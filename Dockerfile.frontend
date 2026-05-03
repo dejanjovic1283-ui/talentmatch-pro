@@ -1,0 +1,17 @@
+FROM python:3.13-slim
+
+RUN apt-get update && apt-get upgrade -y && rm -rf /var/lib/apt/lists/*
+
+WORKDIR /app
+
+# Install frontend dependencies separately for better layer caching.
+COPY frontend/requirements.txt /app/requirements.txt
+RUN pip install --no-cache-dir -r /app/requirements.txt
+
+# Copy the Streamlit frontend source code into the container image.
+COPY frontend /app
+
+EXPOSE 8501
+
+# Start Streamlit in server mode so it works in Docker and cloud runtimes.
+CMD ["sh", "-c", "streamlit run app.py --server.address 0.0.0.0 --server.port ${PORT:-8501}"]

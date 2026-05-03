@@ -1,0 +1,59 @@
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+*.pyc
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# Virtual environments
+.venv/
+venv/
+env/
+ENV/
+
+# Environment variables
+.env
+.env.*
+!.env.example
+
+# Firebase secrets
+backend/serviceAccountKey.json
+serviceAccountKey.json
+*.firebase-adminsdk*.json
+
+# Streamlit secrets
+frontend/.streamlit/secrets.toml
+.streamlit/secrets.toml
+!frontend/.streamlit/secrets.toml.example
+
+# Local database files
+*.db
+*.sqlite
+*.sqlite3
+backend/talentmatch.db
+
+# Dev-only scripts
+get_token.py
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# VS Code
+.vscode/
+.history/
+
+# Logs
+*.log
+logs/
+
+# Build artifacts
+dist/
+build/
+*.egg-info/
+
+# Docker local files
+.docker/
