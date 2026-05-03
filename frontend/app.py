@@ -15,7 +15,7 @@ st.set_page_config(
 )
 
 
-DEFAULT_BACKEND_URL = "http://127.0.0.1:8000"
+DEFAULT_BACKEND_URL = "https://talentmatch-backend-1283.onrender.com"
 ANALYZE_ENDPOINT = "/analyze-resume"
 HISTORY_ENDPOINT = "/history"
 ME_ENDPOINT = "/me"
