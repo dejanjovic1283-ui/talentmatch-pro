@@ -1,26 +1,72 @@
-import streamlit as st  # type: ignore
+import streamlit as st
 
-# Configure the pricing page as a standalone Streamlit page.
-st.set_page_config(
-    page_title="TalentMatch Pro Pricing",
-    page_icon="💳",
-    layout="wide",
+st.set_page_config(page_title="Pricing", page_icon="💳")
+
+st.title("💳 Pricing")
+
+st.markdown("## Choose your plan")
+
+# --- FREE PLAN ---
+st.markdown("### 🟢 Free Plan")
+
+st.markdown("""
+- ✔ 3 CV analyses
+- ✔ AI match score
+- ✔ Basic recommendations
+- ❌ No history
+- ❌ No advanced insights
+""")
+
+st.button("Current plan", disabled=True)
+
+st.markdown("---")
+
+# --- PRO PLAN ---
+st.markdown("### 🚀 Pro Plan")
+
+st.markdown("""
+- ✔ Unlimited CV analyses
+- ✔ AI match score
+- ✔ Advanced recommendations
+- ✔ Full history
+- ✔ Priority processing
+""")
+
+st.markdown("### 💰 $9 / month")
+
+# 👉 OVDE ubaci svoj Lemon Squeezy link
+LEMON_CHECKOUT_URL = "https://your-checkout-link.lemonsqueezy.com"
+
+st.markdown(
+    f"""
+    <a href="{LEMON_CHECKOUT_URL}" target="_blank">
+        <button style="
+            background-color:#FF4B4B;
+            color:white;
+            padding:10px 20px;
+            border:none;
+            border-radius:5px;
+            font-size:16px;
+            cursor:pointer;">
+            Upgrade to Pro 🚀
+        </button>
+    </a>
+    """,
+    unsafe_allow_html=True,
 )
 
-st.title("💳 TalentMatch Pro Pricing")
-st.caption("Simple pricing for early users.")
+st.markdown("---")
 
-col1, col2 = st.columns(2)
+# --- FAQ ---
+st.markdown("## ❓ FAQ")
 
-with col1:
-    st.subheader("Free")
-    st.write("- Up to 3 CV analyses")
-    st.write("- Basic AI score")
-    st.write("- Great for testing")
+st.markdown("""
+**How does billing work?**  
+You are charged monthly and can cancel anytime.
 
-with col2:
-    st.subheader("Pro")
-    st.write("- Unlimited analyses")
-    st.write("- Full recommendation set")
-    st.write("- Stored history")
-    st.write("- SaaS billing flow")
+**What happens if I reach the free limit?**  
+You will need to upgrade to continue using the service.
+
+**Can I cancel anytime?**  
+Yes, no contracts, cancel whenever you want.
+""")
