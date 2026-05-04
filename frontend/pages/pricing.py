@@ -1,4 +1,4 @@
-import streamlit as st
+import streamlit as st # pyright: ignore[reportMissingImports]
 
 st.set_page_config(page_title="Pricing", page_icon="💳")
 
