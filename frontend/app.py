@@ -16,7 +16,7 @@ st.set_page_config(
 
 
 DEFAULT_BACKEND_URL = "https://talentmatch-backend-1283.onrender.com"
-ANALYZE_ENDPOINT = "/analyze-resume"
+ANALYZE_ENDPOINT = "/analyze-test"
 HISTORY_ENDPOINT = "/history"
 ME_ENDPOINT = "/me"
 CHECKOUT_ENDPOINT = "/create-checkout"
