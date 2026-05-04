@@ -216,15 +216,7 @@ async def analyze_test(
         print("OPENAI ANALYSIS TEST ERROR:", exc)
         raise HTTPException(status_code=500, detail=f"AI analysis failed: {exc}")
 
-    try:
-        storage_path = upload_pdf_to_firebase(
-            pdf_bytes,
-            1,
-            file.filename or "test_cv.pdf",
-        )
-    except Exception as exc:
-        print("FIREBASE STORAGE TEST ERROR:", exc)
-        raise HTTPException(status_code=500, detail=f"Firebase Storage upload failed: {exc}")
+    storage_path = None
 
     result["storage_path"] = storage_path
 
