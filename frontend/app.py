@@ -5,7 +5,7 @@ from dataclasses import dataclass
 from typing import Any
 
 import requests
-import streamlit as st
+import streamlit as st # pyright: ignore[reportMissingImports]
 
 
 st.set_page_config(
