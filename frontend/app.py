@@ -5,7 +5,7 @@ from dataclasses import dataclass
 from typing import Any
 
 import requests
-import streamlit as st # pyright: ignore[reportMissingImports]
+import streamlit as st
 
 
 st.set_page_config(
@@ -14,19 +14,15 @@ st.set_page_config(
     layout="wide",
 )
 
-
 DEFAULT_BACKEND_URL = "https://talentmatch-backend-1283.onrender.com"
-ANALYZE_ENDPOINT = "/analyze-test"
+ANALYZE_ENDPOINT = "/analyze-test"  # Temporary production demo endpoint.
 HISTORY_ENDPOINT = "/history"
-ME_ENDPOINT = "/me"
-CHECKOUT_ENDPOINT = "/create-checkout"
 DEFAULT_REQUEST_TIMEOUT_SECONDS = 120
-
 
 DEFAULT_JOB_DESCRIPTION = """
 Founding Full-Stack AI SaaS Engineer
 
-We are building TalentMatch Pro, an AI-powered SaaS platform that helps job seekers compare their CVs against real job descriptions, identify skill gaps, and improve their application strategy.
+We are building TalentMatch Pro, an AI-powered SaaS platform that helps job seekers compare their CVs against real job descriptions, identify gaps, and improve their application strategy.
 
 What you will do:
 - Build and scale a FastAPI + Streamlit product
@@ -49,7 +45,7 @@ Nice to have:
 
 @dataclass(frozen=True)
 class AppConfig:
-    """Application runtime configuration."""
+    """Runtime configuration loaded from Streamlit secrets or environment variables."""
 
     backend_url: str
     firebase_api_key: str
@@ -58,7 +54,7 @@ class AppConfig:
 
 
 def get_secret_or_env(name: str, default: str = "") -> str:
-    """Read configuration from Streamlit secrets first, then environment variables."""
+    """Read a value from Streamlit secrets first, then from environment variables."""
     try:
         if name in st.secrets:
             value = st.secrets[name]
@@ -71,12 +67,8 @@ def get_secret_or_env(name: str, default: str = "") -> str:
 
 
 def load_config() -> AppConfig:
-    """Load app configuration."""
-    backend_url = (
-        get_secret_or_env("BACKEND_URL")
-        or get_secret_or_env("API_BASE_URL")
-        or DEFAULT_BACKEND_URL
-    )
+    """Load application configuration."""
+    backend_url = get_secret_or_env("BACKEND_URL", DEFAULT_BACKEND_URL)
 
     return AppConfig(
         backend_url=backend_url.rstrip("/"),
@@ -90,9 +82,9 @@ def init_session_state() -> None:
     defaults: dict[str, Any] = {
         "user": None,
         "auth_error": "",
-        "job_description": DEFAULT_JOB_DESCRIPTION,
         "analysis_result": None,
         "last_uploaded_name": "",
+        "job_description": DEFAULT_JOB_DESCRIPTION,
     }
 
     for key, value in defaults.items():
@@ -107,9 +99,9 @@ def firebase_auth_request(
     password: str,
     config: AppConfig,
 ) -> dict[str, Any]:
-    """Authenticate against Firebase Identity Toolkit REST API."""
+    """Authenticate a user with Firebase Identity Toolkit REST API."""
     if not config.firebase_api_key:
-        raise RuntimeError("FIREBASE_API_KEY is missing in Streamlit secrets.")
+        raise RuntimeError("FIREBASE_API_KEY is missing in Render environment variables.")
 
     url = (
         "https://identitytoolkit.googleapis.com/v1/"
@@ -133,7 +125,7 @@ def firebase_auth_request(
 
 
 def save_user_session(data: dict[str, Any], email: str) -> None:
-    """Store authenticated user data in Streamlit session state."""
+    """Save authenticated user data in session state."""
     st.session_state.user = {
         "email": email,
         "id_token": data.get("idToken", ""),
@@ -165,7 +157,7 @@ def sign_up(email: str, password: str, config: AppConfig) -> None:
 
 
 def sign_out() -> None:
-    """Clear the current user session."""
+    """Clear the current session."""
     st.session_state.user = None
     st.session_state.auth_error = ""
     st.session_state.analysis_result = None
@@ -191,7 +183,7 @@ def get_auth_headers() -> dict[str, str]:
 
 
 def require_auth() -> bool:
-    """Ensure the user is authenticated before using protected features."""
+    """Require the user to be signed in before using the app."""
     if not get_id_token():
         st.warning("Please sign in before analyzing a CV.")
         return False
@@ -199,34 +191,8 @@ def require_auth() -> bool:
     return True
 
 
-def backend_get(path: str, config: AppConfig) -> requests.Response:
-    """Send a GET request to the backend."""
-    return requests.get(
-        f"{config.backend_url}{path}",
-        headers=get_auth_headers(),
-        timeout=30,
-    )
-
-
-def backend_post(
-    path: str,
-    *,
-    config: AppConfig,
-    data: dict[str, Any] | None = None,
-    files: dict[str, Any] | None = None,
-) -> requests.Response:
-    """Send a POST request to the backend."""
-    return requests.post(
-        f"{config.backend_url}{path}",
-        headers=get_auth_headers(),
-        data=data,
-        files=files,
-        timeout=config.request_timeout_seconds,
-    )
-
-
 def extract_backend_error(response: requests.Response) -> str:
-    """Extract a readable backend error message."""
+    """Return a readable backend error message."""
     try:
         payload = response.json()
     except ValueError:
@@ -239,10 +205,6 @@ def extract_backend_error(response: requests.Response) -> str:
         if isinstance(detail, list):
             return "; ".join(str(item) for item in detail)
 
-        message = payload.get("message")
-        if isinstance(message, str):
-            return message
-
     return str(payload)
 
 
@@ -252,10 +214,6 @@ def handle_backend_response(response: requests.Response) -> Any | None:
         st.error("Unauthorized. Please sign out and sign in again.")
         return None
 
-    if response.status_code == 403:
-        st.error(extract_backend_error(response))
-        return None
-
     if response.status_code >= 400:
         st.error(extract_backend_error(response))
         return None
@@ -263,11 +221,12 @@ def handle_backend_response(response: requests.Response) -> Any | None:
     try:
         return response.json()
     except ValueError:
-        return response.text
+        st.error("Backend returned a non-JSON response.")
+        return None
 
 
 def render_sidebar(config: AppConfig) -> None:
-    """Render authentication and runtime information."""
+    """Render sidebar authentication and runtime info."""
     with st.sidebar:
         st.header("Authentication")
 
@@ -283,7 +242,6 @@ def render_sidebar(config: AppConfig) -> None:
             auth_mode = st.radio(
                 "Choose action",
                 ["Sign in", "Create account"],
-                horizontal=False,
             )
 
             email = st.text_input("Email")
@@ -316,7 +274,7 @@ def render_sidebar(config: AppConfig) -> None:
 
 
 def render_header() -> None:
-    """Render app header."""
+    """Render the main app header."""
     st.title("🚀 TalentMatch Pro")
     st.caption(
         "Upload your PDF CV, paste a job description, and get an AI-powered match score."
@@ -324,7 +282,7 @@ def render_header() -> None:
 
 
 def validate_inputs(uploaded_file: Any | None, job_description: str) -> list[str]:
-    """Validate uploaded file and job description."""
+    """Validate the uploaded file and job description."""
     errors: list[str] = []
 
     if uploaded_file is None:
@@ -342,8 +300,19 @@ def validate_inputs(uploaded_file: Any | None, job_description: str) -> list[str
     return errors
 
 
+def get_score_verdict(score: int | float) -> tuple[str, str]:
+    """Return a human-readable verdict and visual level from a score."""
+    if score >= 80:
+        return "🔥 Strong Match", "success"
+
+    if score >= 60:
+        return "✅ Good Match", "warning"
+
+    return "⚠️ Weak Match", "error"
+
+
 def render_analyze_page(config: AppConfig) -> None:
-    """Render CV analysis page."""
+    """Render the CV analysis page."""
     st.subheader("Analyze CV")
 
     if not require_auth():
@@ -376,8 +345,8 @@ def render_analyze_page(config: AppConfig) -> None:
 
         files = {
             "file": (
-                uploaded_file.name,
-                uploaded_file.getvalue(),
+                uploaded_file.name if uploaded_file else "resume.pdf",
+                uploaded_file.getvalue() if uploaded_file else b"",
                 "application/pdf",
             )
         }
@@ -388,11 +357,12 @@ def render_analyze_page(config: AppConfig) -> None:
 
         with st.spinner("Analyzing CV..."):
             try:
-                response = backend_post(
-                    ANALYZE_ENDPOINT,
-                    config=config,
+                response = requests.post(
+                    f"{config.backend_url}{ANALYZE_ENDPOINT}",
+                    headers=get_auth_headers(),
                     data=data,
                     files=files,
+                    timeout=config.request_timeout_seconds,
                 )
             except requests.RequestException as exc:
                 st.error(f"Backend request failed: {exc}")
@@ -403,14 +373,16 @@ def render_analyze_page(config: AppConfig) -> None:
             return
 
         st.session_state.analysis_result = result
-        st.session_state.last_uploaded_name = uploaded_file.name
+        st.session_state.last_uploaded_name = (
+    uploaded_file.name if uploaded_file else "resume.pdf"
+)
         st.success("Analysis completed successfully.")
 
     render_analysis_result()
 
 
 def render_analysis_result() -> None:
-    """Render latest analysis result."""
+    """Render the latest analysis result with a cleaner SaaS-style UI."""
     result = st.session_state.get("analysis_result")
 
     if not isinstance(result, dict):
@@ -419,86 +391,92 @@ def render_analysis_result() -> None:
     st.divider()
     st.header("Analysis result")
 
-    col_score, col_file = st.columns([1, 2])
+    raw_score = result.get("score", 0)
 
-    score = result.get("score")
-    if isinstance(score, (int, float)):
-        col_score.metric("Match score", f"{int(score)}/100")
+    try:
+        score = int(raw_score)
+    except (TypeError, ValueError):
+        score = 0
 
-    if st.session_state.get("last_uploaded_name"):
-        col_file.write(f"**CV file:** {st.session_state.last_uploaded_name}")
+    verdict, level = get_score_verdict(score)
 
-    summary = result.get("summary")
+    if level == "success":
+        st.success(f"{verdict} — {score}/100")
+    elif level == "warning":
+        st.warning(f"{verdict} — {score}/100")
+    else:
+        st.error(f"{verdict} — {score}/100")
+
+    col_score, col_verdict, col_file = st.columns([1, 1, 2])
+
+    col_score.metric("Match Score", f"{score}/100")
+    col_verdict.metric("Verdict", verdict.replace("🔥 ", "").replace("✅ ", "").replace("⚠️ ", ""))
+
+    uploaded_name = st.session_state.get("last_uploaded_name")
+    if uploaded_name:
+        col_file.write(f"**CV file:** {uploaded_name}")
+
+    summary = result.get("summary", "")
     if summary:
-        st.subheader("Summary")
+        st.subheader("📝 Summary")
         st.write(summary)
 
     strengths = result.get("strengths") or result.get("matched_skills") or []
     weaknesses = result.get("weaknesses") or result.get("missing_skills") or []
     recommendations = result.get("recommendations") or []
 
-    render_list("Strengths", strengths)
-    render_list("Weaknesses", weaknesses)
-    render_list("Recommendations", recommendations)
+    col_left, col_right = st.columns(2)
+
+    with col_left:
+        render_list("✅ Strengths", strengths, empty_text="No strengths detected.")
+
+    with col_right:
+        render_list("❌ Missing Skills", weaknesses, empty_text="No missing skills detected.")
+
+    render_list(
+        "💡 Recommendations",
+        recommendations,
+        empty_text="No recommendations available.",
+    )
+
+    st.info(
+        "Upgrade to TalentMatch Pro for advanced recruiter insights, ATS optimization, and AI interview preparation."
+    )
 
     with st.expander("Raw JSON response"):
         st.json(result)
 
 
-def render_list(title: str, items: Any) -> None:
-    """Render a list section."""
-    if not items:
-        return
-
+def render_list(title: str, items: Any, empty_text: str) -> None:
+    """Render a titled list section."""
     st.subheader(title)
 
-    if isinstance(items, list):
+    if isinstance(items, list) and items:
         for item in items:
             st.markdown(f"- {item}")
-    else:
+        return
+
+    if isinstance(items, str) and items.strip():
         st.write(items)
+        return
+
+    st.caption(empty_text)
 
 
 def render_history_page(config: AppConfig) -> None:
-    """Render user analysis history."""
+    """Render the history page placeholder."""
     st.subheader("History")
-
-    if not require_auth():
-        return
-
-    if st.button("Refresh history"):
-        try:
-            response = backend_get(HISTORY_ENDPOINT, config)
-        except requests.RequestException as exc:
-            st.error(f"Backend request failed: {exc}")
-            return
-
-        result = handle_backend_response(response)
-        if result is None:
-            return
-
-        if not result:
-            st.info("No analysis history yet.")
-            return
-
-        if isinstance(result, list):
-            for item in result:
-                title = item.get("cv_filename") or "Analysis record"
-                with st.expander(title):
-                    st.json(item)
-        else:
-            st.json(result)
+    st.info(
+        "History will be enabled after the production auth and database flow is fully restored."
+    )
 
 
 def render_upgrade_page(config: AppConfig) -> None:
-    """Render upgrade page."""
+    """Render the upgrade page."""
     st.subheader("Upgrade")
 
-    if not require_auth():
-        return
-
     st.write(
-        "Upgrade to Pro to unlock more CV analyses and continue using TalentMatch Pro."
+        "Free users can test TalentMatch Pro. Pro users will get unlimited analyses, saved history, and advanced insights."
     )
 
     if config.lemon_squeezy_checkout_url:
@@ -508,29 +486,34 @@ def render_upgrade_page(config: AppConfig) -> None:
             use_container_width=True,
         )
     else:
-        st.info("Lemon Squeezy checkout URL is not configured yet.")
+        st.warning("Lemon Squeezy checkout is not configured yet.")
 
 
 def render_backend_status(config: AppConfig) -> None:
-    """Render backend health check page."""
-    st.subheader("Backend Status")
+    """Render backend status information."""
+    st.subheader("Backend")
 
-    try:
-        response = requests.get(f"{config.backend_url}/", timeout=10)
-    except requests.RequestException as exc:
-        st.error(f"Backend is unreachable: {exc}")
-        return
+    st.write(f"Backend URL: `{config.backend_url}`")
+    st.write(f"Analyze endpoint: `{ANALYZE_ENDPOINT}`")
 
-    if response.status_code >= 400:
-        st.error(f"Backend returned HTTP {response.status_code}.")
-        return
+    if st.button("Check backend", use_container_width=True):
+        try:
+            response = requests.get(f"{config.backend_url}/", timeout=20)
+        except requests.RequestException as exc:
+            st.error(f"Backend is unreachable: {exc}")
+            return
 
-    st.success("Backend is reachable.")
+        if response.status_code >= 400:
+            st.error(f"Backend returned HTTP {response.status_code}.")
+            st.text(response.text)
+            return
 
-    try:
-        st.json(response.json())
-    except ValueError:
-        st.write(response.text)
+        st.success("Backend is reachable.")
+
+        try:
+            st.json(response.json())
+        except ValueError:
+            st.write(response.text)
 
 
 def main() -> None:
