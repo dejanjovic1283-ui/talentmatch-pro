@@ -22,7 +22,7 @@ history = []
 
 try:
     response = requests.get(
-        f"{config.backend_url}{HISTORY_ENDPOINT}",
+        f"{config.backend_url}/history-test",
         headers=get_auth_headers(),
         timeout=30,
     )

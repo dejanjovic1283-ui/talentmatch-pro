@@ -240,6 +240,85 @@ def get_history(
     ]
 
 
+@app.get("/history-test")
+def get_history_test():
+    """Demo history endpoint used while production auth/storage are disabled."""
+    return [
+        {
+            "id": 1,
+            "cv_filename": "20260501_cv1.pdf",
+            "cv_storage_path": None,
+            "job_description": "Founding Full-Stack AI SaaS Engineer",
+            "score": 55,
+            "summary": "John Doe has foundational Python backend skills but lacks depth in SaaS integrations, Docker, billing workflows, and AI product experience.",
+            "matched_skills": [
+                "Basic Python backend knowledge",
+                "REST API exposure",
+                "Motivated junior developer profile",
+            ],
+            "missing_skills": [
+                "Limited FastAPI production experience",
+                "No clear SaaS billing workflow experience",
+                "Limited AI product experience",
+            ],
+            "recommendations": [
+                "Highlight any FastAPI projects.",
+                "Add examples of API integrations.",
+                "Mention deployment or Docker experience if available.",
+            ],
+            "created_at": "2026-05-03T08:00:00",
+        },
+        {
+            "id": 2,
+            "cv_filename": "20260501_cv2.pdf",
+            "cv_storage_path": None,
+            "job_description": "Founding Full-Stack AI SaaS Engineer",
+            "score": 85,
+            "summary": "Jane Smith is a strong match with backend engineering, FastAPI, Firebase, Docker, and SaaS-oriented experience.",
+            "matched_skills": [
+                "Strong Python backend fundamentals",
+                "Experience with FastAPI and REST APIs",
+                "Integrated Firebase authentication and storage",
+                "Experience with Docker for deployment",
+            ],
+            "missing_skills": [
+                "Limited explicit Lemon Squeezy billing experience",
+                "Could mention more AI product work",
+            ],
+            "recommendations": [
+                "Add billing workflow experience.",
+                "Highlight AI product ownership.",
+                "Mention prompt design or PDF processing experience.",
+            ],
+            "created_at": "2026-05-03T08:10:00",
+        },
+        {
+            "id": 3,
+            "cv_filename": "20260501_cv3.pdf",
+            "cv_storage_path": None,
+            "job_description": "Founding Full-Stack AI SaaS Engineer",
+            "score": 85,
+            "summary": "Alex Morgan has strong Python, FastAPI, Docker, and AI product alignment, with minor gaps around billing and deployment pipeline ownership.",
+            "matched_skills": [
+                "Python and FastAPI experience",
+                "Docker deployment familiarity",
+                "AI product and document processing exposure",
+                "Backend API development",
+            ],
+            "missing_skills": [
+                "No direct Lemon Squeezy billing example",
+                "Limited deployment pipeline ownership details",
+            ],
+            "recommendations": [
+                "Add examples of cloud deployment ownership.",
+                "Mention payment or subscription integrations.",
+                "Emphasize end-to-end SaaS MVP delivery.",
+            ],
+            "created_at": "2026-05-03T08:20:00",
+        },
+    ]
+
+
 @app.post("/billing/create-checkout", response_model=BillingCheckoutResponse)
 def create_checkout(current_user: User = Depends(get_current_user)):
     """Generate a Lemon Squeezy checkout URL linked to the signed-in user."""
