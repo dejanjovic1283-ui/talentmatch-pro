@@ -1,7 +1,7 @@
 import requests
 import streamlit as st # pyright: ignore[reportMissingImports]
 
-from app import HISTORY_ENDPOINT, get_auth_headers, load_config
+from app import get_auth_headers, load_config
 
 st.set_page_config(
     page_title="Analysis History",
@@ -12,11 +12,6 @@ st.set_page_config(
 config = load_config()
 
 st.title("📜 Analysis History")
-
-user = st.session_state.get("user")
-if not isinstance(user, dict) or not user.get("id_token"):
-    st.warning("Please sign in first.")
-    st.stop()
 
 history = []
 
@@ -37,6 +32,10 @@ except requests.RequestException as exc:
     st.error(f"Backend request failed: {exc}")
     st.stop()
 
+if not history:
+    st.info("No analyses yet.")
+    st.stop()
+
 for item in history:
     score = int(item.get("score", 0) or 0)
 
@@ -48,6 +47,7 @@ for item in history:
         badge = "⚠️ Weak Match"
 
     with st.container(border=True):
+
         col1, col2, col3 = st.columns([2, 1, 1])
 
         with col1:
