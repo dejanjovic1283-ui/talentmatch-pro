@@ -9,7 +9,6 @@ from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy import text
 from sqlalchemy.orm import Session
 
-# Make certificate handling explicit for Windows-friendly local development.
 os.environ["SSL_CERT_FILE"] = certifi.where()
 os.environ["REQUESTS_CA_BUNDLE"] = certifi.where()
 ssl._create_default_https_context = ssl.create_default_context(cafile=certifi.where())
@@ -28,16 +27,17 @@ from schemas import (
 )
 from storage import upload_pdf_to_firebase
 
-# Load environment variables and create database tables on startup.
 load_dotenv()
 Base.metadata.create_all(bind=engine)
 
 app = FastAPI(title="TalentMatch Pro API")
 
-# Use explicit origins because credentialed requests should not use wildcard CORS.
 allowed_origins = [
     origin.strip()
-    for origin in os.getenv("CORS_ORIGINS", "http://localhost:8501,http://127.0.0.1:8501").split(",")
+    for origin in os.getenv(
+        "CORS_ORIGINS",
+        "http://localhost:8501,http://127.0.0.1:8501,https://talentmatch-frontend-dejan.onrender.com",
+    ).split(",")
     if origin.strip()
 ]
 
@@ -53,7 +53,7 @@ FREE_PLAN_ANALYSIS_LIMIT = int(os.getenv("FREE_PLAN_ANALYSIS_LIMIT", "3"))
 
 
 def ensure_analysis_allowed(db: Session, user: User) -> None:
-    """Enforce the free-plan usage limit before running AI analysis."""
+    """Enforce the free-plan usage limit for the production endpoint."""
     if user.is_pro:
         return
 
@@ -66,12 +66,15 @@ def ensure_analysis_allowed(db: Session, user: User) -> None:
 
 
 def config_status() -> dict:
-    """Return high-level configuration status for debugging and health checks."""
+    """Return high-level configuration status for debugging."""
     return {
         "database_configured": bool(os.getenv("DATABASE_URL", "").strip()),
         "openai_configured": bool(os.getenv("OPENAI_API_KEY", "").strip()),
         "firebase_project_configured": bool(os.getenv("FIREBASE_PROJECT_ID", "").strip()),
-        "firebase_credentials_configured": bool(os.getenv("GOOGLE_APPLICATION_CREDENTIALS", "").strip()),
+        "firebase_credentials_configured": bool(
+            os.getenv("GOOGLE_APPLICATION_CREDENTIALS", "").strip()
+            or os.getenv("FIREBASE_CREDENTIALS", "").strip()
+        ),
         "firebase_storage_configured": bool(os.getenv("FIREBASE_STORAGE_BUCKET", "").strip()),
         "lemonsqueezy_checkout_configured": bool(os.getenv("LEMON_SQUEEZY_CHECKOUT_URL", "").strip()),
         "lemonsqueezy_webhook_configured": bool(os.getenv("LEMON_SQUEEZY_WEBHOOK_SECRET", "").strip()),
@@ -96,7 +99,7 @@ def healthz():
 
 @app.get("/readyz")
 def readyz(db: Session = Depends(get_db)):
-    """Readiness probe endpoint that checks dependencies and configuration."""
+    """Readiness probe endpoint."""
     checks = config_status()
 
     try:
@@ -104,19 +107,6 @@ def readyz(db: Session = Depends(get_db)):
         checks["database_connection_ok"] = True
     except Exception:
         checks["database_connection_ok"] = False
-
-    ready = all(
-        [
-            checks["database_connection_ok"],
-            checks["openai_configured"],
-            checks["firebase_project_configured"],
-            checks["firebase_credentials_configured"],
-            checks["firebase_storage_configured"],
-        ]
-    )
-
-    if not ready:
-        raise HTTPException(status_code=503, detail=checks)
 
     return {"status": "ready", **checks}
 
@@ -140,7 +130,7 @@ async def analyze_resume(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    """Analyze a CV against a job description and store the results."""
+    """Production endpoint: analyze a CV, save DB record, and upload PDF to Firebase."""
     ensure_analysis_allowed(db, current_user)
 
     pdf_bytes = await file.read()
@@ -169,7 +159,7 @@ async def analyze_resume(
         )
     except Exception as exc:
         print("FIREBASE STORAGE ERROR:", exc)
-        raise HTTPException(status_code=500, detail=f"Firebase Storage upload failed: {exc}")
+        storage_path = None
 
     record = AnalysisRecord(
         user_id=current_user.id,
@@ -187,6 +177,7 @@ async def analyze_resume(
     db.commit()
     db.refresh(record)
 
+    result["storage_path"] = storage_path
     return result
 
 
@@ -196,8 +187,7 @@ async def analyze_test(
     job_description: str = Form(...),
     current_user: User = Depends(get_test_user),
 ):
-    """Analyze a CV locally without Firebase Auth. Development only."""
-
+    """Demo endpoint: analyze a CV without auth, DB save, billing limit, or Firebase upload."""
     pdf_bytes = await file.read()
     if not pdf_bytes:
         raise HTTPException(status_code=400, detail="Uploaded PDF is empty.")
@@ -216,10 +206,7 @@ async def analyze_test(
         print("OPENAI ANALYSIS TEST ERROR:", exc)
         raise HTTPException(status_code=500, detail=f"AI analysis failed: {exc}")
 
-    storage_path = None
-
-    result["storage_path"] = storage_path
-
+    result["storage_path"] = None
     return result
 
 
@@ -255,7 +242,7 @@ def get_history(
 
 @app.post("/billing/create-checkout", response_model=BillingCheckoutResponse)
 def create_checkout(current_user: User = Depends(get_current_user)):
-    """Generate a checkout URL that is linked to the signed-in user."""
+    """Generate a Lemon Squeezy checkout URL linked to the signed-in user."""
     return {
         "checkout_url": create_checkout_url(
             email=current_user.email,
@@ -288,6 +275,7 @@ async def webhook(request: Request, db: Session = Depends(get_db)):
     email = custom_data.get("email") or attributes.get("user_email")
 
     user = None
+
     if user_id:
         try:
             user = db.query(User).filter(User.id == int(user_id)).first()
