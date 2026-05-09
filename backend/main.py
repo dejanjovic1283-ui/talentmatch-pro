@@ -1,5 +1,6 @@
 import json
 import os
+import re
 import ssl
 
 import certifi
@@ -53,7 +54,6 @@ FREE_PLAN_ANALYSIS_LIMIT = int(os.getenv("FREE_PLAN_ANALYSIS_LIMIT", "3"))
 
 
 def ensure_analysis_allowed(db: Session, user: User) -> None:
-    """Enforce the free-plan usage limit for the production endpoint."""
     if user.is_pro:
         return
 
@@ -66,7 +66,6 @@ def ensure_analysis_allowed(db: Session, user: User) -> None:
 
 
 def config_status() -> dict:
-    """Return high-level configuration status for debugging."""
     return {
         "database_configured": bool(os.getenv("DATABASE_URL", "").strip()),
         "openai_configured": bool(os.getenv("OPENAI_API_KEY", "").strip()),
@@ -83,7 +82,6 @@ def config_status() -> dict:
 
 @app.get("/")
 def root():
-    """Simple root endpoint for smoke testing."""
     return {
         "status": "ok",
         "message": "TalentMatch Pro backend is running.",
@@ -93,13 +91,11 @@ def root():
 
 @app.get("/healthz")
 def healthz():
-    """Liveness probe endpoint."""
     return {"status": "ok"}
 
 
 @app.get("/readyz")
 def readyz(db: Session = Depends(get_db)):
-    """Readiness probe endpoint."""
     checks = config_status()
 
     try:
@@ -113,7 +109,6 @@ def readyz(db: Session = Depends(get_db)):
 
 @app.get("/me", response_model=UserProfileResponse)
 def get_profile(current_user: User = Depends(get_current_user)):
-    """Return the current authenticated user profile."""
     return {
         "id": current_user.id,
         "email": current_user.email,
@@ -130,7 +125,6 @@ async def analyze_resume(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    """Production endpoint: analyze a CV, save DB record, and upload PDF to Firebase."""
     ensure_analysis_allowed(db, current_user)
 
     pdf_bytes = await file.read()
@@ -187,7 +181,6 @@ async def analyze_test(
     job_description: str = Form(...),
     current_user: User = Depends(get_test_user),
 ):
-    """Demo endpoint: analyze a CV without auth, DB save, billing limit, or Firebase upload."""
     pdf_bytes = await file.read()
     if not pdf_bytes:
         raise HTTPException(status_code=400, detail="Uploaded PDF is empty.")
@@ -210,12 +203,103 @@ async def analyze_test(
     return result
 
 
+ATS_STOPWORDS = {
+    "and", "or", "the", "a", "an", "to", "of", "for", "in", "on", "with", "as",
+    "is", "are", "be", "by", "this", "that", "you", "your", "we", "our", "will",
+    "from", "at", "it", "their", "they", "them", "role", "candidate", "experience",
+    "skills", "strong", "work", "working", "build", "building", "product", "what",
+    "have", "has", "about", "into", "against", "real", "helps", "helps", "using",
+}
+
+
+def extract_ats_keywords(text: str, limit: int = 30) -> list[str]:
+    words = re.findall(r"[a-zA-Z][a-zA-Z0-9+#.-]{2,}", text.lower())
+
+    keywords = []
+    for word in words:
+        clean = word.strip(".,:;()[]{}")
+        if clean and clean not in ATS_STOPWORDS and clean not in keywords:
+            keywords.append(clean)
+
+    priority_terms = [
+        "python", "fastapi", "sql", "api", "apis", "docker", "firebase",
+        "openai", "saas", "backend", "frontend", "streamlit", "auth",
+        "authentication", "storage", "billing", "lemon", "squeezy",
+        "deployment", "cloud", "pdf", "ai", "prompt", "database",
+        "render", "mvp", "ats", "recruiter",
+    ]
+
+    ordered = []
+    for term in priority_terms:
+        if term in keywords:
+            ordered.append(term)
+
+    for keyword in keywords:
+        if keyword not in ordered:
+            ordered.append(keyword)
+
+    return ordered[:limit]
+
+
+@app.post("/ats-test")
+async def ats_test(
+    file: UploadFile = File(...),
+    job_description: str = Form(...),
+):
+    pdf_bytes = await file.read()
+
+    if not pdf_bytes:
+        raise HTTPException(status_code=400, detail="Uploaded PDF is empty.")
+
+    try:
+        cv_text = extract_text_from_pdf(pdf_bytes)
+    except Exception as exc:
+        raise HTTPException(status_code=400, detail=f"Could not extract text from PDF: {exc}")
+
+    if not cv_text.strip():
+        raise HTTPException(status_code=400, detail="Could not extract text from PDF.")
+
+    keywords = extract_ats_keywords(job_description)
+    cv_lower = cv_text.lower()
+
+    matched = []
+    missing = []
+
+    for keyword in keywords:
+        if keyword.lower() in cv_lower:
+            matched.append(keyword)
+        else:
+            missing.append(keyword)
+
+    coverage = round((len(matched) / len(keywords)) * 100) if keywords else 0
+
+    if coverage >= 80:
+        verdict = "ATS Strong"
+    elif coverage >= 60:
+        verdict = "ATS Good"
+    else:
+        verdict = "ATS Weak"
+
+    return {
+        "coverage": coverage,
+        "verdict": verdict,
+        "total_keywords": len(keywords),
+        "matched_keywords": matched,
+        "missing_keywords": missing,
+        "recommendations": [
+            f"Add missing high-value keywords where truthful: {', '.join(missing[:8])}."
+            if missing else "Your CV covers the main ATS keywords well.",
+            "Mirror important job-description terms naturally in your CV summary and experience bullets.",
+            "Use exact tool names where relevant, for example FastAPI, Docker, SQL, Firebase, OpenAI.",
+        ],
+    }
+
+
 @app.get("/history", response_model=list[HistoryItemResponse])
 def get_history(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    """Return the current user's previous CV analyses."""
     records = (
         db.query(AnalysisRecord)
         .filter(AnalysisRecord.user_id == current_user.id)
@@ -242,7 +326,6 @@ def get_history(
 
 @app.get("/history-test")
 def get_history_test():
-    """Demo history endpoint used while production auth/storage are disabled."""
     return [
         {
             "id": 1,
@@ -321,7 +404,6 @@ def get_history_test():
 
 @app.post("/billing/create-checkout", response_model=BillingCheckoutResponse)
 def create_checkout(current_user: User = Depends(get_current_user)):
-    """Generate a Lemon Squeezy checkout URL linked to the signed-in user."""
     return {
         "checkout_url": create_checkout_url(
             email=current_user.email,
@@ -332,7 +414,6 @@ def create_checkout(current_user: User = Depends(get_current_user)):
 
 @app.post("/billing/webhook")
 async def webhook(request: Request, db: Session = Depends(get_db)):
-    """Process Lemon Squeezy webhooks and upgrade local users to Pro."""
     body = await request.body()
     signature = request.headers.get("X-Signature", "")
 
