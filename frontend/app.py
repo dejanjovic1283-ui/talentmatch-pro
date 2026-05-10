@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 import os
 from dataclasses import dataclass
 from datetime import datetime
@@ -16,6 +17,7 @@ st.set_page_config(
 
 DEFAULT_BACKEND_URL = "https://talentmatch-backend-1283.onrender.com"
 ANALYZE_ENDPOINT = "/analyze-resume"
+PDF_REPORT_ENDPOINT = "/reports/analysis-pdf"
 DEFAULT_REQUEST_TIMEOUT_SECONDS = 120
 
 DEFAULT_JOB_DESCRIPTION = """
@@ -77,7 +79,13 @@ def get_auth_headers() -> dict[str, str]:
 
 
 def sign_out() -> None:
-    for key in ["user", "analysis_result", "last_uploaded_name", "last_job_description"]:
+    for key in [
+        "user",
+        "analysis_result",
+        "last_uploaded_name",
+        "last_job_description",
+        "pdf_report_bytes",
+    ]:
         st.session_state.pop(key, None)
 
 
@@ -172,10 +180,49 @@ def build_text_report(result: dict[str, Any]) -> str:
         lines.append(f"- {item}")
 
     lines.extend(["", "Job Description", "-" * 20, job_description])
+
     return "\n".join(lines)
 
 
-def render_analysis_result() -> None:
+def fetch_pdf_report(config: AppConfig, result: dict[str, Any]) -> bytes | None:
+    headers = get_auth_headers()
+
+    if not headers:
+        st.error("Missing auth token. Please login again.")
+        return None
+
+    cv_filename = str(st.session_state.get("last_uploaded_name", "resume.pdf"))
+    job_description = str(st.session_state.get("last_job_description", ""))
+
+    data = {
+        "cv_filename": cv_filename,
+        "score": str(int(result.get("score", 0) or 0)),
+        "summary": str(result.get("summary", "")),
+        "strengths_json": json.dumps(result.get("strengths", [])),
+        "weaknesses_json": json.dumps(result.get("weaknesses", [])),
+        "recommendations_json": json.dumps(result.get("recommendations", [])),
+        "job_description": job_description,
+    }
+
+    try:
+        response = requests.post(
+            f"{config.backend_url}{PDF_REPORT_ENDPOINT}",
+            headers=headers,
+            data=data,
+            timeout=config.request_timeout_seconds,
+        )
+    except requests.RequestException as exc:
+        st.error(f"PDF report request failed: {exc}")
+        return None
+
+    if response.status_code != 200:
+        st.error(response.text[:1000])
+        return None
+
+    return response.content
+
+
+def render_analysis_result(config: AppConfig) -> None:
     result = st.session_state.get("analysis_result")
 
     if not isinstance(result, dict):
@@ -207,16 +254,40 @@ def render_analysis_result() -> None:
 
     st.progress(min(max(score, 0), 100) / 100)
 
-    report_text = build_text_report(result)
     cv_file = str(st.session_state.get("last_uploaded_name", "resume")).replace(".pdf", "")
 
-    st.download_button(
-        "📥 Download Report",
-        data=report_text,
-        file_name=f"{cv_file}_talentmatch_report.txt",
-        mime="text/plain",
-        use_container_width=True,
-    )
+    txt_col, pdf_col = st.columns(2)
+
+    with txt_col:
+        report_text = build_text_report(result)
+
+        st.download_button(
+            "📥 Download TXT Report",
+            data=report_text,
+            file_name=f"{cv_file}_talentmatch_report.txt",
+            mime="text/plain",
+            use_container_width=True,
+        )
+
+    with pdf_col:
+        if st.button("📄 Generate PDF Report", use_container_width=True):
+            with st.spinner("Generating PDF report..."):
+                pdf_bytes = fetch_pdf_report(config, result)
+
+            if pdf_bytes:
+                st.session_state["pdf_report_bytes"] = pdf_bytes
+                st.success("PDF report generated.")
+
+        pdf_bytes = st.session_state.get("pdf_report_bytes")
+
+        if isinstance(pdf_bytes, bytes):
+            st.download_button(
+                "⬇️ Download PDF Report",
+                data=pdf_bytes,
+                file_name=f"{cv_file}_talentmatch_report.pdf",
+                mime="application/pdf",
+                use_container_width=True,
+            )
 
     st.markdown("## 📝 Summary")
     st.write(result.get("summary", ""))
@@ -314,10 +385,11 @@ def main() -> None:
         st.session_state["analysis_result"] = result
         st.session_state["last_uploaded_name"] = uploaded_file.name
         st.session_state["last_job_description"] = job_description
+        st.session_state.pop("pdf_report_bytes", None)
 
         st.success("Analysis completed successfully.")
 
-    render_analysis_result()
+    render_analysis_result(config)
 
 
 if __name__ == "__main__":

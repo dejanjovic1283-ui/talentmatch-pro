@@ -2,11 +2,13 @@ import json
 import os
 import re
 import ssl
+from io import BytesIO
 
 import certifi
 from dotenv import load_dotenv
 from fastapi import Depends, FastAPI, File, Form, HTTPException, Request, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import StreamingResponse
 from sqlalchemy import text
 from sqlalchemy.orm import Session
 
@@ -19,6 +21,7 @@ from billing import create_checkout_url, verify_webhook_signature
 from db import Base, engine, get_db
 from models import AnalysisRecord, User
 from openai_service import analyze_cv_with_ai, rewrite_cv_with_ai
+from pdf_report import build_analysis_pdf_report
 from pdf_utils import extract_text_from_pdf
 from schemas import (
     AnalysisResponse,
@@ -50,57 +53,47 @@ app.add_middleware(
     allow_headers=["Authorization", "Content-Type"],
 )
 
-FREE_PLAN_ANALYSIS_LIMIT = int(
-    os.getenv("FREE_PLAN_ANALYSIS_LIMIT", "50")
-)
+FREE_PLAN_ANALYSIS_LIMIT = int(os.getenv("FREE_PLAN_ANALYSIS_LIMIT", "50"))
 
 
 def ensure_analysis_allowed(db: Session, user: User) -> None:
     if user.is_pro:
         return
 
-    used = (
-        db.query(AnalysisRecord)
-        .filter(AnalysisRecord.user_id == user.id)
-        .count()
-    )
+    used = db.query(AnalysisRecord).filter(AnalysisRecord.user_id == user.id).count()
 
     if used >= FREE_PLAN_ANALYSIS_LIMIT:
         raise HTTPException(
             status_code=403,
-            detail=(
-                f"Free plan limit reached "
-                f"({FREE_PLAN_ANALYSIS_LIMIT}). "
-                f"Please upgrade to Pro."
-            ),
+            detail=f"Free plan limit reached ({FREE_PLAN_ANALYSIS_LIMIT}). Please upgrade to Pro.",
         )
 
 
 def config_status() -> dict:
     return {
-        "database_configured": bool(
-            os.getenv("DATABASE_URL", "").strip()
-        ),
-        "openai_configured": bool(
-            os.getenv("OPENAI_API_KEY", "").strip()
-        ),
-        "firebase_project_configured": bool(
-            os.getenv("FIREBASE_PROJECT_ID", "").strip()
-        ),
+        "database_configured": bool(os.getenv("DATABASE_URL", "").strip()),
+        "openai_configured": bool(os.getenv("OPENAI_API_KEY", "").strip()),
+        "firebase_project_configured": bool(os.getenv("FIREBASE_PROJECT_ID", "").strip()),
         "firebase_credentials_configured": bool(
             os.getenv("GOOGLE_APPLICATION_CREDENTIALS", "").strip()
             or os.getenv("FIREBASE_CREDENTIALS", "").strip()
         ),
-        "firebase_storage_configured": bool(
-            os.getenv("FIREBASE_STORAGE_BUCKET", "").strip()
-        ),
-        "lemonsqueezy_checkout_configured": bool(
-            os.getenv("LEMON_SQUEEZY_CHECKOUT_URL", "").strip()
-        ),
-        "lemonsqueezy_webhook_configured": bool(
-            os.getenv("LEMON_SQUEEZY_WEBHOOK_SECRET", "").strip()
-        ),
+        "firebase_storage_configured": bool(os.getenv("FIREBASE_STORAGE_BUCKET", "").strip()),
+        "lemonsqueezy_checkout_configured": bool(os.getenv("LEMON_SQUEEZY_CHECKOUT_URL", "").strip()),
+        "lemonsqueezy_webhook_configured": bool(os.getenv("LEMON_SQUEEZY_WEBHOOK_SECRET", "").strip()),
     }
+
+
+def parse_json_list(value: str) -> list[str]:
+    try:
+        data = json.loads(value or "[]")
+    except json.JSONDecodeError:
+        return []
+
+    if not isinstance(data, list):
+        return []
+
+    return [str(item).strip() for item in data if str(item).strip()]
 
 
 @app.get("/")
@@ -131,9 +124,7 @@ def readyz(db: Session = Depends(get_db)):
 
 
 @app.get("/me", response_model=UserProfileResponse)
-def get_profile(
-    current_user: User = Depends(get_current_user),
-):
+def get_profile(current_user: User = Depends(get_current_user)):
     return {
         "id": current_user.id,
         "email": current_user.email,
@@ -143,10 +134,7 @@ def get_profile(
     }
 
 
-@app.post(
-    "/analyze-resume",
-    response_model=AnalysisResponse,
-)
+@app.post("/analyze-resume", response_model=AnalysisResponse)
 async def analyze_resume(
     file: UploadFile = File(...),
     job_description: str = Form(...),
@@ -158,37 +146,21 @@ async def analyze_resume(
     pdf_bytes = await file.read()
 
     if not pdf_bytes:
-        raise HTTPException(
-            status_code=400,
-            detail="Uploaded PDF is empty.",
-        )
+        raise HTTPException(status_code=400, detail="Uploaded PDF is empty.")
 
     try:
         cv_text = extract_text_from_pdf(pdf_bytes)
     except Exception as exc:
-        raise HTTPException(
-            status_code=400,
-            detail=f"Could not extract text from PDF: {exc}",
-        )
+        raise HTTPException(status_code=400, detail=f"Could not extract text from PDF: {exc}")
 
     if not cv_text.strip():
-        raise HTTPException(
-            status_code=400,
-            detail="Could not extract text from PDF.",
-        )
+        raise HTTPException(status_code=400, detail="Could not extract text from PDF.")
 
     try:
-        result = analyze_cv_with_ai(
-            cv_text,
-            job_description,
-        )
+        result = analyze_cv_with_ai(cv_text, job_description)
     except Exception as exc:
         print("OPENAI ANALYSIS ERROR:", exc)
-
-        raise HTTPException(
-            status_code=500,
-            detail=f"AI analysis failed: {exc}",
-        )
+        raise HTTPException(status_code=500, detail=f"AI analysis failed: {exc}")
 
     try:
         storage_path = upload_pdf_to_firebase(
@@ -207,15 +179,9 @@ async def analyze_resume(
         job_description=job_description,
         score=result["score"],
         summary=result["summary"],
-        matched_skills=json.dumps(
-            result["strengths"]
-        ),
-        missing_skills=json.dumps(
-            result["weaknesses"]
-        ),
-        recommendations=json.dumps(
-            result["recommendations"]
-        ),
+        matched_skills=json.dumps(result["strengths"]),
+        missing_skills=json.dumps(result["weaknesses"]),
+        recommendations=json.dumps(result["recommendations"]),
     )
 
     db.add(record)
@@ -223,14 +189,10 @@ async def analyze_resume(
     db.refresh(record)
 
     result["storage_path"] = storage_path
-
     return result
 
 
-@app.post(
-    "/analyze-test",
-    response_model=AnalysisResponse,
-)
+@app.post("/analyze-test", response_model=AnalysisResponse)
 async def analyze_test(
     file: UploadFile = File(...),
     job_description: str = Form(...),
@@ -239,101 +201,50 @@ async def analyze_test(
     pdf_bytes = await file.read()
 
     if not pdf_bytes:
-        raise HTTPException(
-            status_code=400,
-            detail="Uploaded PDF is empty.",
-        )
+        raise HTTPException(status_code=400, detail="Uploaded PDF is empty.")
 
     try:
         cv_text = extract_text_from_pdf(pdf_bytes)
     except Exception as exc:
-        raise HTTPException(
-            status_code=400,
-            detail=f"Could not extract text from PDF: {exc}",
-        )
+        raise HTTPException(status_code=400, detail=f"Could not extract text from PDF: {exc}")
 
     if not cv_text.strip():
-        raise HTTPException(
-            status_code=400,
-            detail="Could not extract text from PDF.",
-        )
+        raise HTTPException(status_code=400, detail="Could not extract text from PDF.")
 
     try:
-        result = analyze_cv_with_ai(
-            cv_text,
-            job_description,
-        )
+        result = analyze_cv_with_ai(cv_text, job_description)
     except Exception as exc:
         print("OPENAI ANALYSIS TEST ERROR:", exc)
-
-        raise HTTPException(
-            status_code=500,
-            detail=f"AI analysis failed: {exc}",
-        )
+        raise HTTPException(status_code=500, detail=f"AI analysis failed: {exc}")
 
     result["storage_path"] = None
-
     return result
 
 
 ATS_STOPWORDS = {
-    "and", "or", "the", "a", "an", "to", "of", "for", "in", "on",
-    "with", "as", "is", "are", "be", "by", "this", "that", "you",
-    "your", "we", "our", "will", "from", "at", "it", "their",
-    "they", "them", "role", "candidate", "experience", "skills",
-    "strong", "work", "working", "build", "building", "product",
-    "what", "have", "has", "about", "into", "against", "real",
-    "helps", "using",
+    "and", "or", "the", "a", "an", "to", "of", "for", "in", "on", "with",
+    "as", "is", "are", "be", "by", "this", "that", "you", "your", "we",
+    "our", "will", "from", "at", "it", "their", "they", "them", "role",
+    "candidate", "experience", "skills", "strong", "work", "working",
+    "build", "building", "product", "what", "have", "has", "about",
+    "into", "against", "real", "helps", "using",
 }
 
 
-def extract_ats_keywords(
-    text: str,
-    limit: int = 30,
-) -> list[str]:
-    words = re.findall(
-        r"[a-zA-Z][a-zA-Z0-9+#.-]{2,}",
-        text.lower(),
-    )
-
+def extract_ats_keywords(text: str, limit: int = 30) -> list[str]:
+    words = re.findall(r"[a-zA-Z][a-zA-Z0-9+#.-]{2,}", text.lower())
     keywords = []
 
     for word in words:
         clean = word.strip(".,:;()[]{}")
-
-        if (
-            clean
-            and clean not in ATS_STOPWORDS
-            and clean not in keywords
-        ):
+        if clean and clean not in ATS_STOPWORDS and clean not in keywords:
             keywords.append(clean)
 
     priority_terms = [
-        "python",
-        "fastapi",
-        "sql",
-        "api",
-        "apis",
-        "docker",
-        "firebase",
-        "openai",
-        "saas",
-        "backend",
-        "frontend",
-        "streamlit",
-        "auth",
-        "authentication",
-        "storage",
-        "billing",
-        "deployment",
-        "cloud",
-        "pdf",
-        "ai",
-        "prompt",
-        "database",
-        "render",
-        "mvp",
-        "ats",
+        "python", "fastapi", "sql", "api", "apis", "docker", "firebase",
+        "openai", "saas", "backend", "frontend", "streamlit", "auth",
+        "authentication", "storage", "billing", "deployment", "cloud",
+        "pdf", "ai", "prompt", "database", "render", "mvp", "ats",
         "recruiter",
     ]
 
@@ -358,24 +269,15 @@ async def ats_test(
     pdf_bytes = await file.read()
 
     if not pdf_bytes:
-        raise HTTPException(
-            status_code=400,
-            detail="Uploaded PDF is empty.",
-        )
+        raise HTTPException(status_code=400, detail="Uploaded PDF is empty.")
 
     try:
         cv_text = extract_text_from_pdf(pdf_bytes)
     except Exception as exc:
-        raise HTTPException(
-            status_code=400,
-            detail=f"Could not extract text from PDF: {exc}",
-        )
+        raise HTTPException(status_code=400, detail=f"Could not extract text from PDF: {exc}")
 
     if not cv_text.strip():
-        raise HTTPException(
-            status_code=400,
-            detail="Could not extract text from PDF.",
-        )
+        raise HTTPException(status_code=400, detail="Could not extract text from PDF.")
 
     keywords = extract_ats_keywords(job_description)
     cv_lower = cv_text.lower()
@@ -389,11 +291,7 @@ async def ats_test(
         else:
             missing.append(keyword)
 
-    coverage = (
-        round((len(matched) / len(keywords)) * 100)
-        if keywords
-        else 0
-    )
+    coverage = round((len(matched) / len(keywords)) * 100) if keywords else 0
 
     if coverage >= 80:
         verdict = "ATS Strong"
@@ -409,21 +307,11 @@ async def ats_test(
         "matched_keywords": matched,
         "missing_keywords": missing,
         "recommendations": [
-            (
-                f"Add missing high-value keywords "
-                f"where truthful: "
-                f"{', '.join(missing[:8])}."
-            )
+            f"Add missing high-value keywords where truthful: {', '.join(missing[:8])}."
             if missing
             else "Your CV covers the main ATS keywords well.",
-            (
-                "Mirror important job-description terms "
-                "naturally in your CV summary and experience bullets."
-            ),
-            (
-                "Use exact tool names where relevant, "
-                "for example FastAPI, Docker, SQL, Firebase, OpenAI."
-            ),
+            "Mirror important job-description terms naturally in your CV summary and experience bullets.",
+            "Use exact tool names where relevant, for example FastAPI, Docker, SQL, Firebase, OpenAI.",
         ],
     }
 
@@ -437,58 +325,73 @@ async def rewrite_cv(
     pdf_bytes = await file.read()
 
     if not pdf_bytes:
-        raise HTTPException(
-            status_code=400,
-            detail="Uploaded PDF is empty.",
-        )
+        raise HTTPException(status_code=400, detail="Uploaded PDF is empty.")
 
     try:
         cv_text = extract_text_from_pdf(pdf_bytes)
     except Exception as exc:
-        raise HTTPException(
-            status_code=400,
-            detail=f"Could not extract text from PDF: {exc}",
-        )
+        raise HTTPException(status_code=400, detail=f"Could not extract text from PDF: {exc}")
 
     if not cv_text.strip():
-        raise HTTPException(
-            status_code=400,
-            detail="Could not extract text from PDF.",
-        )
+        raise HTTPException(status_code=400, detail="Could not extract text from PDF.")
 
     try:
-        result = rewrite_cv_with_ai(
-            cv_text,
-            job_description,
-        )
-
-        return result
-
+        return rewrite_cv_with_ai(cv_text, job_description)
     except Exception as exc:
         print("OPENAI CV REWRITE ERROR:", exc)
+        raise HTTPException(status_code=500, detail=f"CV rewrite failed: {exc}")
 
-        raise HTTPException(
-            status_code=500,
-            detail=f"CV rewrite failed: {exc}",
+
+@app.post("/reports/analysis-pdf")
+async def create_analysis_pdf_report(
+    cv_filename: str = Form(...),
+    score: int = Form(...),
+    summary: str = Form(...),
+    strengths_json: str = Form("[]"),
+    weaknesses_json: str = Form("[]"),
+    recommendations_json: str = Form("[]"),
+    job_description: str = Form(""),
+    current_user: User = Depends(get_current_user),
+):
+    strengths = parse_json_list(strengths_json)
+    weaknesses = parse_json_list(weaknesses_json)
+    recommendations = parse_json_list(recommendations_json)
+
+    try:
+        pdf_bytes = build_analysis_pdf_report(
+            cv_filename=cv_filename,
+            score=score,
+            summary=summary,
+            strengths=strengths,
+            weaknesses=weaknesses,
+            recommendations=recommendations,
+            job_description=job_description,
         )
+    except Exception as exc:
+        print("PDF REPORT ERROR:", exc)
+        raise HTTPException(status_code=500, detail=f"PDF report failed: {exc}")
+
+    safe_filename = re.sub(r"[^a-zA-Z0-9_-]+", "_", cv_filename.replace(".pdf", ""))
+    download_name = f"{safe_filename}_talentmatch_report.pdf"
+
+    return StreamingResponse(
+        BytesIO(pdf_bytes),
+        media_type="application/pdf",
+        headers={
+            "Content-Disposition": f'attachment; filename="{download_name}"'
+        },
+    )
 
 
-@app.get(
-    "/history",
-    response_model=list[HistoryItemResponse],
-)
+@app.get("/history", response_model=list[HistoryItemResponse])
 def get_history(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
     records = (
         db.query(AnalysisRecord)
-        .filter(
-            AnalysisRecord.user_id == current_user.id
-        )
-        .order_by(
-            AnalysisRecord.created_at.desc()
-        )
+        .filter(AnalysisRecord.user_id == current_user.id)
+        .order_by(AnalysisRecord.created_at.desc())
         .all()
     )
 
@@ -500,15 +403,9 @@ def get_history(
             "job_description": record.job_description,
             "score": record.score,
             "summary": record.summary,
-            "matched_skills": json.loads(
-                record.matched_skills or "[]"
-            ),
-            "missing_skills": json.loads(
-                record.missing_skills or "[]"
-            ),
-            "recommendations": json.loads(
-                record.recommendations or "[]"
-            ),
+            "matched_skills": json.loads(record.matched_skills or "[]"),
+            "missing_skills": json.loads(record.missing_skills or "[]"),
+            "recommendations": json.loads(record.recommendations or "[]"),
             "created_at": record.created_at,
         }
         for record in records
@@ -522,15 +419,9 @@ def get_history_test():
             "id": 1,
             "cv_filename": "20260501_cv1.pdf",
             "cv_storage_path": None,
-            "job_description": (
-                "Founding Full-Stack AI SaaS Engineer"
-            ),
+            "job_description": "Founding Full-Stack AI SaaS Engineer",
             "score": 55,
-            "summary": (
-                "John Doe has foundational Python backend "
-                "skills but lacks depth in SaaS integrations, "
-                "Docker, billing workflows, and AI product experience."
-            ),
+            "summary": "John Doe has foundational Python backend skills but lacks depth in SaaS integrations, Docker, billing workflows, and AI product experience.",
             "matched_skills": [
                 "Basic Python backend knowledge",
                 "REST API exposure",
@@ -544,23 +435,15 @@ def get_history_test():
             "recommendations": [
                 "Highlight any FastAPI projects.",
                 "Add examples of API integrations.",
-                (
-                    "Mention deployment or Docker "
-                    "experience if available."
-                ),
+                "Mention deployment or Docker experience if available.",
             ],
             "created_at": "2026-05-03T08:00:00",
         }
     ]
 
 
-@app.post(
-    "/billing/create-checkout",
-    response_model=BillingCheckoutResponse,
-)
-def create_checkout(
-    current_user: User = Depends(get_current_user),
-):
+@app.post("/billing/create-checkout", response_model=BillingCheckoutResponse)
+def create_checkout(current_user: User = Depends(get_current_user)):
     return {
         "checkout_url": create_checkout_url(
             email=current_user.email,
@@ -575,48 +458,21 @@ async def webhook(
     db: Session = Depends(get_db),
 ):
     body = await request.body()
+    signature = request.headers.get("X-Signature", "")
 
-    signature = request.headers.get(
-        "X-Signature",
-        "",
-    )
-
-    if not verify_webhook_signature(
-        body,
-        signature,
-    ):
-        raise HTTPException(
-            status_code=400,
-            detail="Invalid webhook signature.",
-        )
+    if not verify_webhook_signature(body, signature):
+        raise HTTPException(status_code=400, detail="Invalid webhook signature.")
 
     payload = await request.json()
 
     meta = payload.get("meta", {}) or {}
     event_name = meta.get("event_name", "")
+    custom_data = meta.get("custom_data", {}) or {}
+    attributes = payload.get("data", {}).get("attributes", {}) or {}
 
-    custom_data = (
-        meta.get("custom_data", {}) or {}
-    )
+    paid_status = str(attributes.get("status", "")).lower()
 
-    attributes = (
-        payload.get("data", {})
-        .get("attributes", {}) or {}
-    )
-
-    paid_status = str(
-        attributes.get("status", "")
-    ).lower()
-
-    if (
-        event_name
-        and paid_status
-        and paid_status not in {
-            "paid",
-            "active",
-            "on_trial",
-        }
-    ):
+    if event_name and paid_status and paid_status not in {"paid", "active", "on_trial"}:
         return {
             "status": "ignored",
             "event_name": event_name,
@@ -624,35 +480,22 @@ async def webhook(
         }
 
     user_id = custom_data.get("user_id")
-
-    email = (
-        custom_data.get("email")
-        or attributes.get("user_email")
-    )
+    email = custom_data.get("email") or attributes.get("user_email")
 
     user = None
 
     if user_id:
         try:
-            user = (
-                db.query(User)
-                .filter(User.id == int(user_id))
-                .first()
-            )
+            user = db.query(User).filter(User.id == int(user_id)).first()
         except ValueError:
             user = None
 
     if user is None and email:
-        user = (
-            db.query(User)
-            .filter(User.email == email)
-            .first()
-        )
+        user = db.query(User).filter(User.email == email).first()
 
     if user:
         user.plan = "pro"
         user.is_pro = True
-
         db.commit()
 
         return {
