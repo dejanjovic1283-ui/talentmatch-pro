@@ -1,3 +1,5 @@
+import os
+
 import requests
 import streamlit as st
 
@@ -7,7 +9,7 @@ st.set_page_config(
     layout="wide",
 )
 
-FIREBASE_API_KEY = st.secrets.get("FIREBASE_API_KEY", "")
+FIREBASE_API_KEY = os.getenv("FIREBASE_API_KEY", "")
 
 st.title("🚀 Create Account")
 st.caption("Start using TalentMatch Pro.")
@@ -28,21 +30,20 @@ def firebase_register(email: str, password: str):
         "returnSecureToken": True,
     }
 
-    response = requests.post(url, json=payload, timeout=30)
-
-    return response
+    return requests.post(url, json=payload, timeout=30)
 
 
 with st.container(border=True):
     email = st.text_input("Email")
     password = st.text_input("Password", type="password")
-    confirm_password = st.text_input(
-        "Confirm Password",
-        type="password",
-    )
+    confirm_password = st.text_input("Confirm Password", type="password")
 
     if st.button("Create Account", use_container_width=True):
-        if not email or not password:
+        if not FIREBASE_API_KEY:
+            st.error("FIREBASE_API_KEY is missing in Render Environment.")
+            st.stop()
+
+        if not email or not password or not confirm_password:
             st.error("Please fill all fields.")
             st.stop()
 
@@ -62,11 +63,7 @@ with st.container(border=True):
 
         if response.status_code != 200:
             try:
-                error_data = response.json()
-                error_message = (
-                    error_data.get("error", {})
-                    .get("message", response.text)
-                )
+                error_message = response.json().get("error", {}).get("message", response.text)
             except Exception:
                 error_message = response.text
 
@@ -85,9 +82,5 @@ with st.container(border=True):
         st.success("Account created successfully.")
         st.rerun()
 
-
 st.divider()
-
-st.info(
-    "After registration you can immediately use ATS Checker and CV Analysis."
-)
+st.info("After registration you can immediately use ATS Checker and CV Analysis.")

@@ -1,3 +1,5 @@
+import os
+
 import requests
 import streamlit as st
 
@@ -7,12 +9,12 @@ st.set_page_config(
     layout="wide",
 )
 
-BACKEND_URL = st.secrets.get(
+BACKEND_URL = os.getenv(
     "BACKEND_URL",
     "https://talentmatch-backend-1283.onrender.com",
 )
 
-FIREBASE_API_KEY = st.secrets.get("FIREBASE_API_KEY", "")
+FIREBASE_API_KEY = os.getenv("FIREBASE_API_KEY", "")
 
 st.title("🔐 Login")
 st.caption("Access your TalentMatch Pro account.")
@@ -33,9 +35,7 @@ def firebase_login(email: str, password: str):
         "returnSecureToken": True,
     }
 
-    response = requests.post(url, json=payload, timeout=30)
-
-    return response
+    return requests.post(url, json=payload, timeout=30)
 
 
 with st.container(border=True):
@@ -43,6 +43,10 @@ with st.container(border=True):
     password = st.text_input("Password", type="password")
 
     if st.button("Login", use_container_width=True):
+        if not FIREBASE_API_KEY:
+            st.error("FIREBASE_API_KEY is missing in Render Environment.")
+            st.stop()
+
         if not email or not password:
             st.error("Please fill all fields.")
             st.stop()
@@ -55,11 +59,7 @@ with st.container(border=True):
 
         if response.status_code != 200:
             try:
-                error_data = response.json()
-                error_message = (
-                    error_data.get("error", {})
-                    .get("message", response.text)
-                )
+                error_message = response.json().get("error", {}).get("message", response.text)
             except Exception:
                 error_message = response.text
 
@@ -78,13 +78,10 @@ with st.container(border=True):
         st.success("Logged in successfully.")
         st.rerun()
 
-
 st.divider()
 
 if st.session_state.get("user"):
-    st.success(
-        f"Logged in as: {st.session_state['user']['email']}"
-    )
+    st.success(f"Logged in as: {st.session_state['user']['email']}")
 
     if st.button("Logout", use_container_width=True):
         st.session_state["user"] = None
