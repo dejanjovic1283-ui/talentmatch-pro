@@ -1,5 +1,5 @@
 import requests
-import streamlit as st # pyright: ignore[reportMissingImports]
+import streamlit as st
 
 from app import get_auth_headers, load_config
 
@@ -35,16 +35,59 @@ Nice to have:
 """.strip()
 
 
-def get_verdict_style(coverage: int) -> tuple[str, str]:
+def get_verdict(coverage: int) -> tuple[str, str, str]:
     if coverage >= 80:
-        return "🔥 ATS Strong", "success"
+        return "ATS Strong", "🔥", "success"
     if coverage >= 60:
-        return "✅ ATS Good", "warning"
-    return "⚠️ ATS Weak", "error"
+        return "ATS Good", "✅", "warning"
+    return "ATS Weak", "⚠️", "error"
+
+
+def render_keyword_tags(keywords: list[str], empty_message: str) -> None:
+    if not keywords:
+        st.caption(empty_message)
+        return
+
+    html = "<div style='display:flex; flex-wrap:wrap; gap:8px; margin-top:8px;'>"
+
+    for keyword in keywords:
+        safe_keyword = (
+            str(keyword)
+            .replace("&", "&amp;")
+            .replace("<", "&lt;")
+            .replace(">", "&gt;")
+        )
+
+        html += (
+            "<span style='"
+            "padding:6px 10px;"
+            "border-radius:999px;"
+            "background:#eef2ff;"
+            "border:1px solid #c7d2fe;"
+            "font-size:14px;"
+            "line-height:1.4;"
+            "'>"
+            f"{safe_keyword}"
+            "</span>"
+        )
+
+    html += "</div>"
+    st.markdown(html, unsafe_allow_html=True)
+
+
+def render_recommendations(recommendations: list[str]) -> None:
+    if not recommendations:
+        st.info("No recommendations available.")
+        return
+
+    for recommendation in recommendations:
+        st.markdown(f"- {recommendation}")
 
 
 st.title("🎯 ATS Keyword Checker")
-st.caption("Check how well your CV matches important keywords from the job description.")
+st.caption(
+    "Compare your CV against a job description and see which ATS keywords are missing."
+)
 
 uploaded_file = st.file_uploader(
     "Upload your CV as a PDF",
@@ -55,14 +98,16 @@ uploaded_file = st.file_uploader(
 job_description = st.text_area(
     "Paste the job description",
     value=DEFAULT_JOB_DESCRIPTION,
-    height=280,
+    height=300,
 )
 
 if uploaded_file is not None:
     file_size_kb = len(uploaded_file.getvalue()) / 1024
     st.info(f"Selected file: {uploaded_file.name} ({file_size_kb:.1f} KB)")
 
-if st.button("Run ATS Check", use_container_width=True):
+run_clicked = st.button("Run ATS Check", use_container_width=True)
+
+if run_clicked:
     if uploaded_file is None:
         st.error("Please upload a PDF CV.")
         st.stop()
@@ -109,21 +154,23 @@ if st.button("Run ATS Check", use_container_width=True):
     st.session_state["ats_result"] = response.json()
     st.session_state["ats_file_name"] = uploaded_file.name
 
+
 result = st.session_state.get("ats_result")
 
 if isinstance(result, dict):
     st.divider()
-    st.header("ATS Result")
 
     coverage = int(result.get("coverage", 0) or 0)
-    verdict, level = get_verdict_style(coverage)
+    verdict, icon, level = get_verdict(coverage)
+
+    st.header("ATS Result")
 
     if level == "success":
-        st.success(f"{verdict} — {coverage}% keyword coverage")
+        st.success(f"{icon} {verdict} — {coverage}% keyword coverage")
     elif level == "warning":
-        st.warning(f"{verdict} — {coverage}% keyword coverage")
+        st.warning(f"{icon} {verdict} — {coverage}% keyword coverage")
     else:
-        st.error(f"{verdict} — {coverage}% keyword coverage")
+        st.error(f"{icon} {verdict} — {coverage}% keyword coverage")
 
     col1, col2, col3 = st.columns(3)
 
@@ -142,30 +189,34 @@ if isinstance(result, dict):
     missing = result.get("missing_keywords", [])
     recommendations = result.get("recommendations", [])
 
+    st.subheader("Keyword Breakdown")
+
     left, right = st.columns(2)
 
     with left:
-        st.subheader("✅ Matched ATS Keywords")
-        if matched:
-            st.write(", ".join(matched))
-        else:
-            st.caption("No matched keywords found.")
+        with st.container(border=True):
+            st.markdown("### ✅ Matched Keywords")
+            st.caption("These terms were found in your CV.")
+            render_keyword_tags(matched, "No matched keywords found.")
 
     with right:
-        st.subheader("❌ Missing ATS Keywords")
-        if missing:
-            st.write(", ".join(missing))
-        else:
-            st.caption("No missing keywords found.")
+        with st.container(border=True):
+            st.markdown("### ❌ Missing Keywords")
+            st.caption("Add these only if they truthfully match your experience.")
+            render_keyword_tags(missing, "No missing keywords found.")
 
     st.subheader("💡 Recommendations")
-    for recommendation in recommendations:
-        st.markdown(f"- {recommendation}")
+
+    with st.container(border=True):
+        render_recommendations(recommendations)
 
     st.info(
-        "Tip: Add missing keywords only where they truthfully match your experience. "
-        "ATS optimization should improve clarity, not fake skills."
+        "ATS optimization works best when you naturally mirror the job description. "
+        "Do not add fake skills — only make real experience easier to find."
     )
 
-    with st.expander("Raw ATS JSON response"):
-        st.json(result)
+    st.markdown("---")
+    st.markdown(
+        "🚀 Want deeper recruiter insights, rewrite suggestions, and interview prep? "
+        "**Upgrade to TalentMatch Pro** from the pricing page."
+    )
