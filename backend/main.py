@@ -27,12 +27,28 @@ from schemas import (
     AnalysisResponse,
     BillingCheckoutResponse,
     HistoryItemResponse,
-    UserProfileResponse,
 )
 from storage import upload_pdf_to_firebase
+from usage_service import ensure_analysis_allowed, get_user_usage
 
 load_dotenv()
 Base.metadata.create_all(bind=engine)
+
+
+def run_lightweight_migrations() -> None:
+    """Adds small missing columns when using existing SQLite/Postgres DB."""
+    try:
+        with engine.begin() as conn:
+            conn.execute(
+                text(
+                    "ALTER TABLE users ADD COLUMN analyses_used INTEGER DEFAULT 0"
+                )
+            )
+    except Exception:
+        pass
+
+
+run_lightweight_migrations()
 
 app = FastAPI(title="TalentMatch Pro API")
 
@@ -52,21 +68,6 @@ app.add_middleware(
     allow_methods=["GET", "POST", "OPTIONS"],
     allow_headers=["Authorization", "Content-Type"],
 )
-
-FREE_PLAN_ANALYSIS_LIMIT = int(os.getenv("FREE_PLAN_ANALYSIS_LIMIT", "50"))
-
-
-def ensure_analysis_allowed(db: Session, user: User) -> None:
-    if user.is_pro:
-        return
-
-    used = db.query(AnalysisRecord).filter(AnalysisRecord.user_id == user.id).count()
-
-    if used >= FREE_PLAN_ANALYSIS_LIMIT:
-        raise HTTPException(
-            status_code=403,
-            detail=f"Free plan limit reached ({FREE_PLAN_ANALYSIS_LIMIT}). Please upgrade to Pro.",
-        )
 
 
 def config_status() -> dict:
@@ -123,14 +124,20 @@ def readyz(db: Session = Depends(get_db)):
     return {"status": "ready", **checks}
 
 
-@app.get("/me", response_model=UserProfileResponse)
-def get_profile(current_user: User = Depends(get_current_user)):
+@app.get("/me")
+def get_profile(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    usage = get_user_usage(db, current_user)
+
     return {
         "id": current_user.id,
         "email": current_user.email,
         "full_name": current_user.full_name,
         "plan": current_user.plan,
         "is_pro": current_user.is_pro,
+        **usage,
     }
 
 
@@ -187,6 +194,8 @@ async def analyze_resume(
     db.add(record)
     db.commit()
     db.refresh(record)
+
+    get_user_usage(db, current_user)
 
     result["storage_path"] = storage_path
     return result
@@ -335,6 +344,17 @@ async def rewrite_cv(
     if not cv_text.strip():
         raise HTTPException(status_code=400, detail="Could not extract text from PDF.")
 
+    if not current_user.is_pro:
+        raise HTTPException(
+            status_code=403,
+            detail={
+                "message": "CV Rewrite AI is a Pro feature.",
+                "upgrade_required": True,
+                "plan": current_user.plan,
+                "is_pro": current_user.is_pro,
+            },
+        )
+
     try:
         return rewrite_cv_with_ai(cv_text, job_description)
     except Exception as exc:
@@ -353,6 +373,17 @@ async def create_analysis_pdf_report(
     job_description: str = Form(""),
     current_user: User = Depends(get_current_user),
 ):
+    if not current_user.is_pro:
+        raise HTTPException(
+            status_code=403,
+            detail={
+                "message": "PDF reports are a Pro feature.",
+                "upgrade_required": True,
+                "plan": current_user.plan,
+                "is_pro": current_user.is_pro,
+            },
+        )
+
     strengths = parse_json_list(strengths_json)
     weaknesses = parse_json_list(weaknesses_json)
     recommendations = parse_json_list(recommendations_json)
@@ -377,9 +408,7 @@ async def create_analysis_pdf_report(
     return StreamingResponse(
         BytesIO(pdf_bytes),
         media_type="application/pdf",
-        headers={
-            "Content-Disposition": f'attachment; filename="{download_name}"'
-        },
+        headers={"Content-Disposition": f'attachment; filename="{download_name}"'},
     )
 
 

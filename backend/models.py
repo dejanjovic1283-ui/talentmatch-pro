@@ -18,6 +18,7 @@ class User(Base):
 
     plan: Mapped[str] = mapped_column(String(50), default="free")
     is_pro: Mapped[bool] = mapped_column(Boolean, default=False)
+    analyses_used: Mapped[int] = mapped_column(Integer, default=0)
 
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
 
