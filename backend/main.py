@@ -50,7 +50,7 @@ app.add_middleware(
     allow_headers=["Authorization", "Content-Type"],
 )
 
-FREE_PLAN_ANALYSIS_LIMIT = int(os.getenv("FREE_PLAN_ANALYSIS_LIMIT", "3"))
+FREE_PLAN_ANALYSIS_LIMIT = int(os.getenv("FREE_PLAN_ANALYSIS_LIMIT", "50"))
 
 
 def ensure_analysis_allowed(db: Session, user: User) -> None:
@@ -76,12 +76,8 @@ def config_status() -> dict:
             or os.getenv("FIREBASE_CREDENTIALS", "").strip()
         ),
         "firebase_storage_configured": bool(os.getenv("FIREBASE_STORAGE_BUCKET", "").strip()),
-        "lemonsqueezy_checkout_configured": bool(
-            os.getenv("LEMON_SQUEEZY_CHECKOUT_URL", "").strip()
-        ),
-        "lemonsqueezy_webhook_configured": bool(
-            os.getenv("LEMON_SQUEEZY_WEBHOOK_SECRET", "").strip()
-        ),
+        "lemonsqueezy_checkout_configured": bool(os.getenv("LEMON_SQUEEZY_CHECKOUT_URL", "").strip()),
+        "lemonsqueezy_webhook_configured": bool(os.getenv("LEMON_SQUEEZY_WEBHOOK_SECRET", "").strip()),
     }
 
 
@@ -155,7 +151,6 @@ async def analyze_resume(
         result = analyze_cv_with_ai(cv_text, job_description)
     except Exception as exc:
         print("OPENAI ANALYSIS ERROR:", exc)
-
         raise HTTPException(
             status_code=500,
             detail=f"AI analysis failed: {exc}",
@@ -188,7 +183,6 @@ async def analyze_resume(
     db.refresh(record)
 
     result["storage_path"] = storage_path
-
     return result
 
 
@@ -221,72 +215,27 @@ async def analyze_test(
         result = analyze_cv_with_ai(cv_text, job_description)
     except Exception as exc:
         print("OPENAI ANALYSIS TEST ERROR:", exc)
-
         raise HTTPException(
             status_code=500,
             detail=f"AI analysis failed: {exc}",
         )
 
     result["storage_path"] = None
-
     return result
 
 
 ATS_STOPWORDS = {
-    "and",
-    "or",
-    "the",
-    "a",
-    "an",
-    "to",
-    "of",
-    "for",
-    "in",
-    "on",
-    "with",
-    "as",
-    "is",
-    "are",
-    "be",
-    "by",
-    "this",
-    "that",
-    "you",
-    "your",
-    "we",
-    "our",
-    "will",
-    "from",
-    "at",
-    "it",
-    "their",
-    "they",
-    "them",
-    "role",
-    "candidate",
-    "experience",
-    "skills",
-    "strong",
-    "work",
-    "working",
-    "build",
-    "building",
-    "product",
-    "what",
-    "have",
-    "has",
-    "about",
-    "into",
-    "against",
-    "real",
-    "helps",
-    "using",
+    "and", "or", "the", "a", "an", "to", "of", "for", "in", "on", "with",
+    "as", "is", "are", "be", "by", "this", "that", "you", "your", "we",
+    "our", "will", "from", "at", "it", "their", "they", "them", "role",
+    "candidate", "experience", "skills", "strong", "work", "working",
+    "build", "building", "product", "what", "have", "has", "about",
+    "into", "against", "real", "helps", "using",
 }
 
 
 def extract_ats_keywords(text: str, limit: int = 30) -> list[str]:
     words = re.findall(r"[a-zA-Z][a-zA-Z0-9+#.-]{2,}", text.lower())
-
     keywords = []
 
     for word in words:
@@ -296,31 +245,10 @@ def extract_ats_keywords(text: str, limit: int = 30) -> list[str]:
             keywords.append(clean)
 
     priority_terms = [
-        "python",
-        "fastapi",
-        "sql",
-        "api",
-        "apis",
-        "docker",
-        "firebase",
-        "openai",
-        "saas",
-        "backend",
-        "frontend",
-        "streamlit",
-        "auth",
-        "authentication",
-        "storage",
-        "billing",
-        "deployment",
-        "cloud",
-        "pdf",
-        "ai",
-        "prompt",
-        "database",
-        "render",
-        "mvp",
-        "ats",
+        "python", "fastapi", "sql", "api", "apis", "docker", "firebase",
+        "openai", "saas", "backend", "frontend", "streamlit", "auth",
+        "authentication", "storage", "billing", "deployment", "cloud",
+        "pdf", "ai", "prompt", "database", "render", "mvp", "ats",
         "recruiter",
     ]
 
@@ -362,7 +290,6 @@ async def ats_test(
         )
 
     keywords = extract_ats_keywords(job_description)
-
     cv_lower = cv_text.lower()
 
     matched = []
@@ -461,10 +388,7 @@ def get_history_test():
     ]
 
 
-@app.post(
-    "/billing/create-checkout",
-    response_model=BillingCheckoutResponse,
-)
+@app.post("/billing/create-checkout", response_model=BillingCheckoutResponse)
 def create_checkout(current_user: User = Depends(get_current_user)):
     return {
         "checkout_url": create_checkout_url(
@@ -480,7 +404,6 @@ async def webhook(
     db: Session = Depends(get_db),
 ):
     body = await request.body()
-
     signature = request.headers.get("X-Signature", "")
 
     if not verify_webhook_signature(body, signature):
@@ -498,11 +421,7 @@ async def webhook(
 
     paid_status = str(attributes.get("status", "")).lower()
 
-    if (
-        event_name
-        and paid_status
-        and paid_status not in {"paid", "active", "on_trial"}
-    ):
+    if event_name and paid_status and paid_status not in {"paid", "active", "on_trial"}:
         return {
             "status": "ignored",
             "event_name": event_name,
@@ -526,7 +445,6 @@ async def webhook(
     if user:
         user.plan = "pro"
         user.is_pro = True
-
         db.commit()
 
         return {
