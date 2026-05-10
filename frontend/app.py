@@ -15,10 +15,7 @@ st.set_page_config(
 )
 
 DEFAULT_BACKEND_URL = "https://talentmatch-backend-1283.onrender.com"
-ANALYZE_ENDPOINT = "/analyze-test"
-HISTORY_ENDPOINT = "/history-test"
-ME_ENDPOINT = "/me"
-CHECKOUT_ENDPOINT = "/billing/create-checkout"
+ANALYZE_ENDPOINT = "/analyze-resume"
 DEFAULT_REQUEST_TIMEOUT_SECONDS = 120
 
 DEFAULT_JOB_DESCRIPTION = """
@@ -48,36 +45,19 @@ Nice to have:
 @dataclass(frozen=True)
 class AppConfig:
     backend_url: str
-    firebase_api_key: str
     request_timeout_seconds: int
 
 
-def get_secret(name: str, default: str = "") -> str:
-    try:
-        value = st.secrets.get(name, default)
-    except Exception:
-        value = os.getenv(name, default)
-
-    return str(value).strip()
-
-
 def load_config() -> AppConfig:
-    backend_url = get_secret("BACKEND_URL", DEFAULT_BACKEND_URL).rstrip("/")
-    firebase_api_key = get_secret("FIREBASE_API_KEY", "")
-
-    timeout_raw = get_secret(
-        "REQUEST_TIMEOUT_SECONDS",
-        str(DEFAULT_REQUEST_TIMEOUT_SECONDS),
-    )
+    backend_url = os.getenv("BACKEND_URL", DEFAULT_BACKEND_URL).rstrip("/")
 
     try:
-        timeout = int(timeout_raw)
+        timeout = int(os.getenv("REQUEST_TIMEOUT_SECONDS", str(DEFAULT_REQUEST_TIMEOUT_SECONDS)))
     except ValueError:
         timeout = DEFAULT_REQUEST_TIMEOUT_SECONDS
 
     return AppConfig(
         backend_url=backend_url,
-        firebase_api_key=firebase_api_key,
         request_timeout_seconds=timeout,
     )
 
@@ -85,69 +65,15 @@ def load_config() -> AppConfig:
 def get_auth_headers() -> dict[str, str]:
     user = st.session_state.get("user")
 
-    if isinstance(user, dict):
-        token = user.get("id_token", "")
-    else:
-        token = ""
+    if not isinstance(user, dict):
+        return {}
+
+    token = user.get("id_token") or user.get("idToken") or ""
 
     if not token:
         return {}
 
     return {"Authorization": f"Bearer {token}"}
-
-
-def firebase_auth_url(config: AppConfig, action: str) -> str:
-    endpoint = "signUp" if action == "signup" else "signInWithPassword"
-
-    return (
-        f"https://identitytoolkit.googleapis.com/v1/accounts:{endpoint}"
-        f"?key={config.firebase_api_key}"
-    )
-
-
-def authenticate_user(
-    config: AppConfig,
-    email: str,
-    password: str,
-    action: str,
-) -> tuple[bool, str]:
-    if not config.firebase_api_key:
-        return False, "FIREBASE_API_KEY is missing in Streamlit secrets."
-
-    payload = {
-        "email": email,
-        "password": password,
-        "returnSecureToken": True,
-    }
-
-    try:
-        response = requests.post(
-            firebase_auth_url(config, action),
-            json=payload,
-            timeout=30,
-        )
-    except requests.RequestException as exc:
-        return False, f"Auth request failed: {exc}"
-
-    if response.status_code != 200:
-        try:
-            detail = response.json()
-            message = detail.get("error", {}).get("message", response.text)
-        except Exception:
-            message = response.text
-
-        return False, message
-
-    data = response.json()
-
-    st.session_state["user"] = {
-        "email": data.get("email", email),
-        "id_token": data.get("idToken", ""),
-        "refresh_token": data.get("refreshToken", ""),
-        "local_id": data.get("localId", ""),
-    }
-
-    return True, "Signed in successfully."
 
 
 def sign_out() -> None:
@@ -168,56 +94,13 @@ def render_sidebar(config: AppConfig) -> None:
             sign_out()
             st.rerun()
     else:
-        action_label = st.sidebar.radio(
-            "Choose action",
-            ["Sign in", "Create account"],
-            horizontal=False,
-        )
-
-        email = st.sidebar.text_input("Email")
-        password = st.sidebar.text_input("Password", type="password")
-
-        action = "signup" if action_label == "Create account" else "signin"
-
-        if st.sidebar.button(action_label, use_container_width=True):
-            ok, message = authenticate_user(config, email, password, action)
-
-            if ok:
-                st.sidebar.success(message)
-                st.rerun()
-            else:
-                st.sidebar.error(message)
+        st.sidebar.warning("Please login first.")
+        st.sidebar.page_link("pages/login.py", label="Login", icon="🔐")
+        st.sidebar.page_link("pages/register.py", label="Register", icon="🚀")
 
     st.sidebar.divider()
     st.sidebar.caption(f"Backend URL: {config.backend_url}")
     st.sidebar.caption(f"Endpoint: {ANALYZE_ENDPOINT}")
-
-
-def render_hero() -> None:
-    st.markdown(
-        """
-        <div style="padding: 28px 0 12px 0;">
-            <h1 style="font-size: 52px; margin-bottom: 8px;">
-                🚀 TalentMatch Pro
-            </h1>
-            <p style="font-size: 18px; color: #6b7280; margin-top: 0;">
-                AI-powered CV matching, ATS keyword analysis, and job application insights.
-            </p>
-        </div>
-        """,
-        unsafe_allow_html=True,
-    )
-
-    col1, col2, col3 = st.columns(3)
-
-    with col1:
-        st.info("📄 Upload a CV and compare it against a real job description.")
-
-    with col2:
-        st.info("🎯 Use ATS Checker to find missing keywords.")
-
-    with col3:
-        st.info("📥 Download a shareable analysis report.")
 
 
 def score_verdict(score: int) -> tuple[str, str]:
@@ -242,7 +125,7 @@ def handle_backend_response(response: requests.Response) -> dict[str, Any] | Non
         return None
 
     if response.status_code != 200:
-        st.error(response.text)
+        st.error(response.text[:1000])
         return None
 
     try:
@@ -255,12 +138,9 @@ def handle_backend_response(response: requests.Response) -> dict[str, Any] | Non
 def build_text_report(result: dict[str, Any]) -> str:
     score = int(result.get("score", 0) or 0)
     verdict, icon = score_verdict(score)
+
     cv_file = st.session_state.get("last_uploaded_name", "resume.pdf")
     job_description = st.session_state.get("last_job_description", "")
-
-    strengths = result.get("strengths", [])
-    weaknesses = result.get("weaknesses", [])
-    recommendations = result.get("recommendations", [])
 
     lines = [
         "TalentMatch Pro - CV Analysis Report",
@@ -278,45 +158,21 @@ def build_text_report(result: dict[str, Any]) -> str:
         "-" * 20,
     ]
 
-    for item in strengths:
+    for item in result.get("strengths", []):
         lines.append(f"- {item}")
 
     lines.extend(["", "Missing Skills", "-" * 20])
 
-    for item in weaknesses:
+    for item in result.get("weaknesses", []):
         lines.append(f"- {item}")
 
     lines.extend(["", "Recommendations", "-" * 20])
 
-    for item in recommendations:
+    for item in result.get("recommendations", []):
         lines.append(f"- {item}")
 
-    lines.extend(
-        [
-            "",
-            "Job Description",
-            "-" * 20,
-            job_description,
-            "",
-            "Generated by TalentMatch Pro",
-        ]
-    )
-
+    lines.extend(["", "Job Description", "-" * 20, job_description])
     return "\n".join(lines)
-
-
-def render_download_report(result: dict[str, Any]) -> None:
-    report_text = build_text_report(result)
-    cv_file = st.session_state.get("last_uploaded_name", "resume")
-    safe_name = str(cv_file).replace(".pdf", "").replace(" ", "_")
-
-    st.download_button(
-        label="📥 Download Report",
-        data=report_text,
-        file_name=f"{safe_name}_talentmatch_report.txt",
-        mime="text/plain",
-        use_container_width=True,
-    )
 
 
 def render_analysis_result() -> None:
@@ -351,7 +207,16 @@ def render_analysis_result() -> None:
 
     st.progress(min(max(score, 0), 100) / 100)
 
-    render_download_report(result)
+    report_text = build_text_report(result)
+    cv_file = str(st.session_state.get("last_uploaded_name", "resume")).replace(".pdf", "")
+
+    st.download_button(
+        "📥 Download Report",
+        data=report_text,
+        file_name=f"{cv_file}_talentmatch_report.txt",
+        mime="text/plain",
+        use_container_width=True,
+    )
 
     st.markdown("## 📝 Summary")
     st.write(result.get("summary", ""))
@@ -372,20 +237,20 @@ def render_analysis_result() -> None:
     for item in result.get("recommendations", []):
         st.markdown(f"- {item}")
 
-    st.info(
-        "Next step: open the ATS Checker page to see exact missing keywords "
-        "from the job description."
-    )
 
+def main() -> None:
+    config = load_config()
 
-def render_analyze_page(config: AppConfig) -> None:
-    st.subheader("Analyze CV")
+    render_sidebar(config)
+
+    st.title("🚀 TalentMatch Pro")
+    st.caption("AI-powered CV matching, ATS keyword analysis, and job application insights.")
 
     user = st.session_state.get("user")
 
     if not isinstance(user, dict) or not user.get("id_token"):
-        st.warning("Please sign in before analyzing a CV.")
-        return
+        st.warning("Please login before analyzing a CV.")
+        st.stop()
 
     uploaded_file = st.file_uploader(
         "Upload your CV as a PDF",
@@ -406,11 +271,17 @@ def render_analyze_page(config: AppConfig) -> None:
     if st.button("Analyze CV", use_container_width=True):
         if uploaded_file is None:
             st.error("Please upload a PDF CV.")
-            return
+            st.stop()
 
         if not job_description.strip():
             st.error("Please paste a job description.")
-            return
+            st.stop()
+
+        headers = get_auth_headers()
+
+        if not headers:
+            st.error("Missing auth token. Please login again.")
+            st.stop()
 
         files = {
             "file": (
@@ -426,76 +297,27 @@ def render_analyze_page(config: AppConfig) -> None:
             try:
                 response = requests.post(
                     f"{config.backend_url}{ANALYZE_ENDPOINT}",
-                    headers=get_auth_headers(),
+                    headers=headers,
                     data=data,
                     files=files,
                     timeout=config.request_timeout_seconds,
                 )
             except requests.RequestException as exc:
                 st.error(f"Backend request failed: {exc}")
-                return
+                st.stop()
 
         result = handle_backend_response(response)
 
         if result is None:
-            return
+            st.stop()
 
         st.session_state["analysis_result"] = result
         st.session_state["last_uploaded_name"] = uploaded_file.name
         st.session_state["last_job_description"] = job_description
+
         st.success("Analysis completed successfully.")
 
     render_analysis_result()
-
-
-def render_history_preview() -> None:
-    st.subheader("History")
-    st.info("Open the History page from the sidebar to review previous analysis results.")
-
-
-def render_upgrade_preview() -> None:
-    st.subheader("Upgrade")
-    st.info(
-        "Pro features will include advanced recruiter insights, ATS optimization, "
-        "PDF export reports, and CV rewrite suggestions."
-    )
-
-
-def render_backend_status(config: AppConfig) -> None:
-    st.subheader("Backend Status")
-
-    try:
-        response = requests.get(f"{config.backend_url}/healthz", timeout=20)
-    except requests.RequestException as exc:
-        st.error(f"Backend unavailable: {exc}")
-        return
-
-    if response.status_code == 200:
-        st.success("Backend is live.")
-        st.json(response.json())
-    else:
-        st.error(response.text)
-
-
-def main() -> None:
-    config = load_config()
-
-    render_sidebar(config)
-    render_hero()
-
-    tabs = st.tabs(["Analyze CV", "History", "Upgrade", "Backend"])
-
-    with tabs[0]:
-        render_analyze_page(config)
-
-    with tabs[1]:
-        render_history_preview()
-
-    with tabs[2]:
-        render_upgrade_preview()
-
-    with tabs[3]:
-        render_backend_status(config)
 
 
 if __name__ == "__main__":
