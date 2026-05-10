@@ -1,37 +1,53 @@
+import os
+import requests
 from fastapi import Depends, HTTPException
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
-from firebase_admin import auth as firebase_auth
 from sqlalchemy.orm import Session
 
 from db import get_db
-from firebase import init_firebase
 from models import User
 
-# Use Bearer auth so the Streamlit app can pass the Firebase ID token.
 bearer_scheme = HTTPBearer(auto_error=False)
+
+
+def verify_firebase_token_with_rest(token: str) -> dict:
+    api_key = os.getenv("FIREBASE_API_KEY", "")
+
+    if not api_key:
+        raise HTTPException(status_code=401, detail="FIREBASE_API_KEY missing on backend.")
+
+    url = f"https://identitytoolkit.googleapis.com/v1/accounts:lookup?key={api_key}"
+    response = requests.post(url, json={"idToken": token}, timeout=30)
+
+    if response.status_code != 200:
+        print("FIREBASE REST VERIFY ERROR:", response.text)
+        raise HTTPException(status_code=401, detail="Invalid Firebase token.")
+
+    data = response.json()
+    users = data.get("users", [])
+
+    if not users:
+        raise HTTPException(status_code=401, detail="Firebase user not found.")
+
+    return users[0]
 
 
 def get_current_user(
     credentials: HTTPAuthorizationCredentials | None = Depends(bearer_scheme),
     db: Session = Depends(get_db),
 ) -> User:
-    """Validate the Firebase ID token and upsert the local user record."""
     if credentials is None or credentials.scheme.lower() != "bearer":
         raise HTTPException(status_code=401, detail="Missing Authorization Bearer token.")
 
     token = credentials.credentials.strip()
+
     if not token:
         raise HTTPException(status_code=401, detail="Empty Firebase token.")
 
-    try:
-        init_firebase()
-        decoded = firebase_auth.verify_id_token(token)
-    except Exception as exc:
-        print("FIREBASE TOKEN VERIFY ERROR:", exc)
-        raise HTTPException(status_code=401, detail="Invalid Firebase token.")
+    firebase_user = verify_firebase_token_with_rest(token)
 
-    firebase_uid = decoded.get("uid")
-    email = decoded.get("email") or ""
+    firebase_uid = firebase_user.get("localId")
+    email = firebase_user.get("email", "")
 
     if not firebase_uid:
         raise HTTPException(status_code=401, detail="Firebase UID missing.")
@@ -52,9 +68,8 @@ def get_current_user(
 
     return user
 
-def get_test_user(db: Session = Depends(get_db)) -> User:
-    """Return a stable local development user without requiring Firebase Auth."""
 
+def get_test_user(db: Session = Depends(get_db)) -> User:
     user = db.query(User).filter(User.email == "local-test@talentmatch.dev").first()
 
     if user:
