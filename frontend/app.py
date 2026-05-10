@@ -17,6 +17,7 @@ st.set_page_config(
 
 DEFAULT_BACKEND_URL = "https://talentmatch-backend-1283.onrender.com"
 ANALYZE_ENDPOINT = "/analyze-resume"
+ME_ENDPOINT = "/me"
 PDF_REPORT_ENDPOINT = "/reports/analysis-pdf"
 DEFAULT_REQUEST_TIMEOUT_SECONDS = 120
 
@@ -81,12 +82,65 @@ def get_auth_headers() -> dict[str, str]:
 def sign_out() -> None:
     for key in [
         "user",
+        "usage",
         "analysis_result",
         "last_uploaded_name",
         "last_job_description",
         "pdf_report_bytes",
     ]:
         st.session_state.pop(key, None)
+
+
+def fetch_usage(config: AppConfig) -> dict[str, Any] | None:
+    headers = get_auth_headers()
+
+    if not headers:
+        return None
+
+    try:
+        response = requests.get(
+            f"{config.backend_url}{ME_ENDPOINT}",
+            headers=headers,
+            timeout=30,
+        )
+    except requests.RequestException:
+        return None
+
+    if response.status_code != 200:
+        return None
+
+    try:
+        usage = response.json()
+    except ValueError:
+        return None
+
+    st.session_state["usage"] = usage
+    return usage
+
+
+def render_usage_box(config: AppConfig) -> None:
+    usage = fetch_usage(config)
+
+    if not usage:
+        st.info("Usage info unavailable.")
+        return
+
+    is_pro = bool(usage.get("is_pro"))
+    used = int(usage.get("analyses_used", 0) or 0)
+    limit = int(usage.get("free_limit", 3) or 3)
+    remaining = int(usage.get("remaining", 0) or 0)
+
+    if is_pro:
+        st.success("🚀 Pro plan active — unlimited analyses.")
+        return
+
+    st.info(f"Free plan: {used}/{limit} analyses used. Remaining: {remaining}")
+
+    if limit > 0:
+        st.progress(min(used / limit, 1.0))
+
+    if remaining <= 0:
+        st.error("Free limit reached. Upgrade to Pro to continue.")
 
 
 def render_sidebar(config: AppConfig) -> None:
@@ -101,14 +155,21 @@ def render_sidebar(config: AppConfig) -> None:
         if st.sidebar.button("Sign out", use_container_width=True):
             sign_out()
             st.rerun()
+
+        st.sidebar.divider()
+        render_usage_box(config)
+
     else:
         st.sidebar.warning("Please login first.")
         st.sidebar.page_link("pages/login.py", label="Login", icon="🔐")
         st.sidebar.page_link("pages/register.py", label="Register", icon="🚀")
 
     st.sidebar.divider()
-    st.sidebar.caption(f"Backend URL: {config.backend_url}")
-    st.sidebar.caption(f"Endpoint: {ANALYZE_ENDPOINT}")
+    st.sidebar.page_link("pages/landing.py", label="Landing", icon="🏠")
+    st.sidebar.page_link("pages/ats_checker.py", label="ATS Checker", icon="🎯")
+    st.sidebar.page_link("pages/cv_rewrite.py", label="CV Rewrite AI", icon="✍️")
+    st.sidebar.page_link("pages/history.py", label="History", icon="📜")
+    st.sidebar.page_link("pages/admin_analytics.py", label="Admin Analytics", icon="📊")
 
 
 def score_verdict(score: int) -> tuple[str, str]:
@@ -119,13 +180,32 @@ def score_verdict(score: int) -> tuple[str, str]:
     return "Weak Match", "⚠️"
 
 
+def extract_error_message(response: requests.Response) -> str:
+    try:
+        payload = response.json()
+    except ValueError:
+        return response.text[:1000]
+
+    detail = payload.get("detail")
+
+    if isinstance(detail, dict):
+        return detail.get("message", str(detail))
+
+    if isinstance(detail, str):
+        return detail
+
+    return str(payload)
+
+
 def handle_backend_response(response: requests.Response) -> dict[str, Any] | None:
     if response.status_code == 401:
         st.error("Unauthorized. Please sign out and sign in again.")
         return None
 
     if response.status_code == 403:
-        st.error(response.text)
+        message = extract_error_message(response)
+        st.error(message)
+        st.warning("🚀 Upgrade to Pro to unlock unlimited analyses, PDF reports, and CV Rewrite AI.")
         return None
 
     if response.status_code == 429:
@@ -133,7 +213,7 @@ def handle_backend_response(response: requests.Response) -> dict[str, Any] | Non
         return None
 
     if response.status_code != 200:
-        st.error(response.text[:1000])
+        st.error(extract_error_message(response))
         return None
 
     try:
@@ -216,7 +296,9 @@ def fetch_pdf_report(config: AppConfig, result: dict[str, Any]) -> bytes | None:
         return None
 
     if response.status_code != 200:
-        st.error(response.text[:1000])
+        message = extract_error_message(response)
+        st.error(message)
+        st.warning("📄 PDF reports are a Pro feature.")
         return None
 
     return response.content
@@ -270,7 +352,7 @@ def render_analysis_result(config: AppConfig) -> None:
         )
 
     with pdf_col:
-        if st.button("📄 Generate PDF Report", use_container_width=True):
+        if st.button("📄 Generate PDF Report (Pro)", use_container_width=True):
             with st.spinner("Generating PDF report..."):
                 pdf_bytes = fetch_pdf_report(config, result)
 
@@ -322,6 +404,19 @@ def main() -> None:
     if not isinstance(user, dict) or not user.get("id_token"):
         st.warning("Please login before analyzing a CV.")
         st.stop()
+
+    usage = fetch_usage(config)
+
+    if usage:
+        is_pro = bool(usage.get("is_pro"))
+        remaining = int(usage.get("remaining", 0) or 0)
+
+        if is_pro:
+            st.success("🚀 Pro plan active.")
+        elif remaining <= 0:
+            st.error("Free analysis limit reached. Upgrade to Pro to continue.")
+        else:
+            st.info(f"Free plan: {remaining} analyses remaining.")
 
     uploaded_file = st.file_uploader(
         "Upload your CV as a PDF",
@@ -386,6 +481,8 @@ def main() -> None:
         st.session_state["last_uploaded_name"] = uploaded_file.name
         st.session_state["last_job_description"] = job_description
         st.session_state.pop("pdf_report_bytes", None)
+
+        fetch_usage(config)
 
         st.success("Analysis completed successfully.")
 
