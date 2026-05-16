@@ -23,6 +23,7 @@ from models import AnalysisRecord, User
 from openai_service import analyze_cv_with_ai, rewrite_cv_with_ai
 from pdf_report import build_analysis_pdf_report
 from pdf_utils import extract_text_from_pdf
+from recruiter_service import rank_candidates
 from schemas import AnalysisResponse, BillingCheckoutResponse, HistoryItemResponse
 from semantic_service import analyze_semantic_match
 from storage import upload_pdf_to_firebase
@@ -347,6 +348,66 @@ async def semantic_match(
     except Exception as exc:
         print("SEMANTIC MATCH ERROR:", exc)
         raise HTTPException(status_code=500, detail=f"Semantic match failed: {exc}")
+
+
+@app.post("/recruiter/rank-candidates")
+async def recruiter_rank_candidates(
+    files: list[UploadFile] = File(...),
+    job_description: str = Form(...),
+    current_user: User = Depends(get_current_user),
+):
+    if not current_user.is_pro:
+        raise HTTPException(
+            status_code=403,
+            detail={
+                "message": "Recruiter Mode is a Pro feature.",
+                "upgrade_required": True,
+                "plan": current_user.plan,
+                "is_pro": current_user.is_pro,
+            },
+        )
+
+    if not files:
+        raise HTTPException(status_code=400, detail="Please upload at least one CV.")
+
+    if len(files) > 10:
+        raise HTTPException(status_code=400, detail="Maximum 10 CV files allowed per ranking run.")
+
+    candidates = []
+
+    for uploaded_file in files:
+        pdf_bytes = await uploaded_file.read()
+
+        if not pdf_bytes:
+            candidates.append(
+                {
+                    "filename": uploaded_file.filename or "candidate.pdf",
+                    "cv_text": "",
+                }
+            )
+            continue
+
+        try:
+            cv_text = extract_text_from_pdf(pdf_bytes)
+        except Exception as exc:
+            print(f"CV EXTRACT ERROR for {uploaded_file.filename}:", exc)
+            cv_text = ""
+
+        candidates.append(
+            {
+                "filename": uploaded_file.filename or "candidate.pdf",
+                "cv_text": cv_text,
+            }
+        )
+
+    try:
+        return rank_candidates(
+            candidates=candidates,
+            job_description=job_description,
+        )
+    except Exception as exc:
+        print("RECRUITER RANKING ERROR:", exc)
+        raise HTTPException(status_code=500, detail=f"Recruiter ranking failed: {exc}")
 
 
 @app.post("/rewrite-cv")
