@@ -1,72 +1,122 @@
-import streamlit as st # pyright: ignore[reportMissingImports]
+import os
 
-st.set_page_config(page_title="Pricing", page_icon="💳")
+import requests
+import streamlit as st
 
-st.title("💳 Pricing")
-
-st.markdown("## Choose your plan")
-
-# --- FREE PLAN ---
-st.markdown("### 🟢 Free Plan")
-
-st.markdown("""
-- ✔ 3 CV analyses
-- ✔ AI match score
-- ✔ Basic recommendations
-- ❌ No history
-- ❌ No advanced insights
-""")
-
-st.button("Current plan", disabled=True)
-
-st.markdown("---")
-
-# --- PRO PLAN ---
-st.markdown("### 🚀 Pro Plan")
-
-st.markdown("""
-- ✔ Unlimited CV analyses
-- ✔ AI match score
-- ✔ Advanced recommendations
-- ✔ Full history
-- ✔ Priority processing
-""")
-
-st.markdown("### 💰 $9 / month")
-
-# 👉 OVDE ubaci svoj Lemon Squeezy link
-LEMON_CHECKOUT_URL = "https://your-checkout-link.lemonsqueezy.com"
-
-st.markdown(
-    f"""
-    <a href="{LEMON_CHECKOUT_URL}" target="_blank">
-        <button style="
-            background-color:#FF4B4B;
-            color:white;
-            padding:10px 20px;
-            border:none;
-            border-radius:5px;
-            font-size:16px;
-            cursor:pointer;">
-            Upgrade to Pro 🚀
-        </button>
-    </a>
-    """,
-    unsafe_allow_html=True,
+st.set_page_config(
+    page_title="Upgrade • TalentMatch Pro",
+    page_icon="🚀",
+    layout="wide",
 )
 
-st.markdown("---")
+BACKEND_URL = os.getenv(
+    "BACKEND_URL",
+    "https://talentmatch-backend-1283.onrender.com",
+).rstrip("/")
 
-# --- FAQ ---
-st.markdown("## ❓ FAQ")
 
-st.markdown("""
-**How does billing work?**  
-You are charged monthly and can cancel anytime.
+def get_auth_headers() -> dict[str, str]:
+    user = st.session_state.get("user")
 
-**What happens if I reach the free limit?**  
-You will need to upgrade to continue using the service.
+    if not isinstance(user, dict):
+        return {}
 
-**Can I cancel anytime?**  
-Yes, no contracts, cancel whenever you want.
-""")
+    token = user.get("id_token") or user.get("idToken") or ""
+
+    if not token:
+        return {}
+
+    return {"Authorization": f"Bearer {token}"}
+
+
+def create_checkout() -> str | None:
+    headers = get_auth_headers()
+
+    if not headers:
+        st.error("Please login before upgrading.")
+        return None
+
+    try:
+        response = requests.post(
+            f"{BACKEND_URL}/billing/create-checkout",
+            headers=headers,
+            timeout=60,
+        )
+    except requests.RequestException as exc:
+        st.error(f"Checkout request failed: {exc}")
+        return None
+
+    if response.status_code != 200:
+        st.error(response.text)
+        return None
+
+    data = response.json()
+    checkout_url = data.get("checkout_url")
+
+    if not checkout_url:
+        st.error("Backend did not return checkout_url.")
+        return None
+
+    return checkout_url
+
+
+st.title("🚀 Upgrade to TalentMatch Pro")
+st.caption("Unlock unlimited AI CV analysis, PDF reports, CV Rewrite AI, and premium job application tools.")
+
+free_col, pro_col = st.columns(2)
+
+with free_col:
+    st.container(border=True).markdown(
+        """
+        ## Free
+
+        ✅ 3 CV analyses  
+        ✅ Basic AI match score  
+        ✅ ATS keyword checker  
+        ✅ TXT report export  
+
+        ❌ PDF reports  
+        ❌ CV Rewrite AI  
+        ❌ Unlimited analyses  
+
+        **$0**
+        """
+    )
+
+with pro_col:
+    st.container(border=True).markdown(
+        """
+        ## Pro
+
+        ✅ Unlimited CV analyses  
+        ✅ PDF report export  
+        ✅ CV Rewrite AI  
+        ✅ Saved history  
+        ✅ Advanced ATS insights  
+        ✅ Recruiter-ready reports  
+
+        **$9/month**
+        """
+    )
+
+    if st.button("🚀 Upgrade to Pro", use_container_width=True):
+        checkout_url = create_checkout()
+
+        if checkout_url:
+            st.session_state["checkout_url"] = checkout_url
+            st.success("Checkout created.")
+
+checkout_url = st.session_state.get("checkout_url")
+
+if checkout_url:
+    st.link_button(
+        "Continue to secure checkout",
+        checkout_url,
+        use_container_width=True,
+    )
+
+st.divider()
+
+st.info(
+    "After successful payment, Lemon Squeezy webhook will upgrade your account to Pro automatically."
+)
