@@ -21,47 +21,57 @@ def get_auth_headers() -> dict[str, str]:
     if not isinstance(user, dict):
         return {}
 
-    token = user.get("id_token") or user.get("idToken") or ""
+    token = (
+        user.get("id_token")
+        or user.get("idToken")
+        or ""
+    )
 
     if not token:
         return {}
 
-    return {"Authorization": f"Bearer {token}"}
+    return {
+        "Authorization": f"Bearer {token}"
+    }
 
 
-def create_checkout() -> str | None:
+def demo_upgrade() -> bool:
     headers = get_auth_headers()
 
     if not headers:
-        st.error("Please login before upgrading.")
-        return None
+        st.error(
+            "Please login before upgrading."
+        )
+        return False
 
     try:
         response = requests.post(
-            f"{BACKEND_URL}/billing/create-checkout",
+            f"{BACKEND_URL}/billing/demo-upgrade",
             headers=headers,
             timeout=60,
         )
     except requests.RequestException as exc:
-        st.error(f"Checkout request failed: {exc}")
-        return None
+        st.error(
+            f"Upgrade request failed: {exc}"
+        )
+        return False
 
     if response.status_code != 200:
         st.error(response.text)
-        return None
+        return False
 
-    data = response.json()
-    checkout_url = data.get("checkout_url")
-
-    if not checkout_url:
-        st.error("Backend did not return checkout_url.")
-        return None
-
-    return checkout_url
+    return True
 
 
 st.title("🚀 Upgrade to TalentMatch Pro")
-st.caption("Unlock unlimited AI CV analysis, PDF reports, CV Rewrite AI, and premium job application tools.")
+
+st.caption(
+    (
+        "Unlock unlimited AI CV analysis, "
+        "PDF reports, CV Rewrite AI, "
+        "and premium SaaS features."
+    )
+)
 
 free_col, pro_col = st.columns(2)
 
@@ -71,9 +81,8 @@ with free_col:
         ## Free
 
         ✅ 3 CV analyses  
-        ✅ Basic AI match score  
         ✅ ATS keyword checker  
-        ✅ TXT report export  
+        ✅ TXT export  
 
         ❌ PDF reports  
         ❌ CV Rewrite AI  
@@ -99,24 +108,26 @@ with pro_col:
         """
     )
 
-    if st.button("🚀 Upgrade to Pro", use_container_width=True):
-        checkout_url = create_checkout()
-
-        if checkout_url:
-            st.session_state["checkout_url"] = checkout_url
-            st.success("Checkout created.")
-
-checkout_url = st.session_state.get("checkout_url")
-
-if checkout_url:
-    st.link_button(
-        "Continue to secure checkout",
-        checkout_url,
+    if st.button(
+        "🚀 Demo Upgrade to Pro",
         use_container_width=True,
-    )
+    ):
+        success = demo_upgrade()
+
+        if success:
+            st.success(
+                "You are now Pro in demo mode."
+            )
+
+            st.balloons()
+
+            st.rerun()
 
 st.divider()
 
 st.info(
-    "After successful payment, Lemon Squeezy webhook will upgrade your account to Pro automatically."
+    (
+        "Lemon Squeezy checkout will replace "
+        "demo upgrade after store activation."
+    )
 )
