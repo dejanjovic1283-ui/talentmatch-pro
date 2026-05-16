@@ -21,28 +21,24 @@ def get_auth_headers() -> dict[str, str]:
     if not isinstance(user, dict):
         return {}
 
-    token = (
-        user.get("id_token")
-        or user.get("idToken")
-        or ""
-    )
+    token = user.get("id_token") or user.get("idToken") or ""
 
     if not token:
         return {}
 
-    return {
-        "Authorization": f"Bearer {token}"
-    }
+    return {"Authorization": f"Bearer {token}"}
 
 
-def demo_upgrade() -> bool:
+def demo_upgrade() -> None:
     headers = get_auth_headers()
 
     if not headers:
-        st.error(
-            "Please login before upgrading."
-        )
-        return False
+        st.error("Please login before upgrading.")
+        st.write("DEBUG: No auth headers found.")
+        return
+
+    st.write("DEBUG: Sending request to backend...")
+    st.write("DEBUG BACKEND_URL:", BACKEND_URL)
 
     try:
         response = requests.post(
@@ -51,26 +47,27 @@ def demo_upgrade() -> bool:
             timeout=60,
         )
     except requests.RequestException as exc:
-        st.error(
-            f"Upgrade request failed: {exc}"
-        )
-        return False
+        st.error(f"Upgrade request failed: {exc}")
+        return
 
-    if response.status_code != 200:
-        st.error(response.text)
-        return False
+    st.write("STATUS:", response.status_code)
 
-    return True
+    try:
+        st.json(response.json())
+    except Exception:
+        st.write(response.text)
+
+    if response.status_code == 200:
+        st.success("🚀 Account upgraded to Pro.")
+        st.balloons()
+        st.rerun()
+    else:
+        st.error("Upgrade failed.")
 
 
 st.title("🚀 Upgrade to TalentMatch Pro")
-
 st.caption(
-    (
-        "Unlock unlimited AI CV analysis, "
-        "PDF reports, CV Rewrite AI, "
-        "and premium SaaS features."
-    )
+    "Unlock unlimited AI CV analysis, PDF reports, CV Rewrite AI, and premium SaaS features."
 )
 
 free_col, pro_col = st.columns(2)
@@ -108,26 +105,17 @@ with pro_col:
         """
     )
 
-    if st.button(
+    clicked = st.button(
         "🚀 Demo Upgrade to Pro",
         use_container_width=True,
-    ):
-        success = demo_upgrade()
+        key="demo_upgrade_button",
+    )
 
-        if success:
-            st.success(
-                "You are now Pro in demo mode."
-            )
-
-            st.balloons()
-
-            st.rerun()
+    if clicked:
+        demo_upgrade()
 
 st.divider()
 
 st.info(
-    (
-        "Lemon Squeezy checkout will replace "
-        "demo upgrade after store activation."
-    )
+    "Lemon Squeezy checkout will replace demo upgrade after store activation."
 )
