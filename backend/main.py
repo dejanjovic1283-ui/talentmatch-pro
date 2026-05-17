@@ -39,23 +39,18 @@ Base.metadata.create_all(bind=engine)
 
 
 def run_lightweight_migrations() -> None:
-    try:
-        with engine.begin() as conn:
-            conn.execute(text("ALTER TABLE users ADD COLUMN analyses_used INTEGER DEFAULT 0"))
-    except Exception:
-        pass
+    migrations = [
+        "ALTER TABLE users ADD COLUMN analyses_used INTEGER DEFAULT 0",
+        "ALTER TABLE users ADD COLUMN plan VARCHAR DEFAULT 'free'",
+        "ALTER TABLE users ADD COLUMN is_pro BOOLEAN DEFAULT 0",
+    ]
 
-    try:
-        with engine.begin() as conn:
-            conn.execute(text("ALTER TABLE users ADD COLUMN plan VARCHAR DEFAULT 'free'"))
-    except Exception:
-        pass
-
-    try:
-        with engine.begin() as conn:
-            conn.execute(text("ALTER TABLE users ADD COLUMN is_pro BOOLEAN DEFAULT 0"))
-    except Exception:
-        pass
+    for migration in migrations:
+        try:
+            with engine.begin() as conn:
+                conn.execute(text(migration))
+        except Exception:
+            pass
 
 
 run_lightweight_migrations()
@@ -136,14 +131,21 @@ def get_profile(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    usage = get_user_usage(db, current_user)
+    db.expire_all()
+
+    user = db.query(User).filter(User.id == current_user.id).first()
+
+    if user is None:
+        raise HTTPException(status_code=404, detail="User not found.")
+
+    usage = get_user_usage(db, user)
 
     return {
-        "id": current_user.id,
-        "email": current_user.email,
-        "full_name": current_user.full_name,
-        "plan": current_user.plan,
-        "is_pro": current_user.is_pro,
+        "id": user.id,
+        "email": user.email,
+        "full_name": user.full_name,
+        "plan": user.plan,
+        "is_pro": bool(user.is_pro),
         **usage,
     }
 
@@ -605,7 +607,7 @@ def demo_upgrade_to_pro(
         "status": "ok",
         "message": "Demo upgrade successful.",
         "plan": current_user.plan,
-        "is_pro": current_user.is_pro,
+        "is_pro": bool(current_user.is_pro),
     }
 
 
