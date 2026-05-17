@@ -16,51 +16,47 @@ BACKEND_URL = os.getenv(
 
 
 def get_logged_user() -> dict | None:
-    possible_keys = [
-        "user",
-        "current_user",
-        "firebase_user",
-        "auth_user",
-    ]
-
-    for key in possible_keys:
+    for key in ["user", "current_user", "firebase_user", "auth_user"]:
         value = st.session_state.get(key)
 
         if isinstance(value, dict):
             return value
 
+    email = st.session_state.get("firebase_email") or st.session_state.get("email")
+    token = (
+        st.session_state.get("firebase_token")
+        or st.session_state.get("id_token")
+        or st.session_state.get("idToken")
+    )
+
+    if email or token:
+        return {
+            "email": email,
+            "id_token": token,
+        }
+
     return None
 
 
 def get_token_from_user(user: dict | None) -> str:
-    if not user:
-        return ""
+    if user:
+        for key in ["id_token", "idToken", "token", "access_token", "accessToken"]:
+            token = user.get(key)
 
-    possible_token_keys = [
-        "id_token",
-        "idToken",
-        "token",
-        "access_token",
-        "accessToken",
-    ]
+            if token:
+                return str(token)
 
-    for key in possible_token_keys:
-        token = user.get(key)
+    for key in ["firebase_token", "id_token", "idToken", "token", "access_token"]:
+        token = st.session_state.get(key)
 
         if token:
             return str(token)
-
-    token = st.session_state.get("id_token") or st.session_state.get("idToken")
-
-    if token:
-        return str(token)
 
     return ""
 
 
 def get_auth_headers() -> dict[str, str]:
-    user = get_logged_user()
-    token = get_token_from_user(user)
+    token = get_token_from_user(get_logged_user())
 
     if not token:
         return {}
