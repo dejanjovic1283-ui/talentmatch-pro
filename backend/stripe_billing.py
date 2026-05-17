@@ -27,6 +27,7 @@ def create_checkout_session(user: User) -> str:
     session = stripe.checkout.Session.create(
         mode="subscription",
         customer_email=user.email,
+        client_reference_id=str(user.id),
         line_items=[
             {
                 "price": STRIPE_PRICE_ID,
@@ -75,6 +76,105 @@ def create_customer_portal_url(user: User) -> str:
     return portal_session.url
 
 
+def _get_stripe_value(obj, key, default=None):
+    try:
+        if isinstance(obj, dict):
+            return obj.get(key, default)
+        return obj.get(key, default)
+    except Exception:
+        return getattr(obj, key, default)
+
+
+def _extract_email(data_object) -> str | None:
+    email = _get_stripe_value(data_object, "customer_email")
+
+    if email:
+        return email
+
+    metadata = _get_stripe_value(data_object, "metadata", {}) or {}
+    email = metadata.get("email")
+
+    if email:
+        return email
+
+    customer_details = _get_stripe_value(data_object, "customer_details", {}) or {}
+
+    if isinstance(customer_details, dict):
+        email = customer_details.get("email")
+    else:
+        email = _get_stripe_value(customer_details, "email")
+
+    if email:
+        return email
+
+    return None
+
+
+def _extract_user_id(data_object) -> int | None:
+    metadata = _get_stripe_value(data_object, "metadata", {}) or {}
+
+    raw_user_id = metadata.get("user_id") or _get_stripe_value(
+        data_object,
+        "client_reference_id",
+    )
+
+    if not raw_user_id:
+        return None
+
+    try:
+        return int(raw_user_id)
+    except Exception:
+        return None
+
+
+def _find_user(db: Session, user_id: int | None, email: str | None) -> User | None:
+    user = None
+
+    if user_id:
+        user = db.query(User).filter(User.id == user_id).first()
+
+    if user is None and email:
+        user = db.query(User).filter(User.email == email).first()
+
+    return user
+
+
+def _set_user_pro(db: Session, user: User) -> dict:
+    user.plan = "pro"
+    user.is_pro = True
+
+    db.add(user)
+    db.commit()
+    db.refresh(user)
+
+    return {
+        "status": "ok",
+        "message": "User upgraded to Pro.",
+        "user_id": user.id,
+        "email": user.email,
+        "plan": user.plan,
+        "is_pro": user.is_pro,
+    }
+
+
+def _set_user_free(db: Session, user: User) -> dict:
+    user.plan = "free"
+    user.is_pro = False
+
+    db.add(user)
+    db.commit()
+    db.refresh(user)
+
+    return {
+        "status": "ok",
+        "message": "User downgraded to Free.",
+        "user_id": user.id,
+        "email": user.email,
+        "plan": user.plan,
+        "is_pro": user.is_pro,
+    }
+
+
 def handle_stripe_webhook(body: bytes, signature: str, db: Session) -> dict:
     if not STRIPE_WEBHOOK_SECRET:
         raise HTTPException(status_code=500, detail="STRIPE_WEBHOOK_SECRET is missing.")
@@ -88,97 +188,103 @@ def handle_stripe_webhook(body: bytes, signature: str, db: Session) -> dict:
     except Exception as exc:
         raise HTTPException(status_code=400, detail=f"Invalid Stripe webhook: {exc}")
 
-    event_type = event["type"]
-    data_object = event["data"]["object"]
+    event_type = event.get("type")
+    data_object = event.get("data", {}).get("object", {})
 
-    metadata = data_object.get("metadata") or {}
-    user_id = metadata.get("user_id")
-    email = metadata.get("email") or data_object.get("customer_email")
+    print("STRIPE WEBHOOK EVENT:", event_type)
 
-    if event_type == "checkout.session.completed":
-        subscription_id = data_object.get("subscription")
+    try:
+        if event_type == "checkout.session.completed":
+            user_id = _extract_user_id(data_object)
+            email = _extract_email(data_object)
 
-        if subscription_id:
-            subscription = stripe.Subscription.retrieve(subscription_id)
-            sub_metadata = subscription.get("metadata") or {}
-            user_id = user_id or sub_metadata.get("user_id")
-            email = email or sub_metadata.get("email")
+            print("CHECKOUT COMPLETED USER_ID:", user_id)
+            print("CHECKOUT COMPLETED EMAIL:", email)
 
-        user = None
+            user = _find_user(db, user_id=user_id, email=email)
 
-        if user_id:
-            user = db.query(User).filter(User.id == int(user_id)).first()
+            if not user:
+                return {
+                    "status": "ignored",
+                    "reason": "User not found.",
+                    "event": event_type,
+                    "user_id": user_id,
+                    "email": email,
+                }
 
-        if user is None and email:
-            user = db.query(User).filter(User.email == email).first()
+            return _set_user_pro(db, user)
 
-        if user:
-            user.plan = "pro"
-            user.is_pro = True
-            db.add(user)
-            db.commit()
+        if event_type in {
+            "customer.subscription.created",
+            "customer.subscription.updated",
+        }:
+            metadata = _get_stripe_value(data_object, "metadata", {}) or {}
+            raw_user_id = metadata.get("user_id")
+            email = metadata.get("email")
+            status = _get_stripe_value(data_object, "status", "")
 
-            return {
-                "status": "ok",
-                "event": event_type,
-                "upgraded_user_id": user.id,
-            }
+            user_id = None
 
-    if event_type in {"customer.subscription.created", "customer.subscription.updated"}:
-        metadata = data_object.get("metadata") or {}
-        user_id = metadata.get("user_id")
-        email = metadata.get("email")
-        status = data_object.get("status", "")
+            if raw_user_id:
+                try:
+                    user_id = int(raw_user_id)
+                except Exception:
+                    user_id = None
 
-        user = None
+            user = _find_user(db, user_id=user_id, email=email)
 
-        if user_id:
-            user = db.query(User).filter(User.id == int(user_id)).first()
+            if not user:
+                return {
+                    "status": "ignored",
+                    "reason": "User not found for subscription event.",
+                    "event": event_type,
+                    "subscription_status": status,
+                    "user_id": user_id,
+                    "email": email,
+                }
 
-        if user is None and email:
-            user = db.query(User).filter(User.email == email).first()
-
-        if user:
             if status in {"active", "trialing"}:
-                user.plan = "pro"
-                user.is_pro = True
-            else:
-                user.plan = "free"
-                user.is_pro = False
+                return _set_user_pro(db, user)
 
-            db.add(user)
-            db.commit()
+            return _set_user_free(db, user)
 
-            return {
-                "status": "ok",
-                "event": event_type,
-                "user_id": user.id,
-                "subscription_status": status,
-            }
+        if event_type == "customer.subscription.deleted":
+            metadata = _get_stripe_value(data_object, "metadata", {}) or {}
+            raw_user_id = metadata.get("user_id")
+            email = metadata.get("email")
 
-    if event_type == "customer.subscription.deleted":
-        customer_id = data_object.get("customer")
-        email = None
+            user_id = None
 
-        if customer_id:
-            customer = stripe.Customer.retrieve(customer_id)
-            email = customer.get("email")
+            if raw_user_id:
+                try:
+                    user_id = int(raw_user_id)
+                except Exception:
+                    user_id = None
 
-        user = db.query(User).filter(User.email == email).first() if email else None
+            user = _find_user(db, user_id=user_id, email=email)
 
-        if user:
-            user.plan = "free"
-            user.is_pro = False
-            db.add(user)
-            db.commit()
+            if not user:
+                return {
+                    "status": "ignored",
+                    "reason": "User not found for deleted subscription.",
+                    "event": event_type,
+                    "user_id": user_id,
+                    "email": email,
+                }
 
-            return {
-                "status": "ok",
-                "event": event_type,
-                "downgraded_user_id": user.id,
-            }
+            return _set_user_free(db, user)
 
-    return {
-        "status": "ignored",
-        "event": event_type,
-    }
+        return {
+            "status": "ignored",
+            "event": event_type,
+        }
+
+    except Exception as exc:
+        db.rollback()
+        print("STRIPE WEBHOOK INTERNAL ERROR:", repr(exc))
+
+        return {
+            "status": "error",
+            "event": event_type,
+            "error": str(exc),
+        }
