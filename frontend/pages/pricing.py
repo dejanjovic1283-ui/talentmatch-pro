@@ -15,13 +15,52 @@ BACKEND_URL = os.getenv(
 ).rstrip("/")
 
 
+def get_logged_user() -> dict | None:
+    possible_keys = [
+        "user",
+        "current_user",
+        "firebase_user",
+        "auth_user",
+    ]
+
+    for key in possible_keys:
+        value = st.session_state.get(key)
+
+        if isinstance(value, dict):
+            return value
+
+    return None
+
+
+def get_token_from_user(user: dict | None) -> str:
+    if not user:
+        return ""
+
+    possible_token_keys = [
+        "id_token",
+        "idToken",
+        "token",
+        "access_token",
+        "accessToken",
+    ]
+
+    for key in possible_token_keys:
+        token = user.get(key)
+
+        if token:
+            return str(token)
+
+    token = st.session_state.get("id_token") or st.session_state.get("idToken")
+
+    if token:
+        return str(token)
+
+    return ""
+
+
 def get_auth_headers() -> dict[str, str]:
-    user = st.session_state.get("user")
-
-    if not isinstance(user, dict):
-        return {}
-
-    token = user.get("id_token") or user.get("idToken") or ""
+    user = get_logged_user()
+    token = get_token_from_user(user)
 
     if not token:
         return {}
@@ -46,6 +85,27 @@ def parse_error(response: requests.Response) -> str:
     return str(payload)
 
 
+def get_profile() -> dict | None:
+    headers = get_auth_headers()
+
+    if not headers:
+        return None
+
+    try:
+        response = requests.get(
+            f"{BACKEND_URL}/me",
+            headers=headers,
+            timeout=60,
+        )
+    except requests.RequestException:
+        return None
+
+    if response.status_code != 200:
+        return None
+
+    return response.json()
+
+
 def post_backend(endpoint: str) -> dict | None:
     headers = get_auth_headers()
 
@@ -68,17 +128,6 @@ def post_backend(endpoint: str) -> dict | None:
         return None
 
     return response.json()
-
-
-def demo_upgrade() -> None:
-    result = post_backend("/billing/demo-upgrade")
-
-    if not result:
-        return
-
-    st.success("Demo Pro upgrade successful.")
-    st.balloons()
-    st.rerun()
 
 
 def create_stripe_checkout() -> None:
@@ -111,25 +160,13 @@ def create_billing_portal() -> None:
     st.session_state["stripe_portal_url"] = portal_url
 
 
-def get_profile() -> dict | None:
-    headers = get_auth_headers()
+def demo_upgrade() -> None:
+    result = post_backend("/billing/demo-upgrade")
 
-    if not headers:
-        return None
-
-    try:
-        response = requests.get(
-            f"{BACKEND_URL}/me",
-            headers=headers,
-            timeout=60,
-        )
-    except requests.RequestException:
-        return None
-
-    if response.status_code != 200:
-        return None
-
-    return response.json()
+    if result:
+        st.success("Demo Pro upgrade successful.")
+        st.balloons()
+        st.rerun()
 
 
 query_params = st.query_params
@@ -140,8 +177,10 @@ if query_params.get("success") == "1":
 if query_params.get("canceled") == "1":
     st.warning("Checkout canceled.")
 
+user = get_logged_user()
+headers = get_auth_headers()
+is_logged_in = bool(headers)
 profile = get_profile()
-is_logged_in = bool(get_auth_headers())
 is_pro = bool(profile and profile.get("is_pro"))
 
 st.title("🚀 Upgrade to TalentMatch Pro")
@@ -245,3 +284,15 @@ with col2:
 st.info(
     "Stripe checkout uses test mode now. Use card 4242 4242 4242 4242, expiry 12/34, CVC 123."
 )
+
+with st.expander("Debug auth state"):
+    st.write(
+        {
+            "backend_url": BACKEND_URL,
+            "logged_user_detected": bool(user),
+            "auth_headers_detected": bool(headers),
+            "profile_loaded": bool(profile),
+            "is_pro": is_pro,
+            "session_state_keys": list(st.session_state.keys()),
+        }
+    )
