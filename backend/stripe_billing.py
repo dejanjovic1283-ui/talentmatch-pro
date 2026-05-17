@@ -24,9 +24,11 @@ def create_checkout_session(user: User) -> str:
     if not STRIPE_PRICE_ID:
         raise HTTPException(status_code=500, detail="STRIPE_PRICE_ID is missing.")
 
+    user_email = (user.email or "").strip().lower()
+
     session = stripe.checkout.Session.create(
         mode="subscription",
-        customer_email=user.email,
+        customer_email=user_email,
         client_reference_id=str(user.id),
         line_items=[
             {
@@ -36,12 +38,12 @@ def create_checkout_session(user: User) -> str:
         ],
         metadata={
             "user_id": str(user.id),
-            "email": user.email,
+            "email": user_email,
         },
         subscription_data={
             "metadata": {
                 "user_id": str(user.id),
-                "email": user.email,
+                "email": user_email,
             }
         },
         success_url=f"{FRONTEND_URL}/pricing?success=1",
@@ -58,12 +60,14 @@ def create_customer_portal_url(user: User) -> str:
     if not stripe.api_key:
         raise HTTPException(status_code=500, detail="STRIPE_SECRET_KEY is missing.")
 
-    customers = stripe.Customer.list(email=user.email, limit=1)
+    user_email = (user.email or "").strip().lower()
+
+    customers = stripe.Customer.list(email=user_email, limit=1)
 
     if customers.data:
         customer = customers.data[0]
     else:
-        customer = stripe.Customer.create(email=user.email)
+        customer = stripe.Customer.create(email=user_email)
 
     portal_session = stripe.billing_portal.Session.create(
         customer=customer.id,
@@ -85,27 +89,53 @@ def _get_stripe_value(obj, key, default=None):
         return getattr(obj, key, default)
 
 
+def _normalize_email(email) -> str | None:
+    if not email:
+        return None
+
+    email = str(email).strip().lower()
+
+    if not email:
+        return None
+
+    return email
+
+
 def _extract_email(data_object) -> str | None:
-    email = _get_stripe_value(data_object, "customer_email")
+    email = _normalize_email(_get_stripe_value(data_object, "customer_email"))
 
     if email:
         return email
 
     metadata = _get_stripe_value(data_object, "metadata", {}) or {}
-    email = metadata.get("email")
 
-    if email:
-        return email
+    if isinstance(metadata, dict):
+        email = _normalize_email(metadata.get("email"))
+
+        if email:
+            return email
 
     customer_details = _get_stripe_value(data_object, "customer_details", {}) or {}
 
     if isinstance(customer_details, dict):
-        email = customer_details.get("email")
+        email = _normalize_email(customer_details.get("email"))
     else:
-        email = _get_stripe_value(customer_details, "email")
+        email = _normalize_email(_get_stripe_value(customer_details, "email"))
 
     if email:
         return email
+
+    customer_id = _get_stripe_value(data_object, "customer")
+
+    if customer_id:
+        try:
+            customer = stripe.Customer.retrieve(customer_id)
+            email = _normalize_email(_get_stripe_value(customer, "email"))
+
+            if email:
+                return email
+        except Exception as exc:
+            print("COULD NOT RETRIEVE CUSTOMER EMAIL:", repr(exc))
 
     return None
 
@@ -113,10 +143,13 @@ def _extract_email(data_object) -> str | None:
 def _extract_user_id(data_object) -> int | None:
     metadata = _get_stripe_value(data_object, "metadata", {}) or {}
 
-    raw_user_id = metadata.get("user_id") or _get_stripe_value(
-        data_object,
-        "client_reference_id",
-    )
+    raw_user_id = None
+
+    if isinstance(metadata, dict):
+        raw_user_id = metadata.get("user_id")
+
+    if not raw_user_id:
+        raw_user_id = _get_stripe_value(data_object, "client_reference_id")
 
     if not raw_user_id:
         return None
@@ -130,11 +163,23 @@ def _extract_user_id(data_object) -> int | None:
 def _find_user(db: Session, user_id: int | None, email: str | None) -> User | None:
     user = None
 
-    if user_id:
+    if user_id is not None:
         user = db.query(User).filter(User.id == user_id).first()
 
     if user is None and email:
-        user = db.query(User).filter(User.email == email).first()
+        clean_email = email.strip().lower()
+
+        user = db.query(User).filter(User.email == clean_email).first()
+
+        if user is None:
+            users = db.query(User).all()
+
+            for candidate in users:
+                candidate_email = (candidate.email or "").strip().lower()
+
+                if candidate_email == clean_email:
+                    user = candidate
+                    break
 
     return user
 
@@ -175,6 +220,23 @@ def _set_user_free(db: Session, user: User) -> dict:
     }
 
 
+def _get_subscription_metadata(subscription_id: str | None) -> dict:
+    if not subscription_id:
+        return {}
+
+    try:
+        subscription = stripe.Subscription.retrieve(subscription_id)
+        metadata = _get_stripe_value(subscription, "metadata", {}) or {}
+
+        if isinstance(metadata, dict):
+            return dict(metadata)
+
+        return {}
+    except Exception as exc:
+        print("COULD NOT RETRIEVE SUBSCRIPTION METADATA:", repr(exc))
+        return {}
+
+
 def handle_stripe_webhook(body: bytes, signature: str, db: Session) -> dict:
     if not STRIPE_WEBHOOK_SECRET:
         raise HTTPException(status_code=500, detail="STRIPE_WEBHOOK_SECRET is missing.")
@@ -198,10 +260,25 @@ def handle_stripe_webhook(body: bytes, signature: str, db: Session) -> dict:
             user_id = _extract_user_id(data_object)
             email = _extract_email(data_object)
 
+            if not user_id or not email:
+                subscription_id = _get_stripe_value(data_object, "subscription")
+                subscription_metadata = _get_subscription_metadata(subscription_id)
+
+                if not user_id and subscription_metadata.get("user_id"):
+                    try:
+                        user_id = int(subscription_metadata.get("user_id"))
+                    except Exception:
+                        user_id = None
+
+                if not email and subscription_metadata.get("email"):
+                    email = _normalize_email(subscription_metadata.get("email"))
+
             print("CHECKOUT COMPLETED USER_ID:", user_id)
             print("CHECKOUT COMPLETED EMAIL:", email)
 
             user = _find_user(db, user_id=user_id, email=email)
+
+            print("CHECKOUT USER FOUND:", bool(user))
 
             if not user:
                 return {
@@ -219,8 +296,14 @@ def handle_stripe_webhook(body: bytes, signature: str, db: Session) -> dict:
             "customer.subscription.updated",
         }:
             metadata = _get_stripe_value(data_object, "metadata", {}) or {}
-            raw_user_id = metadata.get("user_id")
-            email = metadata.get("email")
+
+            raw_user_id = None
+            email = None
+
+            if isinstance(metadata, dict):
+                raw_user_id = metadata.get("user_id")
+                email = _normalize_email(metadata.get("email"))
+
             status = _get_stripe_value(data_object, "status", "")
 
             user_id = None
@@ -232,6 +315,11 @@ def handle_stripe_webhook(body: bytes, signature: str, db: Session) -> dict:
                     user_id = None
 
             user = _find_user(db, user_id=user_id, email=email)
+
+            print("SUBSCRIPTION EVENT STATUS:", status)
+            print("SUBSCRIPTION USER_ID:", user_id)
+            print("SUBSCRIPTION EMAIL:", email)
+            print("SUBSCRIPTION USER FOUND:", bool(user))
 
             if not user:
                 return {
@@ -250,8 +338,13 @@ def handle_stripe_webhook(body: bytes, signature: str, db: Session) -> dict:
 
         if event_type == "customer.subscription.deleted":
             metadata = _get_stripe_value(data_object, "metadata", {}) or {}
-            raw_user_id = metadata.get("user_id")
-            email = metadata.get("email")
+
+            raw_user_id = None
+            email = None
+
+            if isinstance(metadata, dict):
+                raw_user_id = metadata.get("user_id")
+                email = _normalize_email(metadata.get("email"))
 
             user_id = None
 
@@ -262,6 +355,10 @@ def handle_stripe_webhook(body: bytes, signature: str, db: Session) -> dict:
                     user_id = None
 
             user = _find_user(db, user_id=user_id, email=email)
+
+            print("SUBSCRIPTION DELETED USER_ID:", user_id)
+            print("SUBSCRIPTION DELETED EMAIL:", email)
+            print("SUBSCRIPTION DELETED USER FOUND:", bool(user))
 
             if not user:
                 return {

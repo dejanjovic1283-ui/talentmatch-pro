@@ -45,11 +45,22 @@ def run_lightweight_migrations() -> None:
     except Exception:
         pass
 
+    try:
+        with engine.begin() as conn:
+            conn.execute(text("ALTER TABLE users ADD COLUMN plan VARCHAR DEFAULT 'free'"))
+    except Exception:
+        pass
+
+    try:
+        with engine.begin() as conn:
+            conn.execute(text("ALTER TABLE users ADD COLUMN is_pro BOOLEAN DEFAULT 0"))
+    except Exception:
+        pass
+
 
 run_lightweight_migrations()
 
 app = FastAPI(title="TalentMatch Pro API")
-
 
 allowed_origins = [
     origin.strip()
@@ -162,7 +173,7 @@ async def analyze_resume(
     try:
         result = analyze_cv_with_ai(cv_text, job_description)
     except Exception as exc:
-        print("OPENAI ANALYSIS ERROR:", exc)
+        print("OPENAI ANALYSIS ERROR:", repr(exc))
         raise HTTPException(status_code=500, detail=f"AI analysis failed: {exc}")
 
     try:
@@ -172,7 +183,7 @@ async def analyze_resume(
             file.filename or "resume.pdf",
         )
     except Exception as exc:
-        print("FIREBASE STORAGE ERROR:", exc)
+        print("FIREBASE STORAGE ERROR:", repr(exc))
         storage_path = None
 
     record = AnalysisRecord(
@@ -219,7 +230,7 @@ async def analyze_test(
     try:
         result = analyze_cv_with_ai(cv_text, job_description)
     except Exception as exc:
-        print("OPENAI ANALYSIS TEST ERROR:", exc)
+        print("OPENAI ANALYSIS TEST ERROR:", repr(exc))
         raise HTTPException(status_code=500, detail=f"AI analysis failed: {exc}")
 
     result["storage_path"] = None
@@ -354,7 +365,7 @@ async def semantic_match(
     try:
         return analyze_semantic_match(cv_text, job_description)
     except Exception as exc:
-        print("SEMANTIC MATCH ERROR:", exc)
+        print("SEMANTIC MATCH ERROR:", repr(exc))
         raise HTTPException(status_code=500, detail=f"Semantic match failed: {exc}")
 
 
@@ -398,7 +409,7 @@ async def recruiter_rank_candidates(
         try:
             cv_text = extract_text_from_pdf(pdf_bytes)
         except Exception as exc:
-            print(f"CV EXTRACT ERROR for {uploaded_file.filename}:", exc)
+            print(f"CV EXTRACT ERROR for {uploaded_file.filename}:", repr(exc))
             cv_text = ""
 
         candidates.append(
@@ -414,7 +425,7 @@ async def recruiter_rank_candidates(
             job_description=job_description,
         )
     except Exception as exc:
-        print("RECRUITER RANKING ERROR:", exc)
+        print("RECRUITER RANKING ERROR:", repr(exc))
         raise HTTPException(status_code=500, detail=f"Recruiter ranking failed: {exc}")
 
 
@@ -451,7 +462,7 @@ async def rewrite_cv(
     try:
         return rewrite_cv_with_ai(cv_text, job_description)
     except Exception as exc:
-        print("OPENAI CV REWRITE ERROR:", exc)
+        print("OPENAI CV REWRITE ERROR:", repr(exc))
         raise HTTPException(status_code=500, detail=f"CV rewrite failed: {exc}")
 
 
@@ -492,7 +503,7 @@ async def create_analysis_pdf_report(
             job_description=job_description,
         )
     except Exception as exc:
-        print("PDF REPORT ERROR:", exc)
+        print("PDF REPORT ERROR:", repr(exc))
         raise HTTPException(status_code=500, detail=f"PDF report failed: {exc}")
 
     safe_filename = re.sub(r"[^a-zA-Z0-9_-]+", "_", cv_filename.replace(".pdf", ""))
@@ -603,11 +614,31 @@ async def stripe_webhook(
     request: Request,
     db: Session = Depends(get_db),
 ):
-    body = await request.body()
-    signature = request.headers.get("stripe-signature", "")
+    try:
+        body = await request.body()
+        signature = request.headers.get("stripe-signature", "")
 
-    return handle_stripe_webhook(
-        body=body,
-        signature=signature,
-        db=db,
-    )
+        print("=== STRIPE WEBHOOK RECEIVED ===")
+        print("SIGNATURE PRESENT:", bool(signature))
+
+        result = handle_stripe_webhook(
+            body=body,
+            signature=signature,
+            db=db,
+        )
+
+        print("WEBHOOK RESULT:", result)
+
+        return {
+            "received": True,
+            "result": result,
+        }
+
+    except Exception as exc:
+        print("WEBHOOK FATAL ERROR:", repr(exc))
+        db.rollback()
+
+        return {
+            "received": False,
+            "error": str(exc),
+        }
