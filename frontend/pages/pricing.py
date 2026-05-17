@@ -29,7 +29,24 @@ def get_auth_headers() -> dict[str, str]:
     return {"Authorization": f"Bearer {token}"}
 
 
-def post_billing_endpoint(endpoint: str) -> dict | None:
+def parse_error(response: requests.Response) -> str:
+    try:
+        payload = response.json()
+    except ValueError:
+        return response.text
+
+    detail = payload.get("detail")
+
+    if isinstance(detail, dict):
+        return detail.get("message", str(detail))
+
+    if isinstance(detail, str):
+        return detail
+
+    return str(payload)
+
+
+def post_backend(endpoint: str) -> dict | None:
     headers = get_auth_headers()
 
     if not headers:
@@ -40,30 +57,32 @@ def post_billing_endpoint(endpoint: str) -> dict | None:
         response = requests.post(
             f"{BACKEND_URL}{endpoint}",
             headers=headers,
-            timeout=60,
+            timeout=90,
         )
     except requests.RequestException as exc:
-        st.error(f"Billing request failed: {exc}")
+        st.error(f"Request failed: {exc}")
         return None
 
     if response.status_code != 200:
-        st.error(response.text)
+        st.error(parse_error(response))
         return None
 
     return response.json()
 
 
 def demo_upgrade() -> None:
-    result = post_billing_endpoint("/billing/demo-upgrade")
+    result = post_backend("/billing/demo-upgrade")
 
-    if result:
-        st.success("Demo Pro upgrade successful.")
-        st.balloons()
-        st.rerun()
+    if not result:
+        return
+
+    st.success("Demo Pro upgrade successful.")
+    st.balloons()
+    st.rerun()
 
 
-def start_stripe_checkout() -> None:
-    result = post_billing_endpoint("/billing/create-checkout")
+def create_stripe_checkout() -> None:
+    result = post_backend("/billing/create-checkout")
 
     if not result:
         return
@@ -77,8 +96,8 @@ def start_stripe_checkout() -> None:
     st.session_state["stripe_checkout_url"] = checkout_url
 
 
-def open_billing_portal() -> None:
-    result = post_billing_endpoint("/billing/create-portal")
+def create_billing_portal() -> None:
+    result = post_backend("/billing/create-portal")
 
     if not result:
         return
@@ -92,81 +111,127 @@ def open_billing_portal() -> None:
     st.session_state["stripe_portal_url"] = portal_url
 
 
+def get_profile() -> dict | None:
+    headers = get_auth_headers()
+
+    if not headers:
+        return None
+
+    try:
+        response = requests.get(
+            f"{BACKEND_URL}/me",
+            headers=headers,
+            timeout=60,
+        )
+    except requests.RequestException:
+        return None
+
+    if response.status_code != 200:
+        return None
+
+    return response.json()
+
+
 query_params = st.query_params
 
 if query_params.get("success") == "1":
-    st.success("Payment successful. Stripe webhook will unlock Pro shortly.")
+    st.success("Payment successful. Stripe webhook will unlock Pro shortly. Refresh in a few seconds.")
 
 if query_params.get("canceled") == "1":
     st.warning("Checkout canceled.")
+
+profile = get_profile()
+is_logged_in = bool(get_auth_headers())
+is_pro = bool(profile and profile.get("is_pro"))
 
 st.title("🚀 Upgrade to TalentMatch Pro")
 st.caption(
     "Unlock unlimited AI CV analysis, PDF reports, CV Rewrite AI, Semantic Matching, and Recruiter Mode."
 )
 
+if not is_logged_in:
+    st.warning("Please login before upgrading.")
+
+if is_pro:
+    st.success("🚀 Pro plan active.")
+
 free_col, pro_col = st.columns(2)
 
 with free_col:
-    st.container(border=True).markdown(
-        """
-        ## Free
+    with st.container(border=True):
+        st.markdown("## Free")
+        st.markdown(
+            """
+            ✅ 3 CV analyses  
+            ✅ ATS keyword checker  
+            ✅ TXT export  
 
-        ✅ 3 CV analyses  
-        ✅ ATS keyword checker  
-        ✅ TXT export  
+            ❌ PDF reports  
+            ❌ CV Rewrite AI  
+            ❌ Semantic Matching  
+            ❌ Recruiter Mode  
+            ❌ Unlimited analyses  
 
-        ❌ PDF reports  
-        ❌ CV Rewrite AI  
-        ❌ Semantic Matching  
-        ❌ Recruiter Mode  
-        ❌ Unlimited analyses  
-
-        **$0**
-        """
-    )
+            **$0**
+            """
+        )
 
 with pro_col:
-    st.container(border=True).markdown(
-        """
-        ## Pro
+    with st.container(border=True):
+        st.markdown("## Pro")
+        st.markdown(
+            """
+            ✅ Unlimited CV analyses  
+            ✅ PDF report export  
+            ✅ CV Rewrite AI  
+            ✅ Semantic Matching  
+            ✅ Recruiter Mode  
+            ✅ Saved history  
+            ✅ Candidate ranking  
+            ✅ Recruiter-ready reports  
 
-        ✅ Unlimited CV analyses  
-        ✅ PDF report export  
-        ✅ CV Rewrite AI  
-        ✅ Semantic Matching  
-        ✅ Recruiter Mode  
-        ✅ Saved history  
-        ✅ Candidate ranking  
-        ✅ Recruiter-ready reports  
-
-        **$9/month**
-        """
-    )
-
-    if st.button("💳 Upgrade with Stripe", use_container_width=True):
-        start_stripe_checkout()
-
-    checkout_url = st.session_state.get("stripe_checkout_url")
-
-    if checkout_url:
-        st.link_button(
-            "Continue to secure Stripe checkout",
-            checkout_url,
-            use_container_width=True,
+            **$9/month**
+            """
         )
+
+        if is_pro:
+            st.success("You already have Pro.")
+        else:
+            if st.button(
+                "💳 Upgrade with Stripe",
+                use_container_width=True,
+                disabled=not is_logged_in,
+            ):
+                create_stripe_checkout()
+
+            checkout_url = st.session_state.get("stripe_checkout_url")
+
+            if checkout_url:
+                st.link_button(
+                    "Continue to secure Stripe checkout",
+                    checkout_url,
+                    use_container_width=True,
+                )
 
 st.divider()
 
 col1, col2 = st.columns(2)
 
 with col1:
-    if st.button("🚀 Demo Upgrade to Pro", use_container_width=True):
+    if st.button(
+        "🚀 Demo Upgrade to Pro",
+        use_container_width=True,
+        disabled=not is_logged_in,
+    ):
         demo_upgrade()
 
 with col2:
-    if st.button("⚙️ Manage Billing", use_container_width=True):
-        open_billing_portal()
+    if st.button(
+        "⚙️ Manage Billing",
+        use_container_width=True,
+        disabled=not is_logged_in,
+    ):
+        create_billing_portal()
 
     portal_url = st.session_state.get("stripe_portal_url")
 
@@ -178,5 +243,5 @@ with col2:
         )
 
 st.info(
-    "Demo upgrade stays available for development. Stripe checkout works after Stripe keys are added in Render."
+    "Stripe checkout uses test mode now. Use card 4242 4242 4242 4242, expiry 12/34, CVC 123."
 )

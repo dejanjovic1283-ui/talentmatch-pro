@@ -23,7 +23,7 @@ from openai_service import analyze_cv_with_ai, rewrite_cv_with_ai
 from pdf_report import build_analysis_pdf_report
 from pdf_utils import extract_text_from_pdf
 from recruiter_service import rank_candidates
-from schemas import AnalysisResponse, BillingCheckoutResponse, HistoryItemResponse
+from schemas import AnalysisResponse, HistoryItemResponse
 from semantic_service import analyze_semantic_match
 from storage import upload_pdf_to_firebase
 from stripe_billing import (
@@ -50,6 +50,7 @@ run_lightweight_migrations()
 
 app = FastAPI(title="TalentMatch Pro API")
 
+
 allowed_origins = [
     origin.strip()
     for origin in os.getenv(
@@ -74,8 +75,9 @@ def config_status() -> dict:
         "openai_configured": bool(os.getenv("OPENAI_API_KEY", "").strip()),
         "firebase_project_configured": bool(os.getenv("FIREBASE_PROJECT_ID", "").strip()),
         "firebase_storage_configured": bool(os.getenv("FIREBASE_STORAGE_BUCKET", "").strip()),
-        "stripe_configured": bool(os.getenv("STRIPE_SECRET_KEY", "").strip()),
+        "stripe_secret_configured": bool(os.getenv("STRIPE_SECRET_KEY", "").strip()),
         "stripe_price_configured": bool(os.getenv("STRIPE_PRICE_ID", "").strip()),
+        "stripe_webhook_configured": bool(os.getenv("STRIPE_WEBHOOK_SECRET", "").strip()),
     }
 
 
@@ -562,7 +564,7 @@ def get_history_test():
     ]
 
 
-@app.post("/billing/create-checkout", response_model=BillingCheckoutResponse)
+@app.post("/billing/create-checkout")
 def create_checkout(current_user: User = Depends(get_current_user)):
     return {
         "checkout_url": create_checkout_session(current_user)
