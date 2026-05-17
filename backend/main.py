@@ -17,7 +17,6 @@ os.environ["REQUESTS_CA_BUNDLE"] = certifi.where()
 ssl._create_default_https_context = ssl.create_default_context(cafile=certifi.where())
 
 from auth import get_current_user, get_test_user
-from billing import create_checkout_url, verify_webhook_signature
 from db import Base, engine, get_db
 from models import AnalysisRecord, User
 from openai_service import analyze_cv_with_ai, rewrite_cv_with_ai
@@ -27,6 +26,11 @@ from recruiter_service import rank_candidates
 from schemas import AnalysisResponse, BillingCheckoutResponse, HistoryItemResponse
 from semantic_service import analyze_semantic_match
 from storage import upload_pdf_to_firebase
+from stripe_billing import (
+    create_checkout_session,
+    create_customer_portal_url,
+    handle_stripe_webhook,
+)
 from usage_service import ensure_analysis_allowed, get_user_usage
 
 load_dotenv()
@@ -70,6 +74,8 @@ def config_status() -> dict:
         "openai_configured": bool(os.getenv("OPENAI_API_KEY", "").strip()),
         "firebase_project_configured": bool(os.getenv("FIREBASE_PROJECT_ID", "").strip()),
         "firebase_storage_configured": bool(os.getenv("FIREBASE_STORAGE_BUCKET", "").strip()),
+        "stripe_configured": bool(os.getenv("STRIPE_SECRET_KEY", "").strip()),
+        "stripe_price_configured": bool(os.getenv("STRIPE_PRICE_ID", "").strip()),
     }
 
 
@@ -559,10 +565,14 @@ def get_history_test():
 @app.post("/billing/create-checkout", response_model=BillingCheckoutResponse)
 def create_checkout(current_user: User = Depends(get_current_user)):
     return {
-        "checkout_url": create_checkout_url(
-            email=current_user.email,
-            user_id=current_user.id,
-        )
+        "checkout_url": create_checkout_session(current_user)
+    }
+
+
+@app.post("/billing/create-portal")
+def create_portal(current_user: User = Depends(get_current_user)):
+    return {
+        "portal_url": create_customer_portal_url(current_user)
     }
 
 
@@ -587,57 +597,15 @@ def demo_upgrade_to_pro(
 
 
 @app.post("/billing/webhook")
-async def webhook(
+async def stripe_webhook(
     request: Request,
     db: Session = Depends(get_db),
 ):
     body = await request.body()
-    signature = request.headers.get("X-Signature", "")
+    signature = request.headers.get("stripe-signature", "")
 
-    if not verify_webhook_signature(body, signature):
-        raise HTTPException(status_code=400, detail="Invalid webhook signature.")
-
-    payload = await request.json()
-
-    meta = payload.get("meta", {}) or {}
-    event_name = meta.get("event_name", "")
-    custom_data = meta.get("custom_data", {}) or {}
-    attributes = payload.get("data", {}).get("attributes", {}) or {}
-
-    paid_status = str(attributes.get("status", "")).lower()
-
-    if event_name and paid_status and paid_status not in {"paid", "active", "on_trial"}:
-        return {
-            "status": "ignored",
-            "event_name": event_name,
-            "payment_status": paid_status,
-        }
-
-    user_id = custom_data.get("user_id")
-    email = custom_data.get("email") or attributes.get("user_email")
-
-    user = None
-
-    if user_id:
-        try:
-            user = db.query(User).filter(User.id == int(user_id)).first()
-        except ValueError:
-            user = None
-
-    if user is None and email:
-        user = db.query(User).filter(User.email == email).first()
-
-    if user:
-        user.plan = "pro"
-        user.is_pro = True
-        db.commit()
-
-        return {
-            "status": "ok",
-            "upgraded_user_id": user.id,
-        }
-
-    return {
-        "status": "ok",
-        "upgraded_user_id": None,
-    }
+    return handle_stripe_webhook(
+        body=body,
+        signature=signature,
+        db=db,
+    )
