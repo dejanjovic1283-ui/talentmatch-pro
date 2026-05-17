@@ -15,57 +15,96 @@ BACKEND_URL = os.getenv(
 
 
 def get_token():
-    return (
-        st.session_state.get("id_token")
-        or st.session_state.get("idToken")
-        or st.session_state.get("firebase_token")
-        or st.session_state.get("token")
-        or ""
-    )
+    user = st.session_state.get("user")
+
+    if isinstance(user, dict):
+        for key in [
+            "idToken",
+            "id_token",
+            "token",
+            "accessToken",
+            "access_token",
+        ]:
+            value = user.get(key)
+            if value:
+                return str(value)
+
+    for key in [
+        "id_token",
+        "idToken",
+        "firebase_token",
+        "token",
+        "access_token",
+    ]:
+        value = st.session_state.get(key)
+        if value:
+            return str(value)
+
+    return ""
 
 
 def get_headers():
     token = get_token()
+
     if not token:
         return {}
+
     return {"Authorization": f"Bearer {token}"}
 
 
 def get_profile():
     headers = get_headers()
+
     if not headers:
         return None
 
     try:
-        r = requests.get(f"{BACKEND_URL}/me", headers=headers, timeout=60)
-        if r.status_code == 200:
-            return r.json()
+        response = requests.get(
+            f"{BACKEND_URL}/me",
+            headers=headers,
+            timeout=60,
+        )
+
+        if response.status_code == 200:
+            return response.json()
+
         return None
+
     except Exception:
         return None
 
 
 def post_backend(endpoint):
     headers = get_headers()
+
     if not headers:
         st.error("Please login first.")
         return None
 
     try:
-        r = requests.post(f"{BACKEND_URL}{endpoint}", headers=headers, timeout=90)
-        if r.status_code != 200:
-            st.error(r.text)
+        response = requests.post(
+            f"{BACKEND_URL}{endpoint}",
+            headers=headers,
+            timeout=90,
+        )
+
+        if response.status_code != 200:
+            st.error(response.text)
             return None
-        return r.json()
-    except Exception as e:
-        st.error(f"Request failed: {e}")
+
+        return response.json()
+
+    except Exception as exc:
+        st.error(f"Request failed: {exc}")
         return None
 
 
 params = st.query_params
 
 if params.get("success") == "1":
-    st.success("Payment successful. Stripe webhook will unlock Pro shortly. Refresh in a few seconds.")
+    st.success(
+        "Payment successful. Stripe webhook will unlock Pro shortly. Refresh in a few seconds."
+    )
 
 if params.get("canceled") == "1":
     st.warning("Checkout canceled.")
@@ -77,7 +116,9 @@ is_logged_in = bool(headers)
 is_pro = bool(profile and profile.get("is_pro"))
 
 st.title("🚀 Upgrade to TalentMatch Pro")
-st.caption("Unlock unlimited AI CV analysis, PDF reports, CV Rewrite AI, Semantic Matching, and Recruiter Mode.")
+st.caption(
+    "Unlock unlimited AI CV analysis, PDF reports, CV Rewrite AI, Semantic Matching, and Recruiter Mode."
+)
 
 if not is_logged_in:
     st.warning("Please login before upgrading.")
@@ -90,7 +131,8 @@ col1, col2 = st.columns(2)
 with col1:
     with st.container(border=True):
         st.markdown("## Free")
-        st.markdown("""
+        st.markdown(
+            """
 ✅ 3 CV analyses  
 ✅ ATS keyword checker  
 ✅ TXT export  
@@ -102,12 +144,14 @@ with col1:
 ❌ Unlimited analyses  
 
 **$0**
-""")
+"""
+        )
 
 with col2:
     with st.container(border=True):
         st.markdown("## Pro")
-        st.markdown("""
+        st.markdown(
+            """
 ✅ Unlimited CV analyses  
 ✅ PDF report export  
 ✅ CV Rewrite AI  
@@ -118,13 +162,19 @@ with col2:
 ✅ Recruiter-ready reports  
 
 **$9/month**
-""")
+"""
+        )
 
         if is_pro:
             st.success("You already have Pro.")
         else:
-            if st.button("💳 Upgrade with Stripe", use_container_width=True, disabled=not is_logged_in):
+            if st.button(
+                "💳 Upgrade with Stripe",
+                use_container_width=True,
+                disabled=not is_logged_in,
+            ):
                 data = post_backend("/billing/create-checkout")
+
                 if data and data.get("checkout_url"):
                     st.session_state["checkout_url"] = data["checkout_url"]
 
@@ -137,18 +187,28 @@ with col2:
 
 st.divider()
 
-c1, c2 = st.columns(2)
+left, right = st.columns(2)
 
-with c1:
-    if st.button("🚀 Demo Upgrade to Pro", use_container_width=True, disabled=not is_logged_in):
+with left:
+    if st.button(
+        "🚀 Demo Upgrade to Pro",
+        use_container_width=True,
+        disabled=not is_logged_in,
+    ):
         data = post_backend("/billing/demo-upgrade")
+
         if data:
             st.success("Demo upgrade successful.")
             st.rerun()
 
-with c2:
-    if st.button("⚙️ Manage Billing", use_container_width=True, disabled=not is_logged_in):
+with right:
+    if st.button(
+        "⚙️ Manage Billing",
+        use_container_width=True,
+        disabled=not is_logged_in,
+    ):
         data = post_backend("/billing/create-portal")
+
         if data and data.get("portal_url"):
             st.session_state["portal_url"] = data["portal_url"]
 
@@ -159,15 +219,19 @@ with c2:
             use_container_width=True,
         )
 
-st.info("Stripe checkout uses test mode now. Use card 4242 4242 4242 4242, expiry 12/34, CVC 123.")
+st.info(
+    "Stripe checkout uses test mode now. Use card 4242 4242 4242 4242, expiry 12/34, CVC 123."
+)
 
 with st.expander("Debug auth state"):
-    st.json({
-        "backend_url": BACKEND_URL,
-        "logged_user_detected": is_logged_in,
-        "auth_headers_detected": bool(headers),
-        "profile_loaded": bool(profile),
-        "is_pro": is_pro,
-        "profile": profile,
-        "session_state_keys": list(st.session_state.keys()),
-    })
+    st.json(
+        {
+            "backend_url": BACKEND_URL,
+            "logged_user_detected": is_logged_in,
+            "auth_headers_detected": bool(headers),
+            "profile_loaded": bool(profile),
+            "is_pro": is_pro,
+            "profile": profile,
+            "session_state_keys": list(st.session_state.keys()),
+        }
+    )
