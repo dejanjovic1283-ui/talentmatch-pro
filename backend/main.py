@@ -579,16 +579,12 @@ def get_history_test():
 
 @app.post("/billing/create-checkout")
 def create_checkout(current_user: User = Depends(get_current_user)):
-    return {
-        "checkout_url": create_checkout_session(current_user)
-    }
+    return {"checkout_url": create_checkout_session(current_user)}
 
 
 @app.post("/billing/create-portal")
 def create_portal(current_user: User = Depends(get_current_user)):
-    return {
-        "portal_url": create_customer_portal_url(current_user)
-    }
+    return {"portal_url": create_customer_portal_url(current_user)}
 
 
 @app.post("/billing/demo-upgrade")
@@ -644,3 +640,16 @@ async def stripe_webhook(
             "received": False,
             "error": str(exc),
         }
+
+
+if __name__ == "__main__":
+    import uvicorn
+
+    port = int(os.environ.get("PORT", "10000"))
+
+    uvicorn.run(
+        "main:app",
+        host="0.0.0.0",
+        port=port,
+        reload=False,
+    )
