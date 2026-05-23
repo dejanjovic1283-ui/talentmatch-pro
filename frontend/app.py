@@ -1,11 +1,5 @@
-from __future__ import annotations
-
-import json
 import os
-from dataclasses import dataclass
-from datetime import datetime
-from typing import Any
-
+import json
 import requests
 import streamlit as st
 
@@ -15,14 +9,12 @@ st.set_page_config(
     layout="wide",
 )
 
-DEFAULT_BACKEND_URL = "https://talentmatch-backend-1283.onrender.com"
-ANALYZE_ENDPOINT = "/analyze-resume"
-ME_ENDPOINT = "/me"
-PDF_REPORT_ENDPOINT = "/reports/analysis-pdf"
-DEFAULT_REQUEST_TIMEOUT_SECONDS = 120
+BACKEND_URL = os.getenv(
+    "BACKEND_URL",
+    "https://talentmatch-backend-1283.onrender.com",
+).rstrip("/")
 
-DEFAULT_JOB_DESCRIPTION = """
-Founding Full-Stack AI SaaS Engineer
+DEFAULT_JOB_DESCRIPTION = """Founding Full-Stack AI SaaS Engineer
 
 We are building TalentMatch Pro, an AI-powered SaaS platform that helps job seekers compare their CVs against real job descriptions, identify gaps, and improve their application strategy.
 
@@ -30,7 +22,7 @@ What you will do:
 - Build and scale a FastAPI + Streamlit product
 - Integrate Firebase authentication and storage
 - Ship AI-powered CV analysis with OpenAI
-- Own billing workflows with Lemon Squeezy
+- Own billing workflows with Stripe
 - Improve product reliability, UX, and deployment pipelines
 
 What we are looking for:
@@ -42,201 +34,142 @@ What we are looking for:
 Nice to have:
 - Experience with AI products, prompt design, and PDF/document processing
 - Experience building MVPs from zero to first users
-""".strip()
+"""
 
 
-@dataclass(frozen=True)
-class AppConfig:
-    backend_url: str
-    request_timeout_seconds: int
-
-
-def load_config() -> AppConfig:
-    backend_url = os.getenv("BACKEND_URL", DEFAULT_BACKEND_URL).rstrip("/")
-
-    try:
-        timeout = int(os.getenv("REQUEST_TIMEOUT_SECONDS", str(DEFAULT_REQUEST_TIMEOUT_SECONDS)))
-    except ValueError:
-        timeout = DEFAULT_REQUEST_TIMEOUT_SECONDS
-
-    return AppConfig(
-        backend_url=backend_url,
-        request_timeout_seconds=timeout,
-    )
-
-
-def get_auth_headers() -> dict[str, str]:
+def get_token():
     user = st.session_state.get("user")
 
-    if not isinstance(user, dict):
-        return {}
+    if isinstance(user, dict):
+        for key in ["idToken", "id_token", "token", "accessToken", "access_token"]:
+            value = user.get(key)
+            if value:
+                return str(value)
 
-    token = user.get("id_token") or user.get("idToken") or ""
+    for key in ["id_token", "idToken", "firebase_token", "token", "access_token"]:
+        value = st.session_state.get(key)
+        if value:
+            return str(value)
 
+    return ""
+
+
+def get_headers():
+    token = get_token()
     if not token:
         return {}
-
     return {"Authorization": f"Bearer {token}"}
 
 
-def sign_out() -> None:
-    for key in [
-        "user",
-        "usage",
-        "analysis_result",
-        "last_uploaded_name",
-        "last_job_description",
-        "pdf_report_bytes",
-    ]:
-        st.session_state.pop(key, None)
-
-
-def fetch_usage(config: AppConfig) -> dict[str, Any] | None:
-    headers = get_auth_headers()
+def get_profile():
+    headers = get_headers()
 
     if not headers:
         return None
 
     try:
         response = requests.get(
-            f"{config.backend_url}{ME_ENDPOINT}",
+            f"{BACKEND_URL}/me",
             headers=headers,
-            timeout=30,
+            timeout=60,
         )
-    except requests.RequestException:
+
+        if response.status_code == 200:
+            return response.json()
+
         return None
 
-    if response.status_code != 200:
+    except Exception:
         return None
+
+
+def analyze_cv(uploaded_file, job_description):
+    headers = get_headers()
+
+    if not headers:
+        st.error("Please login before analyzing a CV.")
+        return None
+
+    files = {
+        "file": (
+            uploaded_file.name,
+            uploaded_file.getvalue(),
+            "application/pdf",
+        )
+    }
+
+    data = {
+        "job_description": job_description,
+    }
 
     try:
-        usage = response.json()
-    except ValueError:
-        return None
+        response = requests.post(
+            f"{BACKEND_URL}/analyze-resume",
+            headers=headers,
+            files=files,
+            data=data,
+            timeout=180,
+        )
 
-    st.session_state["usage"] = usage
-    return usage
+        if response.status_code != 200:
+            st.error(response.text)
+            return None
 
-
-def render_usage_box(config: AppConfig) -> None:
-    usage = fetch_usage(config)
-
-    if not usage:
-        st.info("Usage info unavailable.")
-        return
-
-    is_pro = bool(usage.get("is_pro"))
-    used = int(usage.get("analyses_used", 0) or 0)
-    limit = int(usage.get("free_limit", 3) or 3)
-    remaining = int(usage.get("remaining", 0) or 0)
-
-    if is_pro:
-        st.success("🚀 Pro plan active — unlimited analyses.")
-        return
-
-    st.info(f"Free plan: {used}/{limit} analyses used. Remaining: {remaining}")
-
-    if limit > 0:
-        st.progress(min(used / limit, 1.0))
-
-    if remaining <= 0:
-        st.error("Free limit reached. Upgrade to Pro to continue.")
-
-
-def render_sidebar(config: AppConfig) -> None:
-    st.sidebar.markdown("## Authentication")
-
-    user = st.session_state.get("user")
-
-    if isinstance(user, dict) and user.get("id_token"):
-        st.sidebar.success("Signed in as")
-        st.sidebar.markdown(user.get("email", "Unknown user"))
-
-        if st.sidebar.button("Sign out", use_container_width=True):
-            sign_out()
-            st.rerun()
-
-        st.sidebar.divider()
-        render_usage_box(config)
-
-    else:
-        st.sidebar.warning("Please login first.")
-        st.sidebar.page_link("pages/login.py", label="Login", icon="🔐")
-        st.sidebar.page_link("pages/register.py", label="Register", icon="🚀")
-
-    st.sidebar.divider()
-    st.sidebar.page_link("pages/landing.py", label="Landing", icon="🏠")
-    st.sidebar.page_link("pages/ats_checker.py", label="ATS Checker", icon="🎯")
-    st.sidebar.page_link("pages/cv_rewrite.py", label="CV Rewrite AI", icon="✍️")
-    st.sidebar.page_link("pages/history.py", label="History", icon="📜")
-    st.sidebar.page_link("pages/admin_analytics.py", label="Admin Analytics", icon="📊")
-
-
-def score_verdict(score: int) -> tuple[str, str]:
-    if score >= 80:
-        return "Strong Match", "🔥"
-    if score >= 60:
-        return "Good Match", "✅"
-    return "Weak Match", "⚠️"
-
-
-def extract_error_message(response: requests.Response) -> str:
-    try:
-        payload = response.json()
-    except ValueError:
-        return response.text[:1000]
-
-    detail = payload.get("detail")
-
-    if isinstance(detail, dict):
-        return detail.get("message", str(detail))
-
-    if isinstance(detail, str):
-        return detail
-
-    return str(payload)
-
-
-def handle_backend_response(response: requests.Response) -> dict[str, Any] | None:
-    if response.status_code == 401:
-        st.error("Unauthorized. Please sign out and sign in again.")
-        return None
-
-    if response.status_code == 403:
-        message = extract_error_message(response)
-        st.error(message)
-        st.warning("🚀 Upgrade to Pro to unlock unlimited analyses, PDF reports, and CV Rewrite AI.")
-        return None
-
-    if response.status_code == 429:
-        st.error("Too Many Requests")
-        return None
-
-    if response.status_code != 200:
-        st.error(extract_error_message(response))
-        return None
-
-    try:
         return response.json()
-    except ValueError:
-        st.error("Backend returned invalid JSON.")
+
+    except Exception as exc:
+        st.error(f"Analysis failed: {exc}")
         return None
 
 
-def build_text_report(result: dict[str, Any]) -> str:
-    score = int(result.get("score", 0) or 0)
-    verdict, icon = score_verdict(score)
+def generate_pdf_report(result, job_description):
+    headers = get_headers()
 
-    cv_file = st.session_state.get("last_uploaded_name", "resume.pdf")
-    job_description = st.session_state.get("last_job_description", "")
+    if not headers:
+        st.error("Please login first.")
+        return None
+
+    try:
+        data = {
+            "cv_filename": result.get("cv_filename", st.session_state.get("last_uploaded_name", "resume.pdf")),
+            "score": int(result.get("score", 0)),
+            "summary": result.get("summary", ""),
+            "strengths_json": json.dumps(result.get("strengths", [])),
+            "weaknesses_json": json.dumps(result.get("weaknesses", [])),
+            "recommendations_json": json.dumps(result.get("recommendations", [])),
+            "job_description": job_description,
+        }
+
+        response = requests.post(
+            f"{BACKEND_URL}/reports/analysis-pdf",
+            headers=headers,
+            data=data,
+            timeout=120,
+        )
+
+        if response.status_code != 200:
+            st.error(response.text)
+            return None
+
+        return response.content
+
+    except Exception as exc:
+        st.error(f"PDF generation failed: {exc}")
+        return None
+
+
+def make_txt_report(result, job_description):
+    strengths = result.get("strengths", [])
+    weaknesses = result.get("weaknesses", [])
+    recommendations = result.get("recommendations", [])
 
     lines = [
-        "TalentMatch Pro - CV Analysis Report",
-        "=" * 42,
-        f"Generated at: {datetime.now().strftime('%Y-%m-%d %H:%M')}",
-        f"CV file: {cv_file}",
-        f"Match score: {score}/100",
-        f"Verdict: {icon} {verdict}",
+        "TalentMatch Pro CV Analysis Report",
+        "=" * 40,
+        "",
+        f"Score: {result.get('score', 0)}/100",
+        f"Verdict: {result.get('verdict', 'N/A')}",
+        f"CV file: {result.get('cv_filename', st.session_state.get('last_uploaded_name', 'resume.pdf'))}",
         "",
         "Summary",
         "-" * 20,
@@ -246,17 +179,17 @@ def build_text_report(result: dict[str, Any]) -> str:
         "-" * 20,
     ]
 
-    for item in result.get("strengths", []):
+    for item in strengths:
         lines.append(f"- {item}")
 
     lines.extend(["", "Missing Skills", "-" * 20])
 
-    for item in result.get("weaknesses", []):
+    for item in weaknesses:
         lines.append(f"- {item}")
 
     lines.extend(["", "Recommendations", "-" * 20])
 
-    for item in result.get("recommendations", []):
+    for item in recommendations:
         lines.append(f"- {item}")
 
     lines.extend(["", "Job Description", "-" * 20, job_description])
@@ -264,230 +197,183 @@ def build_text_report(result: dict[str, Any]) -> str:
     return "\n".join(lines)
 
 
-def fetch_pdf_report(config: AppConfig, result: dict[str, Any]) -> bytes | None:
-    headers = get_auth_headers()
+profile = get_profile()
+is_logged_in = bool(get_headers())
+is_pro = bool(profile and profile.get("is_pro"))
+plan = profile.get("plan", "free") if profile else "free"
+remaining = profile.get("remaining") if profile else None
+used = profile.get("analyses_used") if profile else None
+free_limit = profile.get("free_limit", 3) if profile else 3
 
-    if not headers:
-        st.error("Missing auth token. Please login again.")
-        return None
+st.markdown("# 🚀 TalentMatch Pro")
+st.caption("AI-powered CV matching, ATS keyword analysis, and job application insights.")
 
-    cv_filename = str(st.session_state.get("last_uploaded_name", "resume.pdf"))
-    job_description = str(st.session_state.get("last_job_description", ""))
+if not is_logged_in:
+    st.warning("Please login before analyzing a CV.")
+else:
+    if is_pro:
+        st.success("🚀 Pro plan active — unlimited analyses and premium tools unlocked.")
+    else:
+        st.info(f"Free plan: {used or 0}/{free_limit} analyses used. Remaining: {remaining if remaining is not None else free_limit}")
 
-    data = {
-        "cv_filename": cv_filename,
-        "score": str(int(result.get("score", 0) or 0)),
-        "summary": str(result.get("summary", "")),
-        "strengths_json": json.dumps(result.get("strengths", [])),
-        "weaknesses_json": json.dumps(result.get("weaknesses", [])),
-        "recommendations_json": json.dumps(result.get("recommendations", [])),
-        "job_description": job_description,
-    }
+        if remaining is not None:
+            progress = min(max((used or 0) / free_limit, 0), 1)
+            st.progress(progress)
 
-    try:
-        response = requests.post(
-            f"{config.backend_url}{PDF_REPORT_ENDPOINT}",
-            headers=headers,
-            data=data,
-            timeout=config.request_timeout_seconds,
-        )
-    except requests.RequestException as exc:
-        st.error(f"PDF report request failed: {exc}")
-        return None
+st.divider()
 
-    if response.status_code != 200:
-        message = extract_error_message(response)
-        st.error(message)
-        st.warning("📄 PDF reports are a Pro feature.")
-        return None
+uploaded_file = st.file_uploader(
+    "Upload your CV as a PDF",
+    type=["pdf"],
+)
 
-    return response.content
+if uploaded_file:
+    st.session_state["last_uploaded_name"] = uploaded_file.name
+    st.info(f"Selected file: {uploaded_file.name} ({uploaded_file.size / 1024:.1f} KB)")
 
+job_description = st.text_area(
+    "Paste the job description",
+    value=st.session_state.get("last_job_description", DEFAULT_JOB_DESCRIPTION),
+    height=320,
+)
 
-def render_analysis_result(config: AppConfig) -> None:
-    result = st.session_state.get("analysis_result")
+st.session_state["last_job_description"] = job_description
 
-    if not isinstance(result, dict):
-        return
+analyze_disabled = not is_logged_in or uploaded_file is None or not job_description.strip()
 
-    score = int(result.get("score", 0) or 0)
-    verdict, icon = score_verdict(score)
+if st.button(
+    "Analyze CV",
+    use_container_width=True,
+    disabled=analyze_disabled,
+):
+    with st.spinner("Analyzing CV with AI..."):
+        result = analyze_cv(uploaded_file, job_description)
 
+    if result:
+        result["cv_filename"] = uploaded_file.name
+        st.session_state["analysis_result"] = result
+        st.success("Analysis completed successfully.")
+        st.rerun()
+
+if not is_logged_in:
+    st.info("Login first to run an analysis.")
+elif uploaded_file is None:
+    st.info("Upload a PDF CV to start.")
+elif not job_description.strip():
+    st.info("Paste a job description to continue.")
+
+result = st.session_state.get("analysis_result")
+
+if result:
     st.divider()
-    st.header("Analysis result")
+    st.markdown("## Analysis result")
+
+    score = int(result.get("score", 0))
+    verdict = result.get("verdict")
+
+    if not verdict:
+        if score >= 80:
+            verdict = "Strong Match"
+        elif score >= 60:
+            verdict = "Good Match"
+        else:
+            verdict = "Weak Match"
 
     if score >= 80:
-        st.success(f"{icon} {verdict} — {score}/100")
+        st.success(f"🔥 {verdict} — {score}/100")
     elif score >= 60:
-        st.warning(f"{icon} {verdict} — {score}/100")
+        st.warning(f"⚡ {verdict} — {score}/100")
     else:
-        st.error(f"{icon} {verdict} — {score}/100")
+        st.error(f"⚠️ {verdict} — {score}/100")
 
-    col1, col2, col3 = st.columns(3)
+    c1, c2, c3 = st.columns(3)
 
-    with col1:
+    with c1:
         st.metric("Match Score", f"{score}/100")
 
-    with col2:
+    with c2:
         st.metric("Verdict", verdict)
 
-    with col3:
-        st.metric("CV file", st.session_state.get("last_uploaded_name", "resume.pdf"))
+    with c3:
+        st.metric("CV file", result.get("cv_filename", st.session_state.get("last_uploaded_name", "resume.pdf")))
 
-    st.progress(min(max(score, 0), 100) / 100)
+    st.progress(min(max(score / 100, 0), 1))
 
-    cv_file = str(st.session_state.get("last_uploaded_name", "resume")).replace(".pdf", "")
+    txt_report = make_txt_report(result, job_description)
 
-    txt_col, pdf_col = st.columns(2)
+    d1, d2 = st.columns(2)
 
-    with txt_col:
-        report_text = build_text_report(result)
-
+    with d1:
         st.download_button(
             "📥 Download TXT Report",
-            data=report_text,
-            file_name=f"{cv_file}_talentmatch_report.txt",
+            data=txt_report,
+            file_name="talentmatch_report.txt",
             mime="text/plain",
             use_container_width=True,
         )
 
-    with pdf_col:
-        if st.button("📄 Generate PDF Report (Pro)", use_container_width=True):
-            with st.spinner("Generating PDF report..."):
-                pdf_bytes = fetch_pdf_report(config, result)
+    with d2:
+        if is_pro:
+            if st.button("📄 Generate PDF Report", use_container_width=True):
+                with st.spinner("Generating PDF report..."):
+                    pdf_bytes = generate_pdf_report(result, job_description)
 
-            if pdf_bytes:
-                st.session_state["pdf_report_bytes"] = pdf_bytes
-                st.success("PDF report generated.")
+                if pdf_bytes:
+                    st.session_state["pdf_report_bytes"] = pdf_bytes
+                    st.success("PDF report generated.")
 
-        pdf_bytes = st.session_state.get("pdf_report_bytes")
-
-        if isinstance(pdf_bytes, bytes):
-            st.download_button(
-                "⬇️ Download PDF Report",
-                data=pdf_bytes,
-                file_name=f"{cv_file}_talentmatch_report.pdf",
-                mime="application/pdf",
+            if st.session_state.get("pdf_report_bytes"):
+                st.download_button(
+                    "Download PDF Report",
+                    data=st.session_state["pdf_report_bytes"],
+                    file_name="talentmatch_report.pdf",
+                    mime="application/pdf",
+                    use_container_width=True,
+                )
+        else:
+            st.button(
+                "📄 Generate PDF Report (Pro)",
                 use_container_width=True,
+                disabled=True,
             )
+            st.caption("Upgrade to Pro to export PDF reports.")
+
+    st.divider()
 
     st.markdown("## 📝 Summary")
-    st.write(result.get("summary", ""))
+    st.write(result.get("summary", "No summary available."))
 
     left, right = st.columns(2)
 
     with left:
         st.markdown("## ✅ Strengths")
-        for item in result.get("strengths", []):
-            st.markdown(f"- {item}")
+        strengths = result.get("strengths", [])
+
+        if strengths:
+            for item in strengths:
+                st.markdown(f"- {item}")
+        else:
+            st.write("No strengths returned.")
 
     with right:
         st.markdown("## ❌ Missing Skills")
-        for item in result.get("weaknesses", []):
-            st.markdown(f"- {item}")
+        weaknesses = result.get("weaknesses", [])
+
+        if weaknesses:
+            for item in weaknesses:
+                st.markdown(f"- {item}")
+        else:
+            st.write("No missing skills returned.")
 
     st.markdown("## 💡 Recommendations")
-    for item in result.get("recommendations", []):
-        st.markdown(f"- {item}")
+    recommendations = result.get("recommendations", [])
 
+    if recommendations:
+        for item in recommendations:
+            st.markdown(f"- {item}")
+    else:
+        st.write("No recommendations returned.")
 
-def main() -> None:
-    config = load_config()
-
-    render_sidebar(config)
-
-    st.title("🚀 TalentMatch Pro")
-    st.caption("AI-powered CV matching, ATS keyword analysis, and job application insights.")
-
-    user = st.session_state.get("user")
-
-    if not isinstance(user, dict) or not user.get("id_token"):
-        st.warning("Please login before analyzing a CV.")
-        st.stop()
-
-    usage = fetch_usage(config)
-
-    if usage:
-        is_pro = bool(usage.get("is_pro"))
-        remaining = int(usage.get("remaining", 0) or 0)
-
-        if is_pro:
-            st.success("🚀 Pro plan active.")
-        elif remaining <= 0:
-            st.error("Free analysis limit reached. Upgrade to Pro to continue.")
-        else:
-            st.info(f"Free plan: {remaining} analyses remaining.")
-
-    uploaded_file = st.file_uploader(
-        "Upload your CV as a PDF",
-        type=["pdf"],
-        accept_multiple_files=False,
-    )
-
-    job_description = st.text_area(
-        "Paste the job description",
-        value=DEFAULT_JOB_DESCRIPTION,
-        height=320,
-    )
-
-    if uploaded_file is not None:
-        file_size_kb = len(uploaded_file.getvalue()) / 1024
-        st.info(f"Selected file: {uploaded_file.name} ({file_size_kb:.1f} KB)")
-
-    if st.button("Analyze CV", use_container_width=True):
-        if uploaded_file is None:
-            st.error("Please upload a PDF CV.")
-            st.stop()
-
-        if not job_description.strip():
-            st.error("Please paste a job description.")
-            st.stop()
-
-        headers = get_auth_headers()
-
-        if not headers:
-            st.error("Missing auth token. Please login again.")
-            st.stop()
-
-        files = {
-            "file": (
-                uploaded_file.name,
-                uploaded_file.getvalue(),
-                "application/pdf",
-            )
-        }
-
-        data = {"job_description": job_description}
-
-        with st.spinner("Analyzing CV..."):
-            try:
-                response = requests.post(
-                    f"{config.backend_url}{ANALYZE_ENDPOINT}",
-                    headers=headers,
-                    data=data,
-                    files=files,
-                    timeout=config.request_timeout_seconds,
-                )
-            except requests.RequestException as exc:
-                st.error(f"Backend request failed: {exc}")
-                st.stop()
-
-        result = handle_backend_response(response)
-
-        if result is None:
-            st.stop()
-
-        st.session_state["analysis_result"] = result
-        st.session_state["last_uploaded_name"] = uploaded_file.name
-        st.session_state["last_job_description"] = job_description
-        st.session_state.pop("pdf_report_bytes", None)
-
-        fetch_usage(config)
-
-        st.success("Analysis completed successfully.")
-
-    render_analysis_result(config)
-
-
-if __name__ == "__main__":
-    main()
+    if st.query_params.get("debug") == "1":
+        with st.expander("Debug analysis result"):
+            st.json(result)
