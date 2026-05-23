@@ -223,6 +223,8 @@ Optimize your CV, identify missing skills, improve ATS performance, and increase
 """
 )
 
+badge = "⭐ PRO" if is_pro else "FREE"
+st.caption(f"Plan: {badge}")
 st.caption("AI-powered CV matching, ATS keyword analysis, and job application insights.")
 
 b1, b2, b3, b4 = st.columns(4)
@@ -234,10 +236,10 @@ with b2:
     st.metric("ATS Scanner", "Built In")
 
 with b3:
-    st.metric("Semantic Match", "Pro")
+    st.metric("Semantic Match", "Enabled" if is_pro else "Upgrade")
 
 with b4:
-    st.metric("Recruiter Mode", "Pro")
+    st.metric("Recruiter Mode", "Enabled" if is_pro else "Upgrade")
 
 st.divider()
 
@@ -271,7 +273,7 @@ if uploaded_file:
 job_description = st.text_area(
     "Paste the job description",
     value=st.session_state.get("last_job_description", DEFAULT_JOB_DESCRIPTION),
-    height=320,
+    height=220,
 )
 
 st.session_state["last_job_description"] = job_description
