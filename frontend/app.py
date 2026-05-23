@@ -77,9 +77,7 @@ def analyze_cv(uploaded_file, job_description):
         )
     }
 
-    data = {
-        "job_description": job_description,
-    }
+    data = {"job_description": job_description}
 
     try:
         response = requests.post(
@@ -226,7 +224,8 @@ else:
         st.success("🚀 Pro plan active — unlimited analyses and premium tools unlocked.")
     else:
         st.info(
-            f"Free plan: {used or 0}/{free_limit} analyses used. Remaining: {remaining if remaining is not None else free_limit}"
+            f"Free plan: {used or 0}/{free_limit} analyses used. "
+            f"Remaining: {remaining if remaining is not None else free_limit}"
         )
 
         if free_limit:
@@ -249,20 +248,22 @@ if uploaded_file:
 job_description = st.text_area(
     "Paste the job description",
     value=st.session_state.get("last_job_description", ""),
-    placeholder="""Example:
+    placeholder="""Paste the job description here...
 
-Senior Python Backend Engineer
+Example:
 
-Responsibilities:
-- Build scalable APIs
-- Work with PostgreSQL
-- Deploy cloud infrastructure
+Senior Backend Engineer
 
 Requirements:
-- Python
-- FastAPI
-- Docker
-- AWS
+• Python
+• FastAPI
+• PostgreSQL
+• Docker
+
+Responsibilities:
+• Build APIs
+• Improve reliability
+• Deploy cloud services
 """,
     height=220,
 )
@@ -328,7 +329,10 @@ if result:
     with c3:
         st.metric(
             "CV file",
-            result.get("cv_filename", st.session_state.get("last_uploaded_name", "resume.pdf")),
+            result.get(
+                "cv_filename",
+                st.session_state.get("last_uploaded_name", "resume.pdf"),
+            ),
         )
 
     st.progress(min(max(score / 100, 0), 1))
