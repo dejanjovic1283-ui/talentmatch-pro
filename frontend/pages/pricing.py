@@ -16,7 +16,7 @@ BACKEND_URL = os.getenv(
 ).rstrip("/")
 
 STRIPE_MODE = os.getenv("STRIPE_MODE", "test").lower()
-ENABLE_DEMO = os.getenv("ENABLE_DEMO", "true").lower() == "true"
+ENABLE_DEMO = os.getenv("ENABLE_DEMO", "false").lower() == "true"
 
 
 def get_token():
@@ -38,10 +38,8 @@ def get_token():
 
 def get_headers():
     token = get_token()
-
     if not token:
         return {}
-
     return {"Authorization": f"Bearer {token}"}
 
 
@@ -105,8 +103,8 @@ is_pro = bool(profile and profile.get("is_pro"))
 plan = profile.get("plan", "free") if profile else "free"
 
 if success and is_logged_in and not is_pro:
-    with st.spinner("Confirming your Stripe payment and unlocking Pro..."):
-        for _ in range(8):
+    with st.spinner("Confirming Stripe payment and unlocking Pro..."):
+        for _ in range(10):
             time.sleep(2)
             profile = get_profile()
             is_pro = bool(profile and profile.get("is_pro"))
@@ -118,7 +116,9 @@ if success and is_logged_in and not is_pro:
                 time.sleep(1)
                 st.rerun()
 
-    st.warning("Payment was successful, but Pro is still syncing. Please refresh in a few seconds.")
+    st.warning(
+        "Payment was successful, but Pro is still syncing. Please refresh in a few seconds."
+    )
 
 if success and is_pro:
     st.success("🚀 Payment confirmed. Pro plan is active.")
@@ -126,9 +126,12 @@ if success and is_pro:
 if canceled:
     st.warning("Checkout canceled. You can upgrade anytime.")
 
-st.markdown("# 🚀 Upgrade to TalentMatch Pro")
-st.caption(
-    "Unlock unlimited AI CV analysis, PDF reports, CV Rewrite AI, Semantic Matching, Recruiter Mode, and candidate ranking."
+st.markdown(
+    """
+# 🚀 Upgrade to TalentMatch Pro
+
+Unlock unlimited AI CV analysis, PDF reports, CV Rewrite AI, Semantic Matching, Recruiter Mode, and candidate ranking.
+"""
 )
 
 if not is_logged_in:
@@ -204,7 +207,7 @@ with left:
         if st.button(
             "🚀 Demo Upgrade to Pro",
             use_container_width=True,
-            disabled=not is_logged_in,
+            disabled=not is_logged_in or is_pro,
         ):
             data = post_backend("/billing/demo-upgrade")
 
@@ -212,8 +215,6 @@ with left:
                 st.success("Demo upgrade successful.")
                 st.balloons()
                 st.rerun()
-    else:
-        st.caption("Demo upgrade disabled.")
 
 with right:
     if st.button(
@@ -240,7 +241,7 @@ if STRIPE_MODE == "test":
     )
 
 if debug:
-    with st.expander("Debug auth state"):
+    with st.expander("Debug pricing state"):
         st.json(
             {
                 "backend_url": BACKEND_URL,
@@ -250,8 +251,8 @@ if debug:
                 "is_pro": is_pro,
                 "plan": plan,
                 "profile": profile,
-                "session_state_keys": list(st.session_state.keys()),
                 "stripe_mode": STRIPE_MODE,
                 "enable_demo": ENABLE_DEMO,
+                "session_state_keys": list(st.session_state.keys()),
             }
         )
