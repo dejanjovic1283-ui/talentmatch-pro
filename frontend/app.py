@@ -1,5 +1,6 @@
-import os
 import json
+import os
+
 import requests
 import streamlit as st
 
@@ -56,8 +57,10 @@ def get_token():
 
 def get_headers():
     token = get_token()
+
     if not token:
         return {}
+
     return {"Authorization": f"Bearer {token}"}
 
 
@@ -131,7 +134,10 @@ def generate_pdf_report(result, job_description):
 
     try:
         data = {
-            "cv_filename": result.get("cv_filename", st.session_state.get("last_uploaded_name", "resume.pdf")),
+            "cv_filename": result.get(
+                "cv_filename",
+                st.session_state.get("last_uploaded_name", "resume.pdf"),
+            ),
             "score": int(result.get("score", 0)),
             "summary": result.get("summary", ""),
             "strengths_json": json.dumps(result.get("strengths", [])),
@@ -198,15 +204,42 @@ def make_txt_report(result, job_description):
 
 
 profile = get_profile()
-is_logged_in = bool(get_headers())
+headers = get_headers()
+
+is_logged_in = bool(headers)
 is_pro = bool(profile and profile.get("is_pro"))
 plan = profile.get("plan", "free") if profile else "free"
 remaining = profile.get("remaining") if profile else None
-used = profile.get("analyses_used") if profile else None
+used = profile.get("analyses_used") if profile else 0
 free_limit = profile.get("free_limit", 3) if profile else 3
 
-st.markdown("# 🚀 TalentMatch Pro")
+st.markdown(
+    """
+# 🚀 TalentMatch Pro
+
+### AI-powered CV analysis for modern job seekers
+
+Optimize your CV, identify missing skills, improve ATS performance, and increase interview chances.
+"""
+)
+
 st.caption("AI-powered CV matching, ATS keyword analysis, and job application insights.")
+
+b1, b2, b3, b4 = st.columns(4)
+
+with b1:
+    st.metric("AI CV Match", "GPT Powered")
+
+with b2:
+    st.metric("ATS Scanner", "Built In")
+
+with b3:
+    st.metric("Semantic Match", "Pro")
+
+with b4:
+    st.metric("Recruiter Mode", "Pro")
+
+st.divider()
 
 if not is_logged_in:
     st.warning("Please login before analyzing a CV.")
@@ -214,13 +247,17 @@ else:
     if is_pro:
         st.success("🚀 Pro plan active — unlimited analyses and premium tools unlocked.")
     else:
-        st.info(f"Free plan: {used or 0}/{free_limit} analyses used. Remaining: {remaining if remaining is not None else free_limit}")
+        st.info(
+            f"Free plan: {used or 0}/{free_limit} analyses used. Remaining: {remaining if remaining is not None else free_limit}"
+        )
 
-        if remaining is not None:
+        if free_limit:
             progress = min(max((used or 0) / free_limit, 0), 1)
             st.progress(progress)
 
-st.divider()
+        if remaining == 0:
+            st.warning("Free limit reached. Upgrade to Pro to continue.")
+            st.page_link("pages/pricing.py", label="Upgrade to Pro", icon="🚀")
 
 uploaded_file = st.file_uploader(
     "Upload your CV as a PDF",
@@ -252,6 +289,7 @@ if st.button(
     if result:
         result["cv_filename"] = uploaded_file.name
         st.session_state["analysis_result"] = result
+        st.session_state.pop("pdf_report_bytes", None)
         st.success("Analysis completed successfully.")
         st.rerun()
 
@@ -295,7 +333,10 @@ if result:
         st.metric("Verdict", verdict)
 
     with c3:
-        st.metric("CV file", result.get("cv_filename", st.session_state.get("last_uploaded_name", "resume.pdf")))
+        st.metric(
+            "CV file",
+            result.get("cv_filename", st.session_state.get("last_uploaded_name", "resume.pdf")),
+        )
 
     st.progress(min(max(score / 100, 0), 1))
 
@@ -374,6 +415,15 @@ if result:
     else:
         st.write("No recommendations returned.")
 
-    if st.query_params.get("debug") == "1":
-        with st.expander("Debug analysis result"):
-            st.json(result)
+if st.query_params.get("debug") == "1":
+    with st.expander("Debug app state"):
+        st.json(
+            {
+                "backend_url": BACKEND_URL,
+                "logged_in": is_logged_in,
+                "is_pro": is_pro,
+                "plan": plan,
+                "profile": profile,
+                "session_state_keys": list(st.session_state.keys()),
+            }
+        )

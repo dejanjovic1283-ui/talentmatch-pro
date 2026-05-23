@@ -1,5 +1,6 @@
 import os
 import time
+
 import requests
 import streamlit as st
 
@@ -13,6 +14,9 @@ BACKEND_URL = os.getenv(
     "BACKEND_URL",
     "https://talentmatch-backend-1283.onrender.com",
 ).rstrip("/")
+
+STRIPE_MODE = os.getenv("STRIPE_MODE", "test").lower()
+ENABLE_DEMO = os.getenv("ENABLE_DEMO", "true").lower() == "true"
 
 
 def get_token():
@@ -34,8 +38,10 @@ def get_token():
 
 def get_headers():
     token = get_token()
+
     if not token:
         return {}
+
     return {"Authorization": f"Bearer {token}"}
 
 
@@ -89,6 +95,7 @@ def post_backend(endpoint):
 params = st.query_params
 success = params.get("success") == "1"
 canceled = params.get("canceled") == "1"
+debug = params.get("debug") == "1"
 
 headers = get_headers()
 profile = get_profile()
@@ -130,9 +137,9 @@ if not is_logged_in:
 if is_pro:
     st.success("🚀 Pro plan active — all premium features are unlocked.")
 
-col1, col2 = st.columns(2)
+free_col, pro_col = st.columns(2)
 
-with col1:
+with free_col:
     with st.container(border=True):
         st.markdown("## Free")
         st.markdown("### $0")
@@ -150,7 +157,7 @@ with col1:
 """
         )
 
-with col2:
+with pro_col:
     with st.container(border=True):
         st.markdown("## Pro")
         st.markdown("### $9/month")
@@ -193,17 +200,20 @@ st.divider()
 left, right = st.columns(2)
 
 with left:
-    if st.button(
-        "🚀 Demo Upgrade to Pro",
-        use_container_width=True,
-        disabled=not is_logged_in,
-    ):
-        data = post_backend("/billing/demo-upgrade")
+    if ENABLE_DEMO:
+        if st.button(
+            "🚀 Demo Upgrade to Pro",
+            use_container_width=True,
+            disabled=not is_logged_in,
+        ):
+            data = post_backend("/billing/demo-upgrade")
 
-        if data:
-            st.success("Demo upgrade successful.")
-            st.balloons()
-            st.rerun()
+            if data:
+                st.success("Demo upgrade successful.")
+                st.balloons()
+                st.rerun()
+    else:
+        st.caption("Demo upgrade disabled.")
 
 with right:
     if st.button(
@@ -224,11 +234,12 @@ with right:
             use_container_width=True,
         )
 
-st.info(
-    "Stripe is currently in test mode. Use card 4242 4242 4242 4242, expiry 12/34, CVC 123."
-)
+if STRIPE_MODE == "test":
+    st.info(
+        "Stripe test mode enabled. Use card 4242 4242 4242 4242, expiry 12/34, CVC 123."
+    )
 
-if params.get("debug") == "1":
+if debug:
     with st.expander("Debug auth state"):
         st.json(
             {
@@ -240,5 +251,7 @@ if params.get("debug") == "1":
                 "plan": plan,
                 "profile": profile,
                 "session_state_keys": list(st.session_state.keys()),
+                "stripe_mode": STRIPE_MODE,
+                "enable_demo": ENABLE_DEMO,
             }
         )
