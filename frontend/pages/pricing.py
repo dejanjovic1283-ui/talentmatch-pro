@@ -1,4 +1,5 @@
 import os
+import time
 import requests
 import streamlit as st
 
@@ -18,24 +19,12 @@ def get_token():
     user = st.session_state.get("user")
 
     if isinstance(user, dict):
-        for key in [
-            "idToken",
-            "id_token",
-            "token",
-            "accessToken",
-            "access_token",
-        ]:
+        for key in ["idToken", "id_token", "token", "accessToken", "access_token"]:
             value = user.get(key)
             if value:
                 return str(value)
 
-    for key in [
-        "id_token",
-        "idToken",
-        "firebase_token",
-        "token",
-        "access_token",
-    ]:
+    for key in ["id_token", "idToken", "firebase_token", "token", "access_token"]:
         value = st.session_state.get(key)
         if value:
             return str(value)
@@ -45,10 +34,8 @@ def get_token():
 
 def get_headers():
     token = get_token()
-
     if not token:
         return {}
-
     return {"Authorization": f"Bearer {token}"}
 
 
@@ -100,37 +87,55 @@ def post_backend(endpoint):
 
 
 params = st.query_params
-
-if params.get("success") == "1":
-    st.success(
-        "Payment successful. Stripe webhook will unlock Pro shortly. Refresh in a few seconds."
-    )
-
-if params.get("canceled") == "1":
-    st.warning("Checkout canceled.")
+success = params.get("success") == "1"
+canceled = params.get("canceled") == "1"
 
 headers = get_headers()
 profile = get_profile()
 
 is_logged_in = bool(headers)
 is_pro = bool(profile and profile.get("is_pro"))
+plan = profile.get("plan", "free") if profile else "free"
 
-st.title("🚀 Upgrade to TalentMatch Pro")
+if success and is_logged_in and not is_pro:
+    with st.spinner("Confirming your Stripe payment and unlocking Pro..."):
+        for _ in range(8):
+            time.sleep(2)
+            profile = get_profile()
+            is_pro = bool(profile and profile.get("is_pro"))
+            plan = profile.get("plan", "free") if profile else "free"
+
+            if is_pro:
+                st.success("🚀 Pro plan unlocked successfully!")
+                st.balloons()
+                time.sleep(1)
+                st.rerun()
+
+    st.warning("Payment was successful, but Pro is still syncing. Please refresh in a few seconds.")
+
+if success and is_pro:
+    st.success("🚀 Payment confirmed. Pro plan is active.")
+
+if canceled:
+    st.warning("Checkout canceled. You can upgrade anytime.")
+
+st.markdown("# 🚀 Upgrade to TalentMatch Pro")
 st.caption(
-    "Unlock unlimited AI CV analysis, PDF reports, CV Rewrite AI, Semantic Matching, and Recruiter Mode."
+    "Unlock unlimited AI CV analysis, PDF reports, CV Rewrite AI, Semantic Matching, Recruiter Mode, and candidate ranking."
 )
 
 if not is_logged_in:
     st.warning("Please login before upgrading.")
 
 if is_pro:
-    st.success("🚀 Pro plan active.")
+    st.success("🚀 Pro plan active — all premium features are unlocked.")
 
 col1, col2 = st.columns(2)
 
 with col1:
     with st.container(border=True):
         st.markdown("## Free")
+        st.markdown("### $0")
         st.markdown(
             """
 ✅ 3 CV analyses  
@@ -142,14 +147,13 @@ with col1:
 ❌ Semantic Matching  
 ❌ Recruiter Mode  
 ❌ Unlimited analyses  
-
-**$0**
 """
         )
 
 with col2:
     with st.container(border=True):
         st.markdown("## Pro")
+        st.markdown("### $9/month")
         st.markdown(
             """
 ✅ Unlimited CV analyses  
@@ -160,8 +164,6 @@ with col2:
 ✅ Saved history  
 ✅ Candidate ranking  
 ✅ Recruiter-ready reports  
-
-**$9/month**
 """
         )
 
@@ -177,10 +179,11 @@ with col2:
 
                 if data and data.get("checkout_url"):
                     st.session_state["checkout_url"] = data["checkout_url"]
+                    st.rerun()
 
             if st.session_state.get("checkout_url"):
                 st.link_button(
-                    "Open Stripe Checkout",
+                    "Open Secure Stripe Checkout",
                     st.session_state["checkout_url"],
                     use_container_width=True,
                 )
@@ -199,6 +202,7 @@ with left:
 
         if data:
             st.success("Demo upgrade successful.")
+            st.balloons()
             st.rerun()
 
 with right:
@@ -211,27 +215,30 @@ with right:
 
         if data and data.get("portal_url"):
             st.session_state["portal_url"] = data["portal_url"]
+            st.rerun()
 
     if st.session_state.get("portal_url"):
         st.link_button(
-            "Open Billing Portal",
+            "Open Stripe Billing Portal",
             st.session_state["portal_url"],
             use_container_width=True,
         )
 
 st.info(
-    "Stripe checkout uses test mode now. Use card 4242 4242 4242 4242, expiry 12/34, CVC 123."
+    "Stripe is currently in test mode. Use card 4242 4242 4242 4242, expiry 12/34, CVC 123."
 )
 
-with st.expander("Debug auth state"):
-    st.json(
-        {
-            "backend_url": BACKEND_URL,
-            "logged_user_detected": is_logged_in,
-            "auth_headers_detected": bool(headers),
-            "profile_loaded": bool(profile),
-            "is_pro": is_pro,
-            "profile": profile,
-            "session_state_keys": list(st.session_state.keys()),
-        }
-    )
+if params.get("debug") == "1":
+    with st.expander("Debug auth state"):
+        st.json(
+            {
+                "backend_url": BACKEND_URL,
+                "logged_user_detected": is_logged_in,
+                "auth_headers_detected": bool(headers),
+                "profile_loaded": bool(profile),
+                "is_pro": is_pro,
+                "plan": plan,
+                "profile": profile,
+                "session_state_keys": list(st.session_state.keys()),
+            }
+        )
