@@ -15,28 +15,6 @@ BACKEND_URL = os.getenv(
     "https://talentmatch-backend-1283.onrender.com",
 ).rstrip("/")
 
-DEFAULT_JOB_DESCRIPTION = """Founding Full-Stack AI SaaS Engineer
-
-We are building TalentMatch Pro, an AI-powered SaaS platform that helps job seekers compare their CVs against real job descriptions, identify gaps, and improve their application strategy.
-
-What you will do:
-- Build and scale a FastAPI + Streamlit product
-- Integrate Firebase authentication and storage
-- Ship AI-powered CV analysis with OpenAI
-- Own billing workflows with Stripe
-- Improve product reliability, UX, and deployment pipelines
-
-What we are looking for:
-- Strong Python backend fundamentals
-- Experience with APIs, auth, databases, and SaaS integrations
-- Product mindset and ability to ship independently
-- Familiarity with cloud deployment and developer tooling
-
-Nice to have:
-- Experience with AI products, prompt design, and PDF/document processing
-- Experience building MVPs from zero to first users
-"""
-
 
 def get_token():
     user = st.session_state.get("user")
@@ -57,10 +35,8 @@ def get_token():
 
 def get_headers():
     token = get_token()
-
     if not token:
         return {}
-
     return {"Authorization": f"Bearer {token}"}
 
 
@@ -272,7 +248,22 @@ if uploaded_file:
 
 job_description = st.text_area(
     "Paste the job description",
-    value=st.session_state.get("last_job_description", DEFAULT_JOB_DESCRIPTION),
+    value=st.session_state.get("last_job_description", ""),
+    placeholder="""Example:
+
+Senior Python Backend Engineer
+
+Responsibilities:
+- Build scalable APIs
+- Work with PostgreSQL
+- Deploy cloud infrastructure
+
+Requirements:
+- Python
+- FastAPI
+- Docker
+- AWS
+""",
     height=220,
 )
 
