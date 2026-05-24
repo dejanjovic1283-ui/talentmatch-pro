@@ -5,48 +5,33 @@ import requests
 import streamlit as st
 import extra_streamlit_components as stx
 
-
 st.set_page_config(page_title="Login • TalentMatch Pro", page_icon="🔐", layout="wide")
 
 FIREBASE_API_KEY = os.getenv("FIREBASE_API_KEY", "")
 
-
-@st.cache_resource
-def get_cookie_manager():
-    return stx.CookieManager()
-
-
-cookie_manager = get_cookie_manager()
+cookie_manager = stx.CookieManager()
 
 
 def save_auth_cookies(email, id_token, refresh_token=""):
-    expires = datetime.now() + timedelta(days=14)
+    expires_at = datetime.now() + timedelta(days=14)
 
-    cookie_manager.set("tm_email", email or "", expires_at=expires)
-    cookie_manager.set("tm_id_token", id_token or "", expires_at=expires)
-    cookie_manager.set("tm_refresh_token", refresh_token or "", expires_at=expires)
-
-
-def clear_auth_cookies():
-    cookie_manager.delete("tm_email")
-    cookie_manager.delete("tm_id_token")
-    cookie_manager.delete("tm_refresh_token")
+    cookie_manager.set("tm_email", email or "", expires_at=expires_at)
+    cookie_manager.set("tm_id_token", id_token or "", expires_at=expires_at)
+    cookie_manager.set("tm_refresh_token", refresh_token or "", expires_at=expires_at)
 
 
 def restore_auth_from_cookies():
-    cookies = cookie_manager.get_all() or {}
-
-    email = cookies.get("tm_email")
-    id_token = cookies.get("tm_id_token")
-    refresh_token = cookies.get("tm_refresh_token", "")
+    email = cookie_manager.get("tm_email")
+    id_token = cookie_manager.get("tm_id_token")
+    refresh_token = cookie_manager.get("tm_refresh_token")
 
     if email and id_token:
         st.session_state["user"] = {
             "email": email,
             "idToken": id_token,
             "id_token": id_token,
-            "refreshToken": refresh_token,
-            "refresh_token": refresh_token,
+            "refreshToken": refresh_token or "",
+            "refresh_token": refresh_token or "",
         }
 
         st.session_state["firebase_id_token"] = id_token
@@ -54,7 +39,7 @@ def restore_auth_from_cookies():
         st.session_state["idToken"] = id_token
         st.session_state["token"] = id_token
         st.session_state["access_token"] = id_token
-        st.session_state["refresh_token"] = refresh_token
+        st.session_state["refresh_token"] = refresh_token or ""
 
 
 def clear_auth_state():
@@ -72,7 +57,9 @@ def clear_auth_state():
     ]:
         st.session_state.pop(key, None)
 
-    clear_auth_cookies()
+    cookie_manager.delete("tm_email")
+    cookie_manager.delete("tm_id_token")
+    cookie_manager.delete("tm_refresh_token")
 
 
 def firebase_login(email, password):
@@ -97,10 +84,8 @@ st.caption("Access your TalentMatch Pro account.")
 
 current_user = st.session_state.get("user")
 
-if isinstance(current_user, dict):
-    email = current_user.get("email", "")
-
-    st.success(f"Logged in as: {email}")
+if isinstance(current_user, dict) and current_user.get("idToken"):
+    st.success(f"Logged in as: {current_user.get('email', '')}")
 
     col1, col2 = st.columns(2)
 
@@ -114,7 +99,6 @@ if isinstance(current_user, dict):
             st.rerun()
 
     st.stop()
-
 
 email = st.text_input("Email")
 password = st.text_input("Password", type="password")

@@ -1,70 +1,59 @@
 import os
 import json
-from datetime import datetime, timedelta
-
 import requests
 import streamlit as st
 import extra_streamlit_components as stx
 
-
 st.set_page_config(page_title="TalentMatch Pro", page_icon="🚀", layout="wide")
 
+BACKEND_URL = os.getenv(
+    "BACKEND_URL",
+    "https://talentmatch-backend-1283.onrender.com",
+).rstrip("/")
 
-@st.cache_resource
-def get_cookie_manager():
-    return stx.CookieManager()
-
-
-cookie_manager = get_cookie_manager()
-
-
-def load_config():
-    backend_url = (
-        os.getenv("BACKEND_URL")
-        or st.secrets.get("BACKEND_URL", "")
-        or "https://talentmatch-backend-1283.onrender.com"
-    )
-
-    return {"backend_url": backend_url.rstrip("/")}
-
-
-CONFIG = load_config()
-BACKEND_URL = CONFIG["backend_url"]
+cookie_manager = stx.CookieManager()
 
 
 def restore_auth_from_cookies():
-    cookies = cookie_manager.get_all() or {}
+    token = cookie_manager.get("tm_id_token")
+    email = cookie_manager.get("tm_email")
+    refresh_token = cookie_manager.get("tm_refresh_token")
 
-    email = cookies.get("tm_email")
-    id_token = cookies.get("tm_id_token")
-    refresh_token = cookies.get("tm_refresh_token", "")
+    if token:
+        st.session_state["firebase_id_token"] = token
+        st.session_state["id_token"] = token
+        st.session_state["idToken"] = token
+        st.session_state["token"] = token
+        st.session_state["access_token"] = token
 
-    if email and id_token:
         st.session_state["user"] = {
-            "email": email,
-            "idToken": id_token,
-            "id_token": id_token,
-            "refreshToken": refresh_token,
-            "refresh_token": refresh_token,
+            "email": email or "",
+            "idToken": token,
+            "id_token": token,
+            "refreshToken": refresh_token or "",
+            "refresh_token": refresh_token or "",
         }
 
-        st.session_state["firebase_id_token"] = id_token
-        st.session_state["id_token"] = id_token
-        st.session_state["idToken"] = id_token
-        st.session_state["token"] = id_token
-        st.session_state["access_token"] = id_token
-        st.session_state["refresh_token"] = refresh_token
 
+def clear_auth():
+    for key in [
+        "user",
+        "profile",
+        "firebase_id_token",
+        "id_token",
+        "idToken",
+        "token",
+        "access_token",
+        "refresh_token",
+        "analysis_result",
+        "last_uploaded_name",
+        "last_job_description",
+    ]:
+        st.session_state.pop(key, None)
 
-def clear_auth_cookies():
     cookie_manager.delete("tm_email")
     cookie_manager.delete("tm_id_token")
     cookie_manager.delete("tm_refresh_token")
-
-
-def get_current_user():
-    restore_auth_from_cookies()
-    return st.session_state.get("user")
 
 
 def get_auth_token():
@@ -78,7 +67,7 @@ def get_auth_token():
         or st.session_state.get("access_token")
     )
 
-    user = st.session_state.get("user") or {}
+    user = st.session_state.get("user")
 
     if not token and isinstance(user, dict):
         token = (
@@ -94,18 +83,18 @@ def get_auth_token():
 
 def get_auth_headers():
     token = get_auth_token()
-
-    if token:
-        return {"Authorization": f"Bearer {token}"}
-
-    return {}
+    return {"Authorization": f"Bearer {token}"} if token else {}
 
 
-def api_get(path, timeout=20):
-    return requests.get(f"{BACKEND_URL}{path}", headers=get_auth_headers(), timeout=timeout)
+def api_get(path, timeout=30):
+    return requests.get(
+        f"{BACKEND_URL}{path}",
+        headers=get_auth_headers(),
+        timeout=timeout,
+    )
 
 
-def api_post(path, data=None, json_data=None, files=None, timeout=60):
+def api_post(path, data=None, json_data=None, files=None, timeout=120):
     return requests.post(
         f"{BACKEND_URL}{path}",
         headers=get_auth_headers(),
@@ -117,11 +106,14 @@ def api_post(path, data=None, json_data=None, files=None, timeout=60):
 
 
 def load_profile():
-    try:
-        res = api_get("/me")
+    if not get_auth_token():
+        return None
 
-        if res.status_code == 200:
-            profile = res.json()
+    try:
+        response = api_get("/me")
+
+        if response.status_code == 200:
+            profile = response.json()
             st.session_state["profile"] = profile
             return profile
 
@@ -131,12 +123,17 @@ def load_profile():
         return None
 
 
+def get_profile():
+    return st.session_state.get("profile") or load_profile() or {}
+
+
 def refresh_profile():
+    st.session_state.pop("profile", None)
     return load_profile()
 
 
-def get_profile():
-    return st.session_state.get("profile") or load_profile() or {}
+def is_logged_in():
+    return bool(get_auth_token())
 
 
 def is_pro_user():
@@ -149,10 +146,6 @@ def is_pro_user():
     )
 
 
-def get_plan_label():
-    return "PRO" if is_pro_user() else "FREE"
-
-
 def get_usage():
     profile = get_profile()
 
@@ -163,35 +156,33 @@ def get_usage():
     return used, limit, remaining
 
 
-def render_auth_box():
-    user = get_current_user()
+def require_login():
+    if not is_logged_in():
+        st.warning("Please login first.")
+        st.page_link("pages/login.py", label="🔐 Go to Login")
+        st.stop()
 
+
+def require_pro(feature_name="This feature"):
+    if not is_pro_user():
+        st.error(f"{feature_name} is a Pro feature.")
+        st.page_link("pages/pricing.py", label="🚀 Upgrade to Pro")
+        st.stop()
+
+
+def render_sidebar_auth():
     with st.sidebar:
         st.divider()
         st.markdown("### Authentication")
 
-        if user:
-            email = user.get("email") if isinstance(user, dict) else str(user)
+        user = st.session_state.get("user")
+
+        if is_logged_in() and isinstance(user, dict):
             st.success("Signed in as")
-            st.write(email)
+            st.write(user.get("email", ""))
 
             if st.button("Sign out", use_container_width=True):
-                for key in [
-                    "user",
-                    "profile",
-                    "firebase_id_token",
-                    "id_token",
-                    "idToken",
-                    "token",
-                    "access_token",
-                    "refresh_token",
-                    "analysis_result",
-                    "last_uploaded_name",
-                    "last_job_description",
-                ]:
-                    st.session_state.pop(key, None)
-
-                clear_auth_cookies()
+                clear_auth()
                 st.rerun()
         else:
             st.warning("Not signed in")
@@ -200,79 +191,52 @@ def render_auth_box():
                 st.switch_page("pages/login.py")
 
 
-def require_login():
-    if not get_current_user():
-        st.warning("Please login first.")
-        st.page_link("pages/login.py", label="Go to Login")
-        st.stop()
-
-
-def require_pro(feature_name="This feature"):
-    if not is_pro_user():
-        st.error(f"{feature_name} is a Pro feature.")
-        st.warning(f"🚀 {feature_name} is a Pro feature.")
-        st.page_link("pages/pricing.py", label="🚀 Upgrade to Pro")
-        st.stop()
-
-
-def render_header():
-    is_pro = is_pro_user()
-
-    st.markdown("# 🚀 TalentMatch Pro")
-    st.markdown("## AI-powered CV analysis for modern job seekers")
-    st.write("Optimize your CV, identify missing skills, improve ATS performance, and increase interview chances.")
-
-    st.caption("Plan: ⭐ PRO" if is_pro else "Plan: FREE")
-    st.caption("AI-powered CV matching, ATS keyword analysis, and job application insights.")
-
-    col1, col2, col3, col4 = st.columns(4)
-
-    with col1:
-        st.caption("AI CV Match")
-        st.markdown("### GPT Powered")
-
-    with col2:
-        st.caption("ATS Scanner")
-        st.markdown("### Built In")
-
-    with col3:
-        st.caption("Semantic Match")
-        st.markdown("### Enabled" if is_pro else "### Upgrade")
-
-    with col4:
-        st.caption("Recruiter Mode")
-        st.markdown("### Enabled" if is_pro else "### Upgrade")
-
-    st.divider()
-
-
-def render_usage_banner():
-    if is_pro_user():
-        st.success("🚀 Pro plan active — unlimited analyses and premium tools unlocked.")
-        return
-
-    used, limit, remaining = get_usage()
-
-    st.info(f"Free plan: {used}/{limit} analyses used. Remaining: {remaining}")
-    st.progress(min(used / limit, 1) if limit > 0 else 0)
-
-
 restore_auth_from_cookies()
-render_auth_box()
 
-if get_current_user():
-    refresh_profile()
+if is_logged_in():
+    load_profile()
 
-render_header()
-render_usage_banner()
+render_sidebar_auth()
 
-uploaded_file = st.file_uploader(
-    "Upload your CV as a PDF",
-    type=["pdf"],
-    help="Upload a PDF CV to analyze against a job description.",
-)
+is_pro = is_pro_user()
 
-if uploaded_file is not None:
+st.markdown("# 🚀 TalentMatch Pro")
+st.markdown("## AI-powered CV analysis for modern job seekers")
+st.write("Optimize your CV, identify missing skills, improve ATS performance, and increase interview chances.")
+
+st.caption("Plan: ⭐ PRO" if is_pro else "Plan: FREE")
+st.caption("AI-powered CV matching, ATS keyword analysis, and job application insights.")
+
+col1, col2, col3, col4 = st.columns(4)
+
+with col1:
+    st.caption("AI CV Match")
+    st.markdown("### GPT Powered")
+
+with col2:
+    st.caption("ATS Scanner")
+    st.markdown("### Built In")
+
+with col3:
+    st.caption("Semantic Match")
+    st.markdown("### Enabled" if is_pro else "### Upgrade")
+
+with col4:
+    st.caption("Recruiter Mode")
+    st.markdown("### Enabled" if is_pro else "### Upgrade")
+
+st.divider()
+
+if is_pro:
+    st.success("🚀 Pro plan active — unlimited analyses and premium tools unlocked.")
+else:
+    used, limit, remaining = get_usage()
+    st.info(f"Free plan: {used}/{limit} analyses used. Remaining: {remaining}")
+    st.progress(min(used / limit, 1) if limit else 0)
+
+uploaded_file = st.file_uploader("Upload your CV as a PDF", type=["pdf"])
+
+if uploaded_file:
     st.session_state["last_uploaded_name"] = uploaded_file.name
     st.info(f"Selected file: {uploaded_file.name} ({uploaded_file.size / 1024:.1f} KB)")
 
@@ -301,31 +265,36 @@ if st.button("Analyze CV", use_container_width=True, disabled=not can_analyze):
 
     with st.spinner("Analyzing CV..."):
         try:
-            files = {"file": (uploaded_file.name, uploaded_file.getvalue(), "application/pdf")}
+            files = {
+                "file": (
+                    uploaded_file.name,
+                    uploaded_file.getvalue(),
+                    "application/pdf",
+                )
+            }
             data = {"job_description": job_description}
 
-            res = api_post("/analyze", data=data, files=files, timeout=120)
+            response = api_post("/analyze", data=data, files=files)
 
-            if res.status_code == 200:
-                st.session_state["analysis_result"] = res.json()
+            if response.status_code == 200:
+                st.session_state["analysis_result"] = response.json()
                 refresh_profile()
                 st.success("Analysis completed successfully.")
                 st.rerun()
 
-            elif res.status_code == 403:
+            elif response.status_code == 403:
                 st.error("Free limit reached or Pro required.")
-                st.page_link("pages/pricing.py", label="Upgrade to Pro")
+                st.page_link("pages/pricing.py", label="🚀 Upgrade to Pro")
 
             else:
-                st.error(f"Analysis failed: {res.status_code}")
-                st.code(res.text)
+                st.error(f"Analysis failed: {response.status_code}")
+                st.code(response.text)
 
-        except Exception as e:
-            st.error(f"Analysis failed: {e}")
+        except Exception as exc:
+            st.error(f"Analysis failed: {exc}")
 
 if uploaded_file is None:
     st.info("Upload a PDF CV to start.")
-
 
 result = st.session_state.get("analysis_result")
 
