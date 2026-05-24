@@ -1,52 +1,106 @@
 import os
+from datetime import datetime, timedelta
+
 import requests
 import streamlit as st
+import extra_streamlit_components as stx
 
-st.set_page_config(
-    page_title="Login • TalentMatch Pro",
-    page_icon="🔐",
-    layout="wide",
-)
+
+st.set_page_config(page_title="Login • TalentMatch Pro", page_icon="🔐", layout="wide")
 
 FIREBASE_API_KEY = os.getenv("FIREBASE_API_KEY", "")
 
-st.title("🔐 Login")
-st.caption("Access your TalentMatch Pro account.")
+
+@st.cache_resource
+def get_cookie_manager():
+    return stx.CookieManager()
+
+
+cookie_manager = get_cookie_manager()
+
+
+def save_auth_cookies(email, id_token, refresh_token=""):
+    expires = datetime.now() + timedelta(days=14)
+
+    cookie_manager.set("tm_email", email or "", expires_at=expires)
+    cookie_manager.set("tm_id_token", id_token or "", expires_at=expires)
+    cookie_manager.set("tm_refresh_token", refresh_token or "", expires_at=expires)
+
+
+def clear_auth_cookies():
+    cookie_manager.delete("tm_email")
+    cookie_manager.delete("tm_id_token")
+    cookie_manager.delete("tm_refresh_token")
+
+
+def restore_auth_from_cookies():
+    cookies = cookie_manager.get_all() or {}
+
+    email = cookies.get("tm_email")
+    id_token = cookies.get("tm_id_token")
+    refresh_token = cookies.get("tm_refresh_token", "")
+
+    if email and id_token:
+        st.session_state["user"] = {
+            "email": email,
+            "idToken": id_token,
+            "id_token": id_token,
+            "refreshToken": refresh_token,
+            "refresh_token": refresh_token,
+        }
+
+        st.session_state["firebase_id_token"] = id_token
+        st.session_state["id_token"] = id_token
+        st.session_state["idToken"] = id_token
+        st.session_state["token"] = id_token
+        st.session_state["access_token"] = id_token
+        st.session_state["refresh_token"] = refresh_token
 
 
 def clear_auth_state():
     for key in [
         "user",
+        "profile",
         "firebase_id_token",
         "id_token",
         "idToken",
         "token",
         "access_token",
         "refresh_token",
-        "profile",
         "checkout_url",
         "portal_url",
     ]:
         st.session_state.pop(key, None)
 
+    clear_auth_cookies()
 
-def firebase_login(email: str, password: str):
+
+def firebase_login(email, password):
     url = (
         "https://identitytoolkit.googleapis.com/v1/accounts:signInWithPassword"
         f"?key={FIREBASE_API_KEY}"
     )
+
     payload = {
         "email": email,
         "password": password,
         "returnSecureToken": True,
     }
+
     return requests.post(url, json=payload, timeout=30)
 
+
+restore_auth_from_cookies()
+
+st.title("🔐 Login")
+st.caption("Access your TalentMatch Pro account.")
 
 current_user = st.session_state.get("user")
 
 if isinstance(current_user, dict):
-    st.success(f"Logged in as: {current_user.get('email')}")
+    email = current_user.get("email", "")
+
+    st.success(f"Logged in as: {email}")
 
     col1, col2 = st.columns(2)
 
@@ -82,17 +136,18 @@ if st.button("Login", use_container_width=True):
 
     data = response.json()
 
-    id_token = data.get("idToken")
-    refresh_token = data.get("refreshToken")
+    id_token = data.get("idToken", "")
+    refresh_token = data.get("refreshToken", "")
+    user_email = data.get("email", email)
 
     st.session_state["user"] = {
-        "email": data.get("email"),
-        "id_token": id_token,
+        "email": user_email,
         "idToken": id_token,
-        "refresh_token": refresh_token,
+        "id_token": id_token,
         "refreshToken": refresh_token,
-        "local_id": data.get("localId"),
+        "refresh_token": refresh_token,
         "localId": data.get("localId"),
+        "local_id": data.get("localId"),
     }
 
     st.session_state["firebase_id_token"] = id_token
@@ -101,6 +156,8 @@ if st.button("Login", use_container_width=True):
     st.session_state["token"] = id_token
     st.session_state["access_token"] = id_token
     st.session_state["refresh_token"] = refresh_token
+
+    save_auth_cookies(user_email, id_token, refresh_token)
 
     st.success("Logged in successfully.")
     st.switch_page("pages/pricing.py")

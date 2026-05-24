@@ -1,59 +1,73 @@
 import os
 import time
+from datetime import datetime, timedelta
+
 import requests
 import streamlit as st
+import extra_streamlit_components as stx
 
-st.set_page_config(
-    page_title="Pricing • TalentMatch Pro",
-    page_icon="🚀",
-    layout="wide",
-)
 
-BACKEND_URL = os.getenv(
-    "BACKEND_URL",
-    "https://talentmatch-backend-1283.onrender.com",
-).rstrip("/")
+st.set_page_config(page_title="Pricing • TalentMatch Pro", page_icon="🚀", layout="wide")
 
+BACKEND_URL = os.getenv("BACKEND_URL", "https://talentmatch-backend-1283.onrender.com").rstrip("/")
 STRIPE_MODE = os.getenv("STRIPE_MODE", "test").lower()
 ENABLE_DEMO = os.getenv("ENABLE_DEMO", "false").lower() == "true"
 
 
+@st.cache_resource
+def get_cookie_manager():
+    return stx.CookieManager()
+
+
+cookie_manager = get_cookie_manager()
+
+
+def restore_auth_from_cookies():
+    cookies = cookie_manager.get_all() or {}
+
+    email = cookies.get("tm_email")
+    id_token = cookies.get("tm_id_token")
+    refresh_token = cookies.get("tm_refresh_token", "")
+
+    if email and id_token:
+        st.session_state["user"] = {
+            "email": email,
+            "idToken": id_token,
+            "id_token": id_token,
+            "refreshToken": refresh_token,
+            "refresh_token": refresh_token,
+        }
+
+        st.session_state["firebase_id_token"] = id_token
+        st.session_state["id_token"] = id_token
+        st.session_state["idToken"] = id_token
+        st.session_state["token"] = id_token
+        st.session_state["access_token"] = id_token
+        st.session_state["refresh_token"] = refresh_token
+
+
 def get_token():
-    for key in [
-        "firebase_id_token",
-        "id_token",
-        "idToken",
-        "token",
-        "access_token",
-        "firebase_token",
-    ]:
-        value = st.session_state.get(key)
-        if value:
-            return str(value)
+    restore_auth_from_cookies()
+
+    for key in ["firebase_id_token", "id_token", "idToken", "token", "access_token"]:
+        token = st.session_state.get(key)
+        if token:
+            return str(token)
 
     user = st.session_state.get("user")
 
     if isinstance(user, dict):
-        for key in [
-            "idToken",
-            "id_token",
-            "token",
-            "accessToken",
-            "access_token",
-            "firebase_id_token",
-        ]:
-            value = user.get(key)
-            if value:
-                return str(value)
+        for key in ["idToken", "id_token", "token", "accessToken", "access_token"]:
+            token = user.get(key)
+            if token:
+                return str(token)
 
     return ""
 
 
 def get_headers():
     token = get_token()
-    if not token:
-        return {}
-    return {"Authorization": f"Bearer {token}"}
+    return {"Authorization": f"Bearer {token}"} if token else {}
 
 
 def get_profile():
@@ -63,11 +77,7 @@ def get_profile():
         return None
 
     try:
-        response = requests.get(
-            f"{BACKEND_URL}/me",
-            headers=headers,
-            timeout=60,
-        )
+        response = requests.get(f"{BACKEND_URL}/me", headers=headers, timeout=60)
 
         if response.status_code == 200:
             profile = response.json()
@@ -88,11 +98,7 @@ def post_backend(endpoint):
         return None
 
     try:
-        response = requests.post(
-            f"{BACKEND_URL}{endpoint}",
-            headers=headers,
-            timeout=90,
-        )
+        response = requests.post(f"{BACKEND_URL}{endpoint}", headers=headers, timeout=90)
 
         if response.status_code != 200:
             st.error(response.text)
@@ -104,6 +110,8 @@ def post_backend(endpoint):
         st.error(f"Request failed: {exc}")
         return None
 
+
+restore_auth_from_cookies()
 
 params = st.query_params
 success = params.get("success") == "1"
@@ -124,9 +132,10 @@ is_pro = bool(
 
 if success and is_logged_in and not is_pro:
     with st.spinner("Confirming Stripe payment and unlocking Pro..."):
-        for _ in range(12):
+        for _ in range(15):
             time.sleep(2)
             profile = get_profile()
+
             is_pro = bool(
                 profile
                 and (
@@ -150,6 +159,7 @@ if success and is_pro:
 if canceled:
     st.warning("Checkout canceled. You can upgrade anytime.")
 
+
 st.markdown(
     """
 # 🚀 Upgrade to TalentMatch Pro
@@ -160,11 +170,13 @@ Unlock unlimited AI CV analysis, PDF reports, CV Rewrite AI, Semantic Matching, 
 
 if not is_logged_in:
     st.warning("Please login before upgrading.")
+
     if st.button("🔐 Go to Login", use_container_width=True):
         st.switch_page("pages/login.py")
 
 if is_pro:
     st.success("🚀 Pro plan active — all premium features are unlocked.")
+
 
 free_col, pro_col = st.columns(2)
 
@@ -214,11 +226,6 @@ with pro_col:
                 data = post_backend("/billing/create-checkout")
 
                 if data and data.get("checkout_url"):
-                    st.link_button(
-                        "Open Secure Stripe Checkout",
-                        data["checkout_url"],
-                        use_container_width=True,
-                    )
                     st.session_state["checkout_url"] = data["checkout_url"]
 
             if st.session_state.get("checkout_url"):
@@ -230,11 +237,7 @@ with pro_col:
 
 st.divider()
 
-if st.button(
-    "⚙️ Manage Billing",
-    use_container_width=True,
-    disabled=not is_logged_in,
-):
+if st.button("⚙️ Manage Billing", use_container_width=True, disabled=not is_logged_in):
     data = post_backend("/billing/create-portal")
 
     if data and data.get("portal_url"):
@@ -248,18 +251,13 @@ if st.session_state.get("portal_url"):
     )
 
 if ENABLE_DEMO:
-    if st.button(
-        "🚀 Demo Upgrade to Pro",
-        use_container_width=True,
-        disabled=not is_logged_in or is_pro,
-    ):
+    if st.button("🚀 Demo Upgrade to Pro", use_container_width=True, disabled=not is_logged_in or is_pro):
         data = post_backend("/billing/demo-upgrade")
+
         if data:
             st.success("Demo upgrade successful.")
             st.balloons()
             st.rerun()
 
 if STRIPE_MODE == "test":
-    st.info(
-        "Stripe test mode enabled. Use card 4242 4242 4242 4242, expiry 12/34, CVC 123."
-    )
+    st.info("Stripe test mode enabled. Use card 4242 4242 4242 4242, expiry 12/34, CVC 123.")
