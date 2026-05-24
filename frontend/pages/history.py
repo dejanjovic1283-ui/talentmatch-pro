@@ -1,10 +1,7 @@
 import streamlit as st
-
-from auth_utils import api_get, is_logged_in, restore_auth
+from auth_utils import api_get, is_logged_in
 
 st.set_page_config(page_title="History • TalentMatch Pro", page_icon="📜", layout="wide")
-
-restore_auth()
 
 st.title("📜 Analysis History")
 st.caption("View your previous CV analyses and reports.")
@@ -21,51 +18,38 @@ if st.button("Refresh history", use_container_width=True):
 if "history_items" not in st.session_state:
     with st.spinner("Loading history..."):
         try:
-            response = api_get("/history")
-
-            if response.status_code == 200:
-                data = response.json()
-
+            resp = api_get("/history", timeout=60)
+            if resp.status_code == 200:
+                data = resp.json()
                 if isinstance(data, list):
                     st.session_state["history_items"] = data
                 else:
                     st.session_state["history_items"] = data.get("items", data.get("history", []))
-
             else:
-                st.error(f"Failed to load history: {response.status_code}")
-                st.code(response.text)
+                st.error(f"Failed to load history: {resp.status_code}")
+                st.code(resp.text)
                 st.stop()
-
         except Exception as exc:
             st.error(f"Failed to load history: {exc}")
             st.stop()
 
 items = st.session_state.get("history_items", [])
-
 if not items:
     st.info("No analyses yet.")
     st.page_link("app.py", label="🚀 Run your first CV analysis")
     st.stop()
 
-for index, item in enumerate(items, start=1):
+for idx, item in enumerate(items, start=1):
     score = item.get("score") or item.get("match_score") or 0
     verdict = item.get("verdict") or "Analysis"
     cv_file = item.get("cv_file") or item.get("filename") or item.get("file_name") or "CV"
     created_at = item.get("created_at") or item.get("date") or ""
-
     with st.container(border=True):
         col1, col2, col3 = st.columns([2, 1, 1])
-
-        with col1:
-            st.subheader(f"{index}. {cv_file}")
-            if created_at:
-                st.caption(created_at)
-
-        with col2:
-            st.metric("Score", f"{score}/100")
-
-        with col3:
-            st.metric("Verdict", verdict)
+        col1.subheader(f"{idx}. {cv_file}")
+        if created_at: col1.caption(created_at)
+        col2.metric("Score", f"{score}/100")
+        col3.metric("Verdict", verdict)
 
         summary = item.get("summary")
         if summary:
@@ -76,21 +60,15 @@ for index, item in enumerate(items, start=1):
         missing = item.get("missing_skills") or item.get("missing_keywords") or []
         recommendations = item.get("recommendations") or []
 
-        col1, col2 = st.columns(2)
-
-        with col1:
+        c1, c2 = st.columns(2)
+        with c1:
             if strengths:
                 st.markdown("**✅ Strengths**")
-                for strength in strengths:
-                    st.markdown(f"- {strength}")
-
-        with col2:
+                for s in strengths: st.markdown(f"- {s}")
+        with c2:
             if missing:
                 st.markdown("**❌ Missing**")
-                for gap in missing:
-                    st.markdown(f"- {gap}")
-
+                for m in missing: st.markdown(f"- {m}")
         if recommendations:
             st.markdown("**💡 Recommendations**")
-            for rec in recommendations:
-                st.markdown(f"- {rec}")
+            for r in recommendations: st.markdown(f"- {r}")
