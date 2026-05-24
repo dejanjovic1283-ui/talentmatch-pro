@@ -1,6 +1,5 @@
 import os
 import time
-
 import requests
 import streamlit as st
 
@@ -20,18 +19,32 @@ ENABLE_DEMO = os.getenv("ENABLE_DEMO", "false").lower() == "true"
 
 
 def get_token():
-    user = st.session_state.get("user")
-
-    if isinstance(user, dict):
-        for key in ["idToken", "id_token", "token", "accessToken", "access_token"]:
-            value = user.get(key)
-            if value:
-                return str(value)
-
-    for key in ["id_token", "idToken", "firebase_token", "token", "access_token"]:
+    for key in [
+        "firebase_id_token",
+        "id_token",
+        "idToken",
+        "token",
+        "access_token",
+        "firebase_token",
+    ]:
         value = st.session_state.get(key)
         if value:
             return str(value)
+
+    user = st.session_state.get("user")
+
+    if isinstance(user, dict):
+        for key in [
+            "idToken",
+            "id_token",
+            "token",
+            "accessToken",
+            "access_token",
+            "firebase_id_token",
+        ]:
+            value = user.get(key)
+            if value:
+                return str(value)
 
     return ""
 
@@ -57,7 +70,9 @@ def get_profile():
         )
 
         if response.status_code == 200:
-            return response.json()
+            profile = response.json()
+            st.session_state["profile"] = profile
+            return profile
 
         return None
 
@@ -93,22 +108,33 @@ def post_backend(endpoint):
 params = st.query_params
 success = params.get("success") == "1"
 canceled = params.get("canceled") == "1"
-debug = params.get("debug") == "1"
 
 headers = get_headers()
 profile = get_profile()
 
 is_logged_in = bool(headers)
-is_pro = bool(profile and profile.get("is_pro"))
-plan = profile.get("plan", "free") if profile else "free"
+is_pro = bool(
+    profile
+    and (
+        profile.get("is_pro")
+        or profile.get("plan") == "pro"
+        or profile.get("subscription_status") in ["active", "trialing"]
+    )
+)
 
 if success and is_logged_in and not is_pro:
     with st.spinner("Confirming Stripe payment and unlocking Pro..."):
-        for _ in range(10):
+        for _ in range(12):
             time.sleep(2)
             profile = get_profile()
-            is_pro = bool(profile and profile.get("is_pro"))
-            plan = profile.get("plan", "free") if profile else "free"
+            is_pro = bool(
+                profile
+                and (
+                    profile.get("is_pro")
+                    or profile.get("plan") == "pro"
+                    or profile.get("subscription_status") in ["active", "trialing"]
+                )
+            )
 
             if is_pro:
                 st.success("🚀 Pro plan unlocked successfully!")
@@ -116,9 +142,7 @@ if success and is_logged_in and not is_pro:
                 time.sleep(1)
                 st.rerun()
 
-    st.warning(
-        "Payment was successful, but Pro is still syncing. Please refresh in a few seconds."
-    )
+    st.warning("Payment was successful, but Pro is still syncing. Refresh in a few seconds.")
 
 if success and is_pro:
     st.success("🚀 Payment confirmed. Pro plan is active.")
@@ -136,6 +160,8 @@ Unlock unlimited AI CV analysis, PDF reports, CV Rewrite AI, Semantic Matching, 
 
 if not is_logged_in:
     st.warning("Please login before upgrading.")
+    if st.button("🔐 Go to Login", use_container_width=True):
+        st.switch_page("pages/login.py")
 
 if is_pro:
     st.success("🚀 Pro plan active — all premium features are unlocked.")
@@ -188,8 +214,12 @@ with pro_col:
                 data = post_backend("/billing/create-checkout")
 
                 if data and data.get("checkout_url"):
+                    st.link_button(
+                        "Open Secure Stripe Checkout",
+                        data["checkout_url"],
+                        use_container_width=True,
+                    )
                     st.session_state["checkout_url"] = data["checkout_url"]
-                    st.rerun()
 
             if st.session_state.get("checkout_url"):
                 st.link_button(
@@ -200,59 +230,36 @@ with pro_col:
 
 st.divider()
 
-left, right = st.columns(2)
+if st.button(
+    "⚙️ Manage Billing",
+    use_container_width=True,
+    disabled=not is_logged_in,
+):
+    data = post_backend("/billing/create-portal")
 
-with left:
-    if ENABLE_DEMO:
-        if st.button(
-            "🚀 Demo Upgrade to Pro",
-            use_container_width=True,
-            disabled=not is_logged_in or is_pro,
-        ):
-            data = post_backend("/billing/demo-upgrade")
+    if data and data.get("portal_url"):
+        st.session_state["portal_url"] = data["portal_url"]
 
-            if data:
-                st.success("Demo upgrade successful.")
-                st.balloons()
-                st.rerun()
-
-with right:
-    if st.button(
-        "⚙️ Manage Billing",
+if st.session_state.get("portal_url"):
+    st.link_button(
+        "Open Stripe Billing Portal",
+        st.session_state["portal_url"],
         use_container_width=True,
-        disabled=not is_logged_in,
+    )
+
+if ENABLE_DEMO:
+    if st.button(
+        "🚀 Demo Upgrade to Pro",
+        use_container_width=True,
+        disabled=not is_logged_in or is_pro,
     ):
-        data = post_backend("/billing/create-portal")
-
-        if data and data.get("portal_url"):
-            st.session_state["portal_url"] = data["portal_url"]
+        data = post_backend("/billing/demo-upgrade")
+        if data:
+            st.success("Demo upgrade successful.")
+            st.balloons()
             st.rerun()
-
-    if st.session_state.get("portal_url"):
-        st.link_button(
-            "Open Stripe Billing Portal",
-            st.session_state["portal_url"],
-            use_container_width=True,
-        )
 
 if STRIPE_MODE == "test":
     st.info(
         "Stripe test mode enabled. Use card 4242 4242 4242 4242, expiry 12/34, CVC 123."
     )
-
-if debug:
-    with st.expander("Debug pricing state"):
-        st.json(
-            {
-                "backend_url": BACKEND_URL,
-                "logged_user_detected": is_logged_in,
-                "auth_headers_detected": bool(headers),
-                "profile_loaded": bool(profile),
-                "is_pro": is_pro,
-                "plan": plan,
-                "profile": profile,
-                "stripe_mode": STRIPE_MODE,
-                "enable_demo": ENABLE_DEMO,
-                "session_state_keys": list(st.session_state.keys()),
-            }
-        )
