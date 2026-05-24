@@ -1,78 +1,103 @@
 import streamlit as st
+
 from auth_utils import api_post, is_logged_in
 
-st.set_page_config(page_title="ATS Checker • TalentMatch Pro", page_icon="🎯", layout="wide")
+st.set_page_config(page_title="ATS Keyword Checker", page_icon="🎯", layout="wide")
 
 st.title("🎯 ATS Keyword Checker")
 st.caption("Check which job-description keywords your CV already covers and which ones are missing.")
 
 if not is_logged_in():
-    st.warning("Please login before using ATS Checker.")
-    st.page_link("pages/login.py", label="🔐 Go to Login")
+    st.warning("Please login before using the ATS checker.")
+    st.page_link("pages/login.py", label="Login", icon="🔐")
     st.stop()
 
-uploaded_file = st.file_uploader("Upload your CV as a PDF", type=["pdf"])
-job_description = st.text_area(
-    "Paste the job description",
-    placeholder=(
-        "Paste the job description here...\n\n"
-        "Example:\n"
-        "Senior Backend Engineer\n\n"
-        "Requirements:\n"
-        "- Python\n"
-        "- FastAPI\n"
-        "- PostgreSQL\n"
-        "- Docker\n"
-        "- Cloud deployment"
-    ),
-    height=260,
+uploaded_file = st.file_uploader(
+    "Upload your CV as a PDF",
+    type=["pdf"],
+    key="ats_pdf_upload",
 )
 
-can_run = uploaded_file and job_description.strip()
+job_description = st.text_area(
+    "Paste the job description",
+    height=320,
+)
 
-if uploaded_file:
-    st.info(f"Selected file: {uploaded_file.name} ({uploaded_file.size/1024:.1f} KB)")
+if uploaded_file is not None:
+    st.info(f"Selected file: {uploaded_file.name} ({uploaded_file.size / 1024:.1f} KB)")
 
-if st.button("Run ATS Checker", use_container_width=True, disabled=not can_run):
-    if not uploaded_file:
-        st.error("No CV file uploaded. Please upload a PDF file before running the ATS check.")
-    else:
-        with st.spinner("Checking ATS keywords..."):
-            try:
-                files = {"file": (uploaded_file.name, uploaded_file.getvalue(), "application/pdf")}
-                data = {"job_description": job_description}
-                resp = api_post("/ats-checker", data=data, files=files, timeout=120)
-                if resp.status_code == 200:
-                    st.session_state["ats_result"] = resp.json()
-                    st.success("ATS check completed successfully.")
-                else:
-                    st.error(f"ATS check failed: {resp.status_code}")
-                    st.code(resp.text)
-            except Exception as exc:
-                st.error(f"ATS check failed: {exc}")
+run_button = st.button(
+    "Run ATS Checker",
+    use_container_width=True,
+    disabled=uploaded_file is None or not job_description.strip(),
+)
 
-result = st.session_state.get("ats_result")
-if result:
-    st.divider()
-    st.header("ATS Result")
+if run_button:
+    file_payload = None
 
-    score = result.get("score") or result.get("ats_score") or 0
-    st.success(f"ATS Score: {score}/100")
-    st.progress(min(int(score)/100, 1.0) if score else 0)
+    if uploaded_file is not None:
+        file_payload = {
+            "file": (
+                uploaded_file.name or "cv.pdf",
+                uploaded_file.getvalue(),
+                "application/pdf",
+            )
+        }
 
-    col1, col2 = st.columns(2)
-    with col1:
-        st.subheader("✅ Covered Keywords")
-        for kw in result.get("covered_keywords") or result.get("matched_keywords") or []:
-            st.markdown(f"- {kw}")
-        if not result.get("covered_keywords"): st.write("No covered keywords returned.")
-    with col2:
+    with st.spinner("Checking ATS keyword coverage..."):
+        result, error = api_post(
+            "/ats-test",
+            data={"job_description": job_description},
+            files=file_payload,
+        )
+
+    if error:
+        st.error(f"ATS check failed: {error}")
+        if result:
+            st.code(str(result))
+        st.stop()
+
+    if not isinstance(result, dict):
+        st.error("ATS check failed: invalid backend response.")
+        st.code(str(result))
+        st.stop()
+
+    coverage = int(result.get("coverage", 0) or 0)
+    verdict = str(result.get("verdict", "ATS Result"))
+
+    matched_keywords = result.get("matched_keywords", []) or []
+    missing_keywords = result.get("missing_keywords", []) or []
+    recommendations = result.get("recommendations", []) or []
+
+    st.success(f"{verdict} — {coverage}% keyword coverage")
+    st.progress(min(max(coverage, 0), 100) / 100)
+
+    col1, col2, col3 = st.columns(3)
+    col1.metric("Coverage", f"{coverage}%")
+    col2.metric("Matched", len(matched_keywords))
+    col3.metric("Missing", len(missing_keywords))
+
+    left, right = st.columns(2)
+
+    with left:
+        st.subheader("✅ Matched Keywords")
+        if matched_keywords:
+            for keyword in matched_keywords:
+                st.markdown(f"- {keyword}")
+        else:
+            st.info("No matched keywords found.")
+
+    with right:
         st.subheader("❌ Missing Keywords")
-        missing = result.get("missing_keywords") or []
-        for kw in missing: st.markdown(f"- {kw}")
-        if not missing: st.success("No major missing keywords found.")
+        if missing_keywords:
+            for keyword in missing_keywords:
+                st.markdown(f"- {keyword}")
+        else:
+            st.success("No missing keywords found.")
 
     st.subheader("💡 Recommendations")
-    recs = result.get("recommendations") or []
-    for r in recs: st.markdown(f"- {r}")
-    if not recs: st.info("No recommendations returned.")
+    if recommendations:
+        for item in recommendations:
+            st.markdown(f"- {item}")
+    else:
+        st.info("No recommendations returned.")
