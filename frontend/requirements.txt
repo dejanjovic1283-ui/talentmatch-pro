@@ -1,7 +1,6 @@
 streamlit
 requests
 firebase-admin
-extra-streamlit-components
 python-dotenv
 pandas
 plotly

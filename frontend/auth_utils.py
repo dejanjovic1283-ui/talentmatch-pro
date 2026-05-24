@@ -1,10 +1,6 @@
-import json
 import os
-from datetime import datetime, timedelta
-
 import requests
 import streamlit as st
-import extra_streamlit_components as stx
 
 BACKEND_URL = os.getenv(
     "BACKEND_URL",
@@ -13,114 +9,46 @@ BACKEND_URL = os.getenv(
 
 FIREBASE_API_KEY = os.getenv("FIREBASE_API_KEY", "")
 
-cookie_manager = stx.CookieManager(key="talentmatch_auth_cookie_manager")
-
 
 def save_auth(email: str, id_token: str, refresh_token: str = ""):
-    expires_at = datetime.now() + timedelta(days=14)
-
-    user = {
-        "email": email or "",
-        "idToken": id_token or "",
-        "id_token": id_token or "",
-        "refreshToken": refresh_token or "",
-        "refresh_token": refresh_token or "",
-    }
-
-    cookie_manager.set("tm_email", email or "", expires_at=expires_at, key="set_tm_email")
-    cookie_manager.set("tm_id_token", id_token or "", expires_at=expires_at, key="set_tm_id_token")
-    cookie_manager.set("tm_refresh_token", refresh_token or "", expires_at=expires_at, key="set_tm_refresh_token")
-    cookie_manager.set("tm_user", json.dumps(user), expires_at=expires_at, key="set_tm_user")
-
-    st.session_state["user"] = user
     st.session_state["logged_in"] = True
-    st.session_state["firebase_id_token"] = id_token
-    st.session_state["id_token"] = id_token
-    st.session_state["idToken"] = id_token
-    st.session_state["token"] = id_token
-    st.session_state["access_token"] = id_token
-    st.session_state["refresh_token"] = refresh_token or ""
-
-
-def restore_auth():
-    if st.session_state.get("logged_in") and get_token_no_restore():
-        return
-
-    cookies = cookie_manager.get_all() or {}
-
-    token = cookies.get("tm_id_token") or cookies.get("tm_token") or ""
-    refresh_token = cookies.get("tm_refresh_token") or ""
-    email = cookies.get("tm_email") or ""
-
-    user_json = cookies.get("tm_user")
-
-    user = {
+    st.session_state["user"] = {
         "email": email,
-        "idToken": token,
-        "id_token": token,
+        "idToken": id_token,
+        "id_token": id_token,
         "refreshToken": refresh_token,
         "refresh_token": refresh_token,
     }
-
-    if user_json:
-        try:
-            parsed_user = json.loads(user_json)
-            if isinstance(parsed_user, dict):
-                user.update(parsed_user)
-        except Exception:
-            pass
-
-    if token:
-        st.session_state["user"] = user
-        st.session_state["logged_in"] = True
-        st.session_state["firebase_id_token"] = token
-        st.session_state["id_token"] = token
-        st.session_state["idToken"] = token
-        st.session_state["token"] = token
-        st.session_state["access_token"] = token
-        st.session_state["refresh_token"] = refresh_token
-
-
-def get_token_no_restore():
-    return (
-        st.session_state.get("firebase_id_token")
-        or st.session_state.get("id_token")
-        or st.session_state.get("idToken")
-        or st.session_state.get("token")
-        or st.session_state.get("access_token")
-        or ""
-    )
-
-
-def get_token():
-    restore_auth()
-    return get_token_no_restore()
+    st.session_state["firebase_id_token"] = id_token
+    st.session_state["id_token"] = id_token
+    st.session_state["token"] = id_token
+    st.session_state["refresh_token"] = refresh_token
 
 
 def clear_auth():
-    for key in [
+    keys = [
+        "logged_in",
         "user",
         "profile",
-        "logged_in",
         "firebase_id_token",
         "id_token",
-        "idToken",
         "token",
-        "access_token",
         "refresh_token",
-        "checkout_url",
-        "portal_url",
         "analysis_result",
         "ats_result",
         "history_items",
-    ]:
+    ]
+    for key in keys:
         st.session_state.pop(key, None)
 
-    cookie_manager.delete("tm_email", key="delete_tm_email")
-    cookie_manager.delete("tm_id_token", key="delete_tm_id_token")
-    cookie_manager.delete("tm_refresh_token", key="delete_tm_refresh_token")
-    cookie_manager.delete("tm_user", key="delete_tm_user")
-    cookie_manager.delete("tm_token", key="delete_tm_token")
+
+def get_token():
+    return (
+        st.session_state.get("firebase_id_token")
+        or st.session_state.get("id_token")
+        or st.session_state.get("token")
+        or ""
+    )
 
 
 def is_logged_in():
@@ -129,7 +57,9 @@ def is_logged_in():
 
 def get_auth_headers():
     token = get_token()
-    return {"Authorization": f"Bearer {token}"} if token else {}
+    if not token:
+        return {}
+    return {"Authorization": f"Bearer {token}"}
 
 
 def api_get(path: str, timeout: int = 30):
@@ -157,15 +87,14 @@ def load_profile():
 
     try:
         response = api_get("/me")
-
         if response.status_code == 200:
             profile = response.json()
             st.session_state["profile"] = profile
             return profile
-
-        return None
     except Exception:
-        return None
+        pass
+
+    return None
 
 
 def refresh_profile():
@@ -179,7 +108,6 @@ def get_profile():
 
 def is_pro_user():
     profile = get_profile()
-
     return bool(
         profile.get("is_pro")
         or profile.get("pro")
