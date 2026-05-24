@@ -1,4 +1,6 @@
 import os
+from typing import Any, Optional
+
 import requests
 import streamlit as st
 
@@ -9,7 +11,7 @@ import streamlit as st
 
 def get_config(key: str, default: str = "") -> str:
     """
-    Read config safely.
+    Read configuration safely.
 
     Priority:
     1. Render environment variables
@@ -29,9 +31,29 @@ def get_config(key: str, default: str = "") -> str:
 BACKEND_URL = get_config(
     "BACKEND_URL",
     "https://talentmatch-backend-1283.onrender.com"
-)
+).rstrip("/")
 
 FIREBASE_API_KEY = get_config("FIREBASE_API_KEY")
+
+
+# =========================
+# Fake response helper
+# =========================
+
+class FakeResponse:
+    """
+    Small response-like object used when a request fails before reaching the server.
+    """
+
+    def __init__(self, status_code: int, message: str):
+        self.status_code = status_code
+        self.text = message
+
+    def json(self) -> dict:
+        return {
+            "detail": self.text,
+            "error": self.text,
+        }
 
 
 # =========================
@@ -40,38 +62,74 @@ FIREBASE_API_KEY = get_config("FIREBASE_API_KEY")
 
 def save_auth(token: str, email: str = "") -> None:
     """
-    Save auth token and email in Streamlit session state.
+    Save authentication data in Streamlit session state.
+
+    Multiple keys are stored for compatibility across old and new frontend pages.
     """
     st.session_state["token"] = token
+    st.session_state["id_token"] = token
+
     st.session_state["email"] = email
+    st.session_state["user_email"] = email
+
+    st.session_state["authenticated"] = True
+
+    st.session_state["user"] = {
+        "email": email,
+    }
 
 
 def clear_auth() -> None:
     """
-    Clear all auth-related session data.
+    Remove authentication state.
     """
-    for key in ["token", "email", "profile"]:
+    keys = [
+        "token",
+        "id_token",
+        "email",
+        "user_email",
+        "authenticated",
+        "profile",
+        "user",
+    ]
+
+    for key in keys:
         st.session_state.pop(key, None)
 
 
 def restore_auth() -> bool:
     """
-    Compatibility function for older files.
-    Auth is stored in session state.
+    Restore auth state from Streamlit session state.
     """
-    return bool(st.session_state.get("token"))
+    token = (
+        st.session_state.get("token")
+        or st.session_state.get("id_token")
+    )
+
+    if token:
+        st.session_state["token"] = token
+        st.session_state["id_token"] = token
+        st.session_state["authenticated"] = True
+        return True
+
+    st.session_state["authenticated"] = False
+    return False
 
 
 def get_token() -> str:
     """
-    Return current auth token.
+    Return active auth token.
     """
-    return st.session_state.get("token", "")
+    return (
+        st.session_state.get("token")
+        or st.session_state.get("id_token")
+        or ""
+    )
 
 
 def is_logged_in() -> bool:
     """
-    Check if user is logged in.
+    Check whether user is logged in.
     """
     return bool(get_token())
 
@@ -86,7 +144,7 @@ def get_auth_headers() -> dict:
         return {}
 
     return {
-        "Authorization": f"Bearer {token}"
+        "Authorization": f"Bearer {token}",
     }
 
 
@@ -101,17 +159,16 @@ def get_headers() -> dict:
 # Backend API helpers
 # =========================
 
-def api_get(endpoint: str, params=None, timeout: int = 60):
+def api_get(endpoint: str, params: Optional[dict] = None, timeout: int = 60):
     """
     Safe GET request helper.
-    Supports timeout parameter.
     """
     try:
         return requests.get(
             f"{BACKEND_URL}{endpoint}",
             headers=get_auth_headers(),
             params=params,
-            timeout=timeout
+            timeout=timeout,
         )
     except Exception as e:
         return FakeResponse(500, str(e))
@@ -119,20 +176,16 @@ def api_get(endpoint: str, params=None, timeout: int = 60):
 
 def api_post(
     endpoint: str,
-    payload=None,
-    json=None,
-    data=None,
-    files=None,
-    timeout: int = 120
+    payload: Optional[dict] = None,
+    json: Optional[dict] = None,
+    data: Optional[dict] = None,
+    files: Optional[dict] = None,
+    timeout: int = 120,
 ):
     """
     Safe POST request helper.
 
-    Supports:
-    - json payloads
-    - form data
-    - file uploads
-    - timeout parameter
+    Supports JSON payloads, form data, file uploads, and timeout.
     """
     try:
         request_json = json if json is not None else payload
@@ -143,33 +196,17 @@ def api_post(
             json=request_json if files is None else None,
             data=data,
             files=files,
-            timeout=timeout
+            timeout=timeout,
         )
     except Exception as e:
         return FakeResponse(500, str(e))
-
-
-class FakeResponse:
-    """
-    Fallback response object when request fails.
-    """
-
-    def __init__(self, status_code: int, message: str):
-        self.status_code = status_code
-        self.text = message
-
-    def json(self):
-        return {
-            "detail": self.text,
-            "error": self.text
-        }
 
 
 # =========================
 # Profile helpers
 # =========================
 
-def refresh_profile():
+def refresh_profile() -> Optional[dict]:
     """
     Reload user profile from backend.
     """
@@ -189,7 +226,7 @@ def refresh_profile():
         return None
 
 
-def get_profile():
+def get_profile() -> Optional[dict]:
     """
     Get cached profile or refresh it.
     """
@@ -201,7 +238,7 @@ def get_profile():
     return refresh_profile()
 
 
-def load_profile():
+def load_profile() -> Optional[dict]:
     """
     Compatibility alias for older imports.
     """
@@ -228,10 +265,13 @@ def is_pro_user() -> bool:
 # Firebase login
 # =========================
 
-def firebase_login(email: str, password: str):
+def firebase_login(email: str, password: str) -> tuple[Optional[dict], Optional[str]]:
     """
     Login with Firebase REST API.
-    Returns tuple: (data, error_message)
+
+    Returns:
+    - data dict on success
+    - error message on failure
     """
     if not FIREBASE_API_KEY:
         return None, "Missing FIREBASE_API_KEY"
@@ -244,11 +284,15 @@ def firebase_login(email: str, password: str):
     payload = {
         "email": email,
         "password": password,
-        "returnSecureToken": True
+        "returnSecureToken": True,
     }
 
     try:
-        response = requests.post(url, json=payload, timeout=60)
+        response = requests.post(
+            url,
+            json=payload,
+            timeout=60,
+        )
 
         if response.status_code != 200:
             try:
