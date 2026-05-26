@@ -240,17 +240,76 @@ async def analyze_test(
 
 
 ATS_STOPWORDS = {
-    "and", "or", "the", "a", "an", "to", "of", "for", "in", "on", "with",
-    "as", "is", "are", "be", "by", "this", "that", "you", "your", "we",
-    "our", "will", "from", "at", "it", "their", "they", "them", "role",
-    "candidate", "candidates", "experience", "skills", "strong", "work",
-    "working", "build", "building", "product", "what", "have", "has",
-    "about", "into", "against", "real", "helps", "using", "job", "jobs",
-    "description", "descriptions", "identify", "compare", "platform",
-    "founding", "full", "stack", "full-stack", "pro", "seekers", "team",
-    "looking", "years", "required", "preferred", "talentmatch", "cv",
-    "resume", "engineer", "modern", "increase", "chances", "optimize",
-    "powered", "analysis", "application", "strategy",
+    "and","or","the","a","an","to","of","for","in","on","with",
+    "as","is","are","be","by","this","that","you","your","we",
+    "our","will","from","at","it","their","they","them",
+
+    "role","candidate","candidates","experience","skills",
+    "strong","work","working","build","building","product",
+    "products","what","have","has","about","into","against",
+    "real","helps","using","job","jobs","description",
+    "descriptions","identify","compare","platform",
+    "founding","full","stack","fullstack",
+    "full-stack","pro","seekers","team","looking",
+    "years","required","preferred","talentmatch",
+    "cv","resume","engineer","modern","increase",
+    "chances","optimize","powered","analysis",
+    "application","strategy",
+
+    "ship","own","gaps","improve","scale",
+    "integrate","integration","integrations",
+    "workflow","workflows",
+    "compare","identify",
+    "job","jobs",
+    "cvs",
+    "seeker","seekers",
+    "company","companies",
+    "startup","startups",
+    "founder","founding",
+    "building",
+    "product","products",
+    "platform",
+    "team",
+    "candidate",
+    "role",
+
+    "lemon",
+    "squeezy",
+
+    "owning",
+    "shipping",
+    "improving",
+    "scaling",
+
+    "good",
+    "great",
+    "excellent",
+
+    "need",
+    "needs",
+    "needed",
+
+    "want",
+    "wants",
+
+    "ability",
+    "able",
+
+    "must",
+    "should",
+    "could",
+    "would",
+
+    "high",
+    "value",
+
+    "plus",
+    "bonus",
+
+    "fast",
+    "paced",
+
+    "environment"
 }
 
 
