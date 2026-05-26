@@ -243,9 +243,14 @@ ATS_STOPWORDS = {
     "and", "or", "the", "a", "an", "to", "of", "for", "in", "on", "with",
     "as", "is", "are", "be", "by", "this", "that", "you", "your", "we",
     "our", "will", "from", "at", "it", "their", "they", "them", "role",
-    "candidate", "experience", "skills", "strong", "work", "working",
-    "build", "building", "product", "what", "have", "has", "about",
-    "into", "against", "real", "helps", "using",
+    "candidate", "candidates", "experience", "skills", "strong", "work",
+    "working", "build", "building", "product", "what", "have", "has",
+    "about", "into", "against", "real", "helps", "using", "job", "jobs",
+    "description", "descriptions", "identify", "compare", "platform",
+    "founding", "full", "stack", "full-stack", "pro", "seekers", "team",
+    "looking", "years", "required", "preferred", "talentmatch", "cv",
+    "resume", "engineer", "modern", "increase", "chances", "optimize",
+    "powered", "analysis", "application", "strategy",
 }
 
 
@@ -259,17 +264,18 @@ def extract_ats_keywords(text_value: str, limit: int = 30) -> list[str]:
             keywords.append(clean)
 
     priority_terms = [
-        "python", "fastapi", "sql", "api", "apis", "docker", "firebase",
-        "openai", "saas", "backend", "frontend", "streamlit", "auth",
-        "authentication", "storage", "billing", "deployment", "cloud",
-        "pdf", "ai", "prompt", "database", "render", "mvp", "ats",
-        "recruiter",
+        "python", "fastapi", "sql", "postgresql", "api", "apis", "docker",
+        "firebase", "openai", "saas", "backend", "frontend", "streamlit",
+        "auth", "authentication", "storage", "billing", "deployment",
+        "cloud", "pdf", "ai", "prompt", "database", "render", "mvp",
+        "ats", "recruiter", "stripe", "supabase", "postgres",
+        "javascript", "typescript", "react", "fastapi", "rest",
     ]
 
     ordered = []
 
     for term in priority_terms:
-        if term in keywords:
+        if term in keywords and term not in ordered:
             ordered.append(term)
 
     for keyword in keywords:
@@ -319,6 +325,7 @@ async def ats_test(
         verdict = "ATS Weak"
 
     return {
+        "score": coverage,
         "coverage": coverage,
         "verdict": verdict,
         "total_keywords": len(keywords),
@@ -332,6 +339,14 @@ async def ats_test(
             "Use exact tool names where relevant, for example FastAPI, Docker, SQL, Firebase, OpenAI.",
         ],
     }
+
+
+@app.post("/ats-check")
+async def ats_check(
+    file: UploadFile = File(...),
+    job_description: str = Form(...),
+):
+    return await ats_test(file=file, job_description=job_description)
 
 
 @app.post("/semantic-match")
