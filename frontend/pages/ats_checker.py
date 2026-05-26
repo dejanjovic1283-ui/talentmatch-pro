@@ -12,67 +12,95 @@ if not is_logged_in():
     st.warning("Please login before using ATS Checker.")
     st.stop()
 
-uploaded_file = st.file_uploader(
-    "Upload your CV as a PDF",
-    type=["pdf"],
-    accept_multiple_files=False,
-)
+uploaded_file = st.file_uploader("Upload your CV as a PDF", type=["pdf"])
 
 job_description = st.text_area(
     "Paste the job description",
-    height=300,
-    value="""Founding Full-Stack AI SaaS Engineer
-
-What we are looking for:
-- Python
-- FastAPI
-- PostgreSQL
-- Docker
-- Firebase
-- Stripe or Lemon Squeezy
-- Render deployment
-- SaaS products""",
+    height=260,
+    value=(
+        "Founding Full-Stack AI SaaS Engineer\n\n"
+        "What we are looking for:\n"
+        "- Python\n"
+        "- FastAPI\n"
+        "- PostgreSQL\n"
+        "- Docker\n"
+        "- Firebase\n"
+        "- Stripe or Lemon Squeezy\n"
+        "- Render deployment\n"
+        "- SaaS products"
+    ),
 )
 
 if st.button("Run ATS Checker", use_container_width=True):
     if uploaded_file is None:
-        st.warning("Please upload your CV PDF first.")
+        st.warning("Please upload a PDF first.")
         st.stop()
 
     if not job_description.strip():
-        st.warning("Please paste the job description first.")
+        st.warning("Please paste a job description first.")
         st.stop()
 
     with st.spinner("Running ATS keyword check..."):
         response = api_post(
-            "/ats-check",
-            files={"file": uploaded_file},
+            "/ats-test",
+            files={
+                "file": (
+                    uploaded_file.name,
+                    uploaded_file.getvalue(),
+                    "application/pdf",
+                )
+            },
             data={"job_description": job_description},
         )
 
-    if not response.ok:
-        st.error(f"ATS check failed: {response.status_code}")
-        try:
-            st.json(response.json())
-        except Exception:
-            st.code(response.text)
+    # Supports both old and new api_post return styles.
+    if isinstance(response, tuple):
+        if len(response) == 3:
+            ok, result, error = response
+        elif len(response) == 2:
+            result, error = response
+            ok = error is None
+        else:
+            ok, result, error = False, None, "Unexpected API response format."
+    else:
+        ok = True
+        result = response
+        error = None
+
+    if not ok or error:
+        st.error(f"ATS check failed: {error}")
         st.stop()
 
-    try:
-        result = response.json()
-    except Exception:
-        st.error("ATS check failed: backend returned invalid JSON.")
-        st.code(response.text)
+    if not isinstance(result, dict):
+        st.error("ATS check failed: backend returned an invalid response.")
+        st.code(str(result))
         st.stop()
-
-    score = result.get("score", result.get("ats_score", 0))
-    matched_keywords = result.get("matched_keywords", result.get("matched", []))
-    missing_keywords = result.get("missing_keywords", result.get("missing", []))
-    recommendations = result.get("recommendations", result.get("tips", []))
 
     st.success("ATS check completed.")
 
-    st.metric("ATS Keyword Score", f"{score}%")
+    score = result.get("score")
+    if score is not None:
+        st.metric("ATS Match Score", f"{score}%")
+
+    matched_keywords = (
+        result.get("matched_keywords")
+        or result.get("covered_keywords")
+        or result.get("matches")
+        or []
+    )
+
+    missing_keywords = (
+        result.get("missing_keywords")
+        or result.get("missing_skills")
+        or result.get("missing")
+        or []
+    )
+
+    recommendations = (
+        result.get("recommendations")
+        or result.get("suggestions")
+        or []
+    )
 
     col1, col2 = st.columns(2)
 
@@ -98,3 +126,6 @@ if st.button("Run ATS Checker", use_container_width=True):
             st.markdown(f"- {item}")
     else:
         st.info("No recommendations returned.")
+
+    with st.expander("Raw backend response"):
+        st.json(result)
