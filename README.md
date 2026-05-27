@@ -1,208 +1,221 @@
 # 🚀 TalentMatch Pro
 
-TalentMatch Pro is an AI-powered SaaS platform that helps users compare their CV against a real job description, receive a match score, identify missing skills, and get actionable improvement recommendations.
+AI-powered SaaS platform for CV analysis, ATS optimization, semantic candidate matching, recruiter workflows, and AI hiring automation.
 
 ## ✨ Features
 
-- Firebase email/password authentication
+### CV Analysis
 - PDF CV upload
-- AI-powered CV analysis with OpenAI
-- Match score from 0 to 100
-- Strengths, weaknesses, and recommendations
-- Firebase Storage for uploaded CV files
-- Analysis history saved in the database
-- Free plan analysis limit
-- Lemon Squeezy-ready upgrade flow
-- FastAPI backend
-- Streamlit frontend
+- AI resume analysis
+- Match score generation
+- Strengths and weaknesses detection
+- Improvement recommendations
 
-## 🧱 Tech Stack
+### ATS Checker
+- ATS keyword matching
+- Missing keyword detection
+- Resume optimization insights
 
-- Backend: FastAPI, SQLAlchemy, Pydantic
-- Frontend: Streamlit
-- Auth: Firebase Authentication
-- Storage: Firebase Storage
-- AI: OpenAI API
-- Billing: Lemon Squeezy
-- Database: SQLite locally, PostgreSQL in production
-- Deployment: Render + Streamlit Community Cloud
-- Docker: Optional local full-stack setup
+### Semantic Matching
+- Embedding-based matching
+- Candidate ranking
+- Job description similarity scoring
+
+### Recruiter Mode
+- Recruiter workflow tools
+- Candidate overview
+- Hiring optimization
+
+### Billing
+- Stripe integration
+- Pro subscriptions
+- Usage limits
+
+### Authentication
+- Firebase Authentication
+- Firebase Storage
+- Secure file handling
+
+---
+
+## 🏗 Tech Stack
+
+Backend:
+- FastAPI
+- SQLAlchemy
+- SQLite / PostgreSQL
+- OpenAI API
+- Firebase
+- Stripe
+
+Frontend:
+- Streamlit
+- Python
+
+Infrastructure:
+- Render
+- Docker
+- GitHub
+
+---
 
 ## 📁 Project Structure
 
+```text
 talentmatch-pro/
-├── backend/
-│   ├── auth.py
-│   ├── billing.py
-│   ├── db.py
-│   ├── firebase.py
-│   ├── main.py
-│   ├── models.py
-│   ├── openai_service.py
-│   ├── pdf_utils.py
-│   ├── requirements.txt
-│   ├── schemas.py
-│   └── storage.py
-│
-├── frontend/
-│   ├── .streamlit/
-│   │   └── secrets.toml.example
-│   ├── pages/
-│   │   └── pricing.py
-│   ├── app.py
-│   └── requirements.txt
-│
-├── .gitignore
-├── docker-compose.yml
-├── Dockerfile.backend
-├── Dockerfile.frontend
-└── README.md
 
-## 🧪 Local Testing Checklist
+backend/
+├── auth.py
+├── db.py
+├── firebase.py
+├── main.py
+├── models.py
+├── openai_service.py
+├── pdf_report.py
+├── pdf_utils.py
+├── recruiter_service.py
+├── schemas.py
+├── semantic_service.py
+├── storage.py
+├── stripe_billing.py
+└── usage_service.py
 
-Before pushing to GitHub or deploying, verify the full local flow:
+frontend/
+├── .streamlit/
+├── pages/
+│   ├── admin_analytics.py
+│   ├── ats_checker.py
+│   ├── cv_rewrite.py
+│   ├── history.py
+│   ├── landing.py
+│   ├── login.py
+│   ├── pricing.py
+│   ├── recruiter_mode.py
+│   ├── register.py
+│   └── semantic_match.py
+├── app.py
+└── auth_utils.py
+```
 
-1. Start the backend:
+---
 
-- cd backend
-- .venv\Scripts\activate
-- uvicorn main:app --reload
+## ⚙ Environment Variables
 
-2. Start the frontend:
+Backend:
 
-- cd frontend
-- .venv\Scripts\activate
-- streamlit run app.py
+```env
+OPENAI_API_KEY=
 
-3. Open the app:
-- http://localhost:8501
-4. Sign in with Firebase email/password.
-5. Upload a PDF CV.
-6. Paste a job description.
-7. Click "Analyze CV".
+FIREBASE_PROJECT_ID=
+FIREBASE_STORAGE_BUCKET=
 
-**Expected result:**
+STRIPE_SECRET_KEY=
+STRIPE_WEBHOOK_SECRET=
 
-- The backend validates the Firebase ID token.
-- The PDF text is extracted.
-- OpenAI returns a score and recommendations.
-- The PDF is uploaded to Firebase Storage.
-- The analysis is saved in the database.
-- The frontend displays the result.
+DATABASE_URL=
+```
 
-## 📦 Firebase Storage Structure
+Frontend:
 
-**Uploaded CV files are stored per user:**
+```toml
+BACKEND_URL=""
+```
 
-users/{user_id}/cvs/{timestamp}_{filename}.pdf
+---
 
-**Example:**
+## 🚀 Run Locally
 
-users/1/cvs/20260503002521_20260501_cv1.pdf
+Backend
 
-- This structure keeps user files separated and ready for production SaaS usage.
+```bash
+cd backend
 
-## 🧾 Free Plan Logic
+pip install -r requirements.txt
 
-- Free users have a limited number of analyses.
+uvicorn main:app --reload
+```
 
-**The limit is controlled by:**
-FREE_PLAN_ANALYSIS_LIMIT=3
+Frontend
 
-- When the user reaches the free plan limit, the backend returns an upgrade message.
-- Pro users can continue using the analysis flow without the free-plan limit.
+```bash
+cd frontend
 
-## 💳 Lemon Squeezy Upgrade Flow
+pip install -r requirements.txt
 
-**The frontend shows an upgrade option using:**
-LEMON_SQUEEZY_CHECKOUT_URL = "https://your-store.lemonsqueezy.com/buy/your-checkout-id"
+streamlit run app.py
+```
 
-- After payment, Lemon Squeezy sends a webhook request to the backend.
+---
 
-**Webhook endpoint:**
-POST /webhook
+## 🐳 Docker
 
-**Production webhook URL example:**
-https://your-render-backend.onrender.com/webhook
-
-- The backend verifies the webhook signature and upgrades the user to Pro.
-
-## 🚀 Production Deployment Order
-
-**Recommended deployment order:**
-
-1. Confirm local backend works.
-2. Confirm local frontend works.
-3. Confirm Firebase Auth works.
-4. Confirm Firebase Storage upload works.
-5. Confirm OpenAI analysis works.
-6. Push to GitHub.
-7. Deploy backend to Render.
-8. Deploy frontend to Streamlit Community Cloud.
-9. Add production secrets.
-10. Test the production flow end-to-end.
-11. Configure Lemon Squeezy webhook.
-12. Run final production test.
-
-## 🛡️ Security Notes
-
-**Never expose or commit:**
-
-- backend/.env
-- backend/serviceAccountKey.json
-- backend/talentmatch.db
-- frontend/.streamlit/secrets.toml
-- get_token.py
-- .venv/
-
-**Firebase ID tokens must be sent only through the Authorization header:**
-- Authorization: Bearer <firebase_id_token>
-
-- The backend must always verify tokens with Firebase Admin SDK.
-
-## 🐳 Docker Notes
-
-- Docker is optional for local development.
-- Use Docker only after the backend and frontend work locally without Docker.
-
-**Run from the project root:**
+```bash
 docker compose up --build
+```
 
-**Expected URLs:**
-Backend: http://127.0.0.1:8000
-Frontend: http://localhost:8501
+Frontend:
 
-## ✅ MVP Completion Criteria
+http://localhost:8501
 
-**The MVP is considered working when:**
+Backend:
 
-- Users can sign in.
-- Users can upload a PDF CV.
-- Users can paste their own job description.
-- AI returns a match score.
-- Firebase Storage receives the uploaded CV.
-- The database stores the analysis record.
-- The free-plan limit works.
-- The upgrade path is visible.
+http://localhost:8000
 
-## 📌 Roadmap
+---
 
-**Planned improvements:**
+## 🔥 Firebase
 
-- Better Firebase login UI
-- Analysis history page
-- Pro dashboard
-- Lemon Squeezy production webhook
-- Render backend deployment
-- Streamlit Cloud frontend deployment
-- PostgreSQL production database
-- PDF report export
-- Recruiter-facing dashboard
-- LinkedIn launch campaign
+Storage structure:
+
+```text
+users/{user_id}/cvs/{timestamp}_{filename}.pdf
+```
+
+---
+
+## 💳 Stripe
+
+Webhook:
+
+```text
+POST /webhook
+```
+
+Stripe automatically upgrades users to Pro.
+
+---
+
+## 🔒 Security
+
+Never commit:
+
+```text
+backend/.env
+serviceAccountKey.json
+frontend/.streamlit/secrets.toml
+.venv/
+```
+
+---
+
+## 📈 Roadmap
+
+- Better ATS scoring
+- AI CV rewrite improvements
+- Recruiter dashboard expansion
+- PostgreSQL production migration
+- Team recruiter accounts
+
+---
 
 ## 👨‍💻 Author
 
-**Dejan Jović**
+Dejan Jović
 
-**GitHub: dejanjovic1283-ui**
-**Email: dejan.jovic1283@gmail.com**
+GitHub:
+
+https://github.com/dejanjovic1283-ui
+
+---
+
+TalentMatch Pro — AI-powered hiring intelligence.
