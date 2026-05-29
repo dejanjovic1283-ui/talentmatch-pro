@@ -1,7 +1,7 @@
-import os
-
-import requests
 import streamlit as st
+
+from auth_utils import api_post, is_logged_in
+
 
 st.set_page_config(
     page_title="Semantic Match • TalentMatch Pro",
@@ -9,10 +9,6 @@ st.set_page_config(
     layout="wide",
 )
 
-BACKEND_URL = os.getenv(
-    "BACKEND_URL",
-    "https://talentmatch-backend-1283.onrender.com",
-).rstrip("/")
 
 DEFAULT_JOB_DESCRIPTION = """
 Founding Full-Stack AI SaaS Engineer
@@ -23,7 +19,7 @@ What you will do:
 - Build and scale a FastAPI + Streamlit product
 - Integrate Firebase authentication and storage
 - Ship AI-powered CV analysis with OpenAI
-- Own billing workflows with Lemon Squeezy
+- Own billing workflows with Paddle
 - Improve product reliability, UX, and deployment pipelines
 
 What we are looking for:
@@ -38,35 +34,36 @@ Nice to have:
 """.strip()
 
 
-def get_auth_headers() -> dict[str, str]:
-    user = st.session_state.get("user")
+def extract_error_message(response) -> str:
+    status_code = getattr(response, "status_code", None)
+    text = getattr(response, "text", "") or ""
 
-    if not isinstance(user, dict):
-        return {}
-
-    token = user.get("id_token") or user.get("idToken") or ""
-
-    if not token:
-        return {}
-
-    return {"Authorization": f"Bearer {token}"}
-
-
-def extract_error_message(response: requests.Response) -> str:
     try:
         payload = response.json()
-    except ValueError:
-        return response.text[:1000]
+    except Exception:
+        if status_code:
+            return f"{status_code}: {text[:1000]}"
+        return text[:1000] or "Unknown backend error."
+
+    if not isinstance(payload, dict):
+        return str(payload)
 
     detail = payload.get("detail")
+    error = payload.get("error")
 
     if isinstance(detail, dict):
-        return detail.get("message", str(detail))
+        message = detail.get("message") or str(detail)
+    elif detail:
+        message = str(detail)
+    elif error:
+        message = str(error)
+    else:
+        message = str(payload)
 
-    if isinstance(detail, str):
-        return detail
+    if status_code:
+        return f"{status_code}: {message}"
 
-    return str(payload)
+    return message
 
 
 def verdict_level(score: int) -> str:
@@ -82,10 +79,9 @@ st.caption(
     "Compare your CV and job description using OpenAI embeddings plus keyword overlap."
 )
 
-user = st.session_state.get("user")
-
-if not isinstance(user, dict) or not user.get("id_token"):
+if not is_logged_in():
     st.warning("Please login before using Semantic Matching.")
+    st.page_link("pages/login.py", label="🔐 Go to Login")
     st.stop()
 
 uploaded_file = st.file_uploader(
@@ -113,12 +109,6 @@ if st.button("Run Semantic Match", use_container_width=True):
         st.error("Please paste a job description.")
         st.stop()
 
-    headers = get_auth_headers()
-
-    if not headers:
-        st.error("Missing auth token. Please login again.")
-        st.stop()
-
     files = {
         "file": (
             uploaded_file.name,
@@ -128,30 +118,38 @@ if st.button("Run Semantic Match", use_container_width=True):
     }
 
     data = {
-        "job_description": job_description,
+        "job_description": job_description.strip(),
     }
 
     with st.spinner("Running semantic matching..."):
-        try:
-            response = requests.post(
-                f"{BACKEND_URL}/semantic-match",
-                headers=headers,
-                data=data,
-                files=files,
-                timeout=180,
-            )
-        except requests.RequestException as exc:
-            st.error(f"Backend request failed: {exc}")
-            st.stop()
+        response = api_post(
+            "/semantic-match",
+            data=data,
+            files=files,
+            timeout=180,
+        )
 
     if response.status_code != 200:
-        st.error(extract_error_message(response))
+        st.error(f"Semantic match failed: {extract_error_message(response)}")
+
         if response.status_code == 403:
             st.warning("🚀 Semantic Matching is a Pro feature.")
             st.page_link("pages/pricing.py", label="Upgrade to Pro", icon="🚀")
+
         st.stop()
 
-    st.session_state["semantic_result"] = response.json()
+    try:
+        payload = response.json()
+    except Exception:
+        st.error(f"Backend returned invalid JSON: {response.text[:1000]}")
+        st.stop()
+
+    if not isinstance(payload, dict):
+        st.error("Backend returned invalid response format.")
+        st.json(payload)
+        st.stop()
+
+    st.session_state["semantic_result"] = payload
     st.success("Semantic match completed.")
 
 
@@ -189,23 +187,43 @@ if isinstance(result, dict):
     st.progress(min(max(combined_score, 0), 100) / 100)
 
     st.markdown("## 📝 Recruiter Summary")
-    st.write(result.get("summary", ""))
+    summary = result.get("summary", "")
+
+    if summary:
+        st.write(summary)
+    else:
+        st.info("No summary returned.")
 
     left, right = st.columns(2)
 
     with left:
         st.markdown("## ✅ Matched Themes")
-        for item in result.get("matched_themes", []):
-            st.markdown(f"- {item}")
+        matched_themes = result.get("matched_themes", [])
+
+        if matched_themes:
+            for item in matched_themes:
+                st.markdown(f"- {item}")
+        else:
+            st.caption("No matched themes returned.")
 
     with right:
         st.markdown("## ❌ Missing Themes")
-        for item in result.get("missing_themes", []):
-            st.markdown(f"- {item}")
+        missing_themes = result.get("missing_themes", [])
+
+        if missing_themes:
+            for item in missing_themes:
+                st.markdown(f"- {item}")
+        else:
+            st.caption("No missing themes returned.")
 
     st.markdown("## 💡 Recommendations")
-    for item in result.get("recommendations", []):
-        st.markdown(f"- {item}")
+    recommendations = result.get("recommendations", [])
+
+    if recommendations:
+        for item in recommendations:
+            st.markdown(f"- {item}")
+    else:
+        st.caption("No recommendations returned.")
 
     st.divider()
 
