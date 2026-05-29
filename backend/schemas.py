@@ -9,8 +9,13 @@ class UserProfileResponse(BaseModel):
     id: int
     email: EmailStr
     full_name: str | None = None
+
     plan: str
     is_pro: bool
+
+    paddle_customer_id: str | None = None
+    paddle_subscription_id: str | None = None
+    paddle_subscription_status: str | None = None
 
 
 class AnalysisResponse(BaseModel):
