@@ -22,7 +22,7 @@ def normalize_response(raw: Any) -> Tuple[Optional[Any], Optional[str]]:
 
 
 def response_to_json(response: Any) -> Tuple[Optional[Dict[str, Any]], Optional[str]]:
-    """Convert backend response into a JSON dictionary."""
+    """Convert backend response into a JSON dictionary with clear error messages."""
     if response is None:
         return None, "No response from backend."
 
@@ -30,22 +30,31 @@ def response_to_json(response: Any) -> Tuple[Optional[Dict[str, Any]], Optional[
         return response, None
 
     status_code = getattr(response, "status_code", None)
-    text = getattr(response, "text", "")
+    text = getattr(response, "text", "") or ""
+    headers = getattr(response, "headers", {}) or {}
+    content_type = headers.get("content-type", "")
 
     if status_code is not None and status_code >= 400:
         try:
             payload = response.json()
-            return None, json.dumps(payload, indent=2)
+            detail = payload.get("detail") or payload.get("error") or payload
+            return None, f"ATS check failed: {status_code} - {detail}"
         except Exception:
-            return None, text or f"Backend returned status {status_code}."
+            return None, f"ATS check failed: {status_code} - {text[:1000]}"
+
+    if content_type and "application/json" not in content_type:
+        return None, f"Backend returned non-JSON response: {text[:1000]}"
 
     try:
         payload = response.json()
     except Exception:
-        return None, text or "Backend returned an invalid response."
+        return None, f"Backend returned invalid JSON: {text[:1000]}"
 
     if not isinstance(payload, dict):
         return None, "Backend response is not a JSON object."
+
+    if payload.get("error") or payload.get("detail"):
+        return None, str(payload.get("error") or payload.get("detail"))
 
     return payload, None
 
@@ -139,7 +148,7 @@ job_description = st.text_area(
         "- PostgreSQL\n"
         "- Docker\n"
         "- Firebase\n"
-        "- Stripe\n"
+        "- Paddle\n"
         "- Render deployment"
     ),
 )
@@ -182,8 +191,7 @@ if run_clicked:
     payload, parse_error = response_to_json(response)
 
     if parse_error:
-        st.error("ATS check failed: backend returned an invalid response.")
-        st.code(parse_error)
+        st.error(parse_error)
         st.stop()
 
     if not payload:
