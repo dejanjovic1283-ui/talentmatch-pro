@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
+
 from sqlalchemy.orm import Session
 
 from models import User
