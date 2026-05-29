@@ -19,6 +19,7 @@ ssl._create_default_https_context = ssl.create_default_context(cafile=certifi.wh
 load_dotenv()
 
 from auth import get_current_user, get_test_user
+from billing.factory import get_billing_provider
 from db import Base, engine, get_db
 from models import AnalysisRecord, User
 from openai_service import analyze_cv_with_ai, rewrite_cv_with_ai
@@ -28,11 +29,6 @@ from recruiter_service import rank_candidates
 from schemas import AnalysisResponse, HistoryItemResponse
 from semantic_service import analyze_semantic_match
 from storage import upload_pdf_to_firebase
-from stripe_billing import (
-    create_checkout_session,
-    create_customer_portal_url,
-    handle_stripe_webhook,
-)
 from usage_service import ensure_analysis_allowed, get_user_usage
 
 
@@ -44,6 +40,9 @@ def run_lightweight_migrations() -> None:
         "ALTER TABLE users ADD COLUMN analyses_used INTEGER DEFAULT 0",
         "ALTER TABLE users ADD COLUMN plan VARCHAR DEFAULT 'free'",
         "ALTER TABLE users ADD COLUMN is_pro BOOLEAN DEFAULT 0",
+        "ALTER TABLE users ADD COLUMN paddle_customer_id VARCHAR",
+        "ALTER TABLE users ADD COLUMN paddle_subscription_id VARCHAR",
+        "ALTER TABLE users ADD COLUMN paddle_subscription_status VARCHAR",
     ]
 
     for migration in migrations:
@@ -64,7 +63,6 @@ def get_cors_origins() -> list[str]:
         "CORS_ORIGINS",
         "http://localhost:8501,http://127.0.0.1:8501,https://talentmatch-frontend-dejan.onrender.com",
     )
-
     return [origin.strip().rstrip("/") for origin in raw.split(",") if origin.strip()]
 
 
@@ -73,7 +71,7 @@ app.add_middleware(
     allow_origins=get_cors_origins(),
     allow_credentials=True,
     allow_methods=["GET", "POST", "OPTIONS"],
-    allow_headers=["Authorization", "Content-Type"],
+    allow_headers=["Authorization", "Content-Type", "Paddle-Signature"],
 )
 
 
@@ -89,9 +87,11 @@ def config_status() -> dict:
         "firebase_project_configured": bool(os.getenv("FIREBASE_PROJECT_ID", "").strip()),
         "firebase_storage_configured": bool(os.getenv("FIREBASE_STORAGE_BUCKET", "").strip()),
         "firebase_credentials_configured": bool(firebase_credentials or google_credentials),
-        "stripe_secret_configured": bool(os.getenv("STRIPE_SECRET_KEY", "").strip()),
-        "stripe_price_configured": bool(os.getenv("STRIPE_PRICE_ID", "").strip()),
-        "stripe_webhook_configured": bool(os.getenv("STRIPE_WEBHOOK_SECRET", "").strip()),
+        "billing_provider": os.getenv("BILLING_PROVIDER", "paddle"),
+        "paddle_api_configured": bool(os.getenv("PADDLE_API_KEY", "").strip()),
+        "paddle_price_configured": bool(os.getenv("PADDLE_PRICE_ID", "").strip()),
+        "paddle_webhook_configured": bool(os.getenv("PADDLE_WEBHOOK_SECRET", "").strip()),
+        "paddle_environment": os.getenv("PADDLE_ENVIRONMENT", "sandbox"),
         "frontend_url_configured": bool(os.getenv("FRONTEND_URL", "").strip()),
         "cors_origins_count": len(get_cors_origins()),
     }
@@ -134,7 +134,6 @@ def readyz(db: Session = Depends(get_db)):
         checks["database_connection_ok"] = False
 
     status = "ready" if checks["database_connection_ok"] else "not_ready"
-
     return {"status": status, **checks}
 
 
@@ -144,7 +143,6 @@ def get_profile(
     current_user: User = Depends(get_current_user),
 ):
     db.expire_all()
-
     user = db.query(User).filter(User.id == current_user.id).first()
 
     if user is None:
@@ -158,6 +156,9 @@ def get_profile(
         "full_name": user.full_name,
         "plan": user.plan,
         "is_pro": bool(user.is_pro),
+        "paddle_customer_id": user.paddle_customer_id,
+        "paddle_subscription_id": user.paddle_subscription_id,
+        "paddle_subscription_status": user.paddle_subscription_status,
         **usage,
     }
 
@@ -232,19 +233,12 @@ async def analyze_test(
     if not pdf_bytes:
         raise HTTPException(status_code=400, detail="Uploaded PDF is empty.")
 
-    try:
-        cv_text = extract_text_from_pdf(pdf_bytes)
-    except Exception as exc:
-        raise HTTPException(status_code=400, detail=f"Could not extract text from PDF: {exc}")
+    cv_text = extract_text_from_pdf(pdf_bytes)
 
     if not cv_text.strip():
         raise HTTPException(status_code=400, detail="Could not extract text from PDF.")
 
-    try:
-        return analyze_cv_with_ai(cv_text, job_description)
-    except Exception as exc:
-        print("OPENAI ANALYSIS TEST ERROR:", repr(exc))
-        raise HTTPException(status_code=500, detail=f"AI analysis failed: {exc}")
+    return analyze_cv_with_ai(cv_text, job_description)
 
 
 ATS_STOPWORDS = {
@@ -312,10 +306,7 @@ async def ats_test(
     if not pdf_bytes:
         raise HTTPException(status_code=400, detail="Uploaded PDF is empty.")
 
-    try:
-        cv_text = extract_text_from_pdf(pdf_bytes)
-    except Exception as exc:
-        raise HTTPException(status_code=400, detail=f"Could not extract text from PDF: {exc}")
+    cv_text = extract_text_from_pdf(pdf_bytes)
 
     if not cv_text.strip():
         raise HTTPException(status_code=400, detail="Could not extract text from PDF.")
@@ -334,12 +325,7 @@ async def ats_test(
 
     coverage = round((len(matched) / len(keywords)) * 100) if keywords else 0
 
-    if coverage >= 80:
-        verdict = "ATS Strong"
-    elif coverage >= 60:
-        verdict = "ATS Good"
-    else:
-        verdict = "ATS Weak"
+    verdict = "ATS Strong" if coverage >= 80 else "ATS Good" if coverage >= 60 else "ATS Weak"
 
     return {
         "score": coverage,
@@ -373,34 +359,12 @@ async def semantic_match(
     current_user: User = Depends(get_current_user),
 ):
     if not current_user.is_pro:
-        raise HTTPException(
-            status_code=403,
-            detail={
-                "message": "Semantic matching is a Pro feature.",
-                "upgrade_required": True,
-                "plan": current_user.plan,
-                "is_pro": current_user.is_pro,
-            },
-        )
+        raise HTTPException(status_code=403, detail="Semantic matching is a Pro feature.")
 
     pdf_bytes = await file.read()
+    cv_text = extract_text_from_pdf(pdf_bytes)
 
-    if not pdf_bytes:
-        raise HTTPException(status_code=400, detail="Uploaded PDF is empty.")
-
-    try:
-        cv_text = extract_text_from_pdf(pdf_bytes)
-    except Exception as exc:
-        raise HTTPException(status_code=400, detail=f"Could not extract text from PDF: {exc}")
-
-    if not cv_text.strip():
-        raise HTTPException(status_code=400, detail="Could not extract text from PDF.")
-
-    try:
-        return analyze_semantic_match(cv_text, job_description)
-    except Exception as exc:
-        print("SEMANTIC MATCH ERROR:", repr(exc))
-        raise HTTPException(status_code=500, detail=f"Semantic match failed: {exc}")
+    return analyze_semantic_match(cv_text, job_description)
 
 
 @app.post("/recruiter/rank-candidates")
@@ -410,15 +374,7 @@ async def recruiter_rank_candidates(
     current_user: User = Depends(get_current_user),
 ):
     if not current_user.is_pro:
-        raise HTTPException(
-            status_code=403,
-            detail={
-                "message": "Recruiter Mode is a Pro feature.",
-                "upgrade_required": True,
-                "plan": current_user.plan,
-                "is_pro": current_user.is_pro,
-            },
-        )
+        raise HTTPException(status_code=403, detail="Recruiter Mode is a Pro feature.")
 
     if not files:
         raise HTTPException(status_code=400, detail="Please upload at least one CV.")
@@ -430,12 +386,7 @@ async def recruiter_rank_candidates(
 
     for uploaded_file in files:
         pdf_bytes = await uploaded_file.read()
-
-        try:
-            cv_text = extract_text_from_pdf(pdf_bytes) if pdf_bytes else ""
-        except Exception as exc:
-            print(f"CV EXTRACT ERROR for {uploaded_file.filename}:", repr(exc))
-            cv_text = ""
+        cv_text = extract_text_from_pdf(pdf_bytes) if pdf_bytes else ""
 
         candidates.append(
             {
@@ -444,11 +395,7 @@ async def recruiter_rank_candidates(
             }
         )
 
-    try:
-        return rank_candidates(candidates=candidates, job_description=job_description)
-    except Exception as exc:
-        print("RECRUITER RANKING ERROR:", repr(exc))
-        raise HTTPException(status_code=500, detail=f"Recruiter ranking failed: {exc}")
+    return rank_candidates(candidates=candidates, job_description=job_description)
 
 
 @app.post("/rewrite-cv")
@@ -458,34 +405,12 @@ async def rewrite_cv(
     current_user: User = Depends(get_current_user),
 ):
     if not current_user.is_pro:
-        raise HTTPException(
-            status_code=403,
-            detail={
-                "message": "CV Rewrite AI is a Pro feature.",
-                "upgrade_required": True,
-                "plan": current_user.plan,
-                "is_pro": current_user.is_pro,
-            },
-        )
+        raise HTTPException(status_code=403, detail="CV Rewrite AI is a Pro feature.")
 
     pdf_bytes = await file.read()
+    cv_text = extract_text_from_pdf(pdf_bytes)
 
-    if not pdf_bytes:
-        raise HTTPException(status_code=400, detail="Uploaded PDF is empty.")
-
-    try:
-        cv_text = extract_text_from_pdf(pdf_bytes)
-    except Exception as exc:
-        raise HTTPException(status_code=400, detail=f"Could not extract text from PDF: {exc}")
-
-    if not cv_text.strip():
-        raise HTTPException(status_code=400, detail="Could not extract text from PDF.")
-
-    try:
-        return rewrite_cv_with_ai(cv_text, job_description)
-    except Exception as exc:
-        print("OPENAI CV REWRITE ERROR:", repr(exc))
-        raise HTTPException(status_code=500, detail=f"CV rewrite failed: {exc}")
+    return rewrite_cv_with_ai(cv_text, job_description)
 
 
 @app.post("/reports/analysis-pdf")
@@ -500,29 +425,17 @@ async def create_analysis_pdf_report(
     current_user: User = Depends(get_current_user),
 ):
     if not current_user.is_pro:
-        raise HTTPException(
-            status_code=403,
-            detail={
-                "message": "PDF reports are a Pro feature.",
-                "upgrade_required": True,
-                "plan": current_user.plan,
-                "is_pro": current_user.is_pro,
-            },
-        )
+        raise HTTPException(status_code=403, detail="PDF reports are a Pro feature.")
 
-    try:
-        pdf_bytes = build_analysis_pdf_report(
-            cv_filename=cv_filename,
-            score=score,
-            summary=summary,
-            strengths=parse_json_list(strengths_json),
-            weaknesses=parse_json_list(weaknesses_json),
-            recommendations=parse_json_list(recommendations_json),
-            job_description=job_description,
-        )
-    except Exception as exc:
-        print("PDF REPORT ERROR:", repr(exc))
-        raise HTTPException(status_code=500, detail=f"PDF report failed: {exc}")
+    pdf_bytes = build_analysis_pdf_report(
+        cv_filename=cv_filename,
+        score=score,
+        summary=summary,
+        strengths=parse_json_list(strengths_json),
+        weaknesses=parse_json_list(weaknesses_json),
+        recommendations=parse_json_list(recommendations_json),
+        job_description=job_description,
+    )
 
     safe_filename = re.sub(r"[^a-zA-Z0-9_-]+", "_", cv_filename.replace(".pdf", ""))
     download_name = f"{safe_filename}_talentmatch_report.pdf"
@@ -563,44 +476,16 @@ def get_history(
     ]
 
 
-@app.get("/history-test")
-def get_history_test():
-    return [
-        {
-            "id": 1,
-            "cv_filename": "20260501_cv1.pdf",
-            "cv_storage_path": None,
-            "job_description": "Founding Full-Stack AI SaaS Engineer",
-            "score": 55,
-            "summary": "John Doe has foundational Python backend skills but lacks depth in SaaS integrations, Docker, billing workflows, and AI product experience.",
-            "matched_skills": [
-                "Basic Python backend knowledge",
-                "REST API exposure",
-                "Motivated junior developer profile",
-            ],
-            "missing_skills": [
-                "Limited FastAPI production experience",
-                "No clear SaaS billing workflow experience",
-                "Limited AI product experience",
-            ],
-            "recommendations": [
-                "Highlight any FastAPI projects.",
-                "Add examples of API integrations.",
-                "Mention deployment or Docker experience if available.",
-            ],
-            "created_at": "2026-05-03T08:00:00",
-        }
-    ]
-
-
 @app.post("/billing/create-checkout")
 def create_checkout(current_user: User = Depends(get_current_user)):
-    return {"checkout_url": create_checkout_session(current_user)}
+    provider = get_billing_provider()
+    return {"checkout_url": provider.create_checkout_url(current_user)}
 
 
 @app.post("/billing/create-portal")
 def create_portal(current_user: User = Depends(get_current_user)):
-    return {"portal_url": create_customer_portal_url(current_user)}
+    provider = get_billing_provider()
+    return {"portal_url": provider.create_customer_portal_url(current_user)}
 
 
 @app.post("/billing/demo-upgrade")
@@ -610,7 +495,6 @@ def demo_upgrade_to_pro(
 ):
     current_user.plan = "pro"
     current_user.is_pro = True
-
     db.add(current_user)
     db.commit()
     db.refresh(current_user)
@@ -624,38 +508,23 @@ def demo_upgrade_to_pro(
 
 
 @app.post("/billing/webhook")
-async def stripe_webhook(
+async def billing_webhook(
     request: Request,
     db: Session = Depends(get_db),
 ):
     body = await request.body()
-    signature = request.headers.get("stripe-signature", "")
+    provider = get_billing_provider()
+    return provider.handle_webhook(body=body, headers=dict(request.headers), db=db)
 
-    print("=== STRIPE WEBHOOK RECEIVED ===")
-    print("SIGNATURE PRESENT:", bool(signature))
 
-    try:
-        result = handle_stripe_webhook(
-            body=body,
-            signature=signature,
-            db=db,
-        )
-
-        print("WEBHOOK RESULT:", result)
-
-        return {
-            "received": True,
-            "result": result,
-        }
-
-    except HTTPException:
-        db.rollback()
-        raise
-
-    except Exception as exc:
-        print("WEBHOOK FATAL ERROR:", repr(exc))
-        db.rollback()
-        raise HTTPException(status_code=500, detail=str(exc))
+@app.post("/paddle/webhook")
+async def paddle_webhook(
+    request: Request,
+    db: Session = Depends(get_db),
+):
+    body = await request.body()
+    provider = get_billing_provider()
+    return provider.handle_webhook(body=body, headers=dict(request.headers), db=db)
 
 
 if __name__ == "__main__":
