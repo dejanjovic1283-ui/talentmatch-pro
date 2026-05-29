@@ -7,3 +7,4 @@ plotly
 pypdf
 PyPDF2
 stripe
+reportlab>=4.0
