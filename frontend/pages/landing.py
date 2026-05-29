@@ -32,13 +32,16 @@ with col1:
         "missing skills, ATS keywords, and practical improvement recommendations."
     )
 
-    cta1, cta2 = st.columns(2)
+    cta1, cta2, cta3 = st.columns(3)
 
     with cta1:
         st.page_link("app.py", label="Start CV Analysis", icon="📄")
 
     with cta2:
         st.page_link("pages/ats_checker.py", label="Run ATS Checker", icon="🎯")
+
+    with cta3:
+        st.page_link("pages/pricing.py", label="Upgrade to Pro", icon="💳")
 
 with col2:
     st.container(border=True).markdown(
@@ -151,7 +154,7 @@ with free_col:
         - 3 demo CV analyses
         - AI match score
         - Basic recommendations
-        - ATS keyword preview
+        - ATS keyword checker
 
         **$0**
         """
@@ -167,11 +170,14 @@ with pro_col:
         - CV Rewrite AI
         - PDF reports
         - Saved history
+        - Semantic matching
         - Recruiter insights
 
         **$9/month**
         """
     )
+
+    st.page_link("pages/pricing.py", label="💳 Upgrade with Paddle")
 
 st.markdown("---")
 
@@ -200,16 +206,16 @@ with stack6:
     st.success("Render deploy")
 
 with stack7:
-    st.success("SQLite/PostgreSQL ready")
+    st.success("PostgreSQL ready")
 
 with stack8:
-    st.success("Lemon Squeezy ready")
+    st.success("Paddle Billing")
 
 st.markdown("---")
 
 st.markdown("## Try TalentMatch Pro")
 
-cta_col1, cta_col2, cta_col3 = st.columns(3)
+cta_col1, cta_col2, cta_col3, cta_col4 = st.columns(4)
 
 with cta_col1:
     st.page_link("pages/register.py", label="Create Account", icon="🚀")
@@ -220,7 +226,10 @@ with cta_col2:
 with cta_col3:
     st.page_link("pages/ats_checker.py", label="ATS Checker", icon="🎯")
 
+with cta_col4:
+    st.page_link("pages/pricing.py", label="Pricing", icon="💳")
+
 st.caption(
     "TalentMatch Pro is an AI SaaS MVP built for CV analysis, ATS optimization, "
-    "and job application strategy."
+    "semantic matching, recruiter workflows, and Paddle-powered subscriptions."
 )
