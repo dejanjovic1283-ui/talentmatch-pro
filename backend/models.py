@@ -20,6 +20,10 @@ class User(Base):
     is_pro: Mapped[bool] = mapped_column(Boolean, default=False)
     analyses_used: Mapped[int] = mapped_column(Integer, default=0)
 
+    paddle_customer_id: Mapped[str | None] = mapped_column(String(255), nullable=True, index=True)
+    paddle_subscription_id: Mapped[str | None] = mapped_column(String(255), nullable=True, index=True)
+    paddle_subscription_status: Mapped[str | None] = mapped_column(String(100), nullable=True)
+
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
 
     analyses = relationship("AnalysisRecord", back_populates="user")
