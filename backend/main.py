@@ -16,6 +16,8 @@ os.environ["SSL_CERT_FILE"] = certifi.where()
 os.environ["REQUESTS_CA_BUNDLE"] = certifi.where()
 ssl._create_default_https_context = ssl.create_default_context(cafile=certifi.where())
 
+load_dotenv()
+
 from auth import get_current_user, get_test_user
 from db import Base, engine, get_db
 from models import AnalysisRecord, User
@@ -33,7 +35,6 @@ from stripe_billing import (
 )
 from usage_service import ensure_analysis_allowed, get_user_usage
 
-load_dotenv()
 
 Base.metadata.create_all(bind=engine)
 
@@ -55,20 +56,21 @@ def run_lightweight_migrations() -> None:
 
 run_lightweight_migrations()
 
-app = FastAPI(title="TalentMatch Pro API")
+app = FastAPI(title="TalentMatch Pro API", version="0.1.0")
 
-allowed_origins = [
-    origin.strip()
-    for origin in os.getenv(
+
+def get_cors_origins() -> list[str]:
+    raw = os.getenv(
         "CORS_ORIGINS",
         "http://localhost:8501,http://127.0.0.1:8501,https://talentmatch-frontend-dejan.onrender.com",
-    ).split(",")
-    if origin.strip()
-]
+    )
+
+    return [origin.strip().rstrip("/") for origin in raw.split(",") if origin.strip()]
+
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=allowed_origins,
+    allow_origins=get_cors_origins(),
     allow_credentials=True,
     allow_methods=["GET", "POST", "OPTIONS"],
     allow_headers=["Authorization", "Content-Type"],
@@ -76,14 +78,22 @@ app.add_middleware(
 
 
 def config_status() -> dict:
+    database_url = os.getenv("DATABASE_URL", "").strip()
+    firebase_credentials = os.getenv("FIREBASE_CREDENTIALS", "").strip()
+    google_credentials = os.getenv("GOOGLE_APPLICATION_CREDENTIALS", "").strip()
+
     return {
-        "database_configured": bool(os.getenv("DATABASE_URL", "").strip()),
+        "environment": os.getenv("ENVIRONMENT", os.getenv("APP_ENV", "development")),
+        "database_configured": bool(database_url),
         "openai_configured": bool(os.getenv("OPENAI_API_KEY", "").strip()),
         "firebase_project_configured": bool(os.getenv("FIREBASE_PROJECT_ID", "").strip()),
         "firebase_storage_configured": bool(os.getenv("FIREBASE_STORAGE_BUCKET", "").strip()),
+        "firebase_credentials_configured": bool(firebase_credentials or google_credentials),
         "stripe_secret_configured": bool(os.getenv("STRIPE_SECRET_KEY", "").strip()),
         "stripe_price_configured": bool(os.getenv("STRIPE_PRICE_ID", "").strip()),
         "stripe_webhook_configured": bool(os.getenv("STRIPE_WEBHOOK_SECRET", "").strip()),
+        "frontend_url_configured": bool(os.getenv("FRONTEND_URL", "").strip()),
+        "cors_origins_count": len(get_cors_origins()),
     }
 
 
@@ -123,7 +133,9 @@ def readyz(db: Session = Depends(get_db)):
     except Exception:
         checks["database_connection_ok"] = False
 
-    return {"status": "ready", **checks}
+    status = "ready" if checks["database_connection_ok"] else "not_ready"
+
+    return {"status": status, **checks}
 
 
 @app.get("/me")
@@ -206,7 +218,6 @@ async def analyze_resume(
 
     get_user_usage(db, current_user)
 
-    result["storage_path"] = storage_path
     return result
 
 
@@ -230,13 +241,10 @@ async def analyze_test(
         raise HTTPException(status_code=400, detail="Could not extract text from PDF.")
 
     try:
-        result = analyze_cv_with_ai(cv_text, job_description)
+        return analyze_cv_with_ai(cv_text, job_description)
     except Exception as exc:
         print("OPENAI ANALYSIS TEST ERROR:", repr(exc))
         raise HTTPException(status_code=500, detail=f"AI analysis failed: {exc}")
-
-    result["storage_path"] = None
-    return result
 
 
 ATS_STOPWORDS = {
@@ -248,28 +256,18 @@ ATS_STOPWORDS = {
     "products", "what", "have", "has", "about", "into", "against",
     "real", "helps", "using", "job", "jobs", "description",
     "descriptions", "identify", "compare", "platform",
-    "founding", "full", "stack", "fullstack",
-    "full-stack", "pro", "seekers", "team", "looking",
-    "years", "required", "preferred", "talentmatch",
-    "cv", "resume", "engineer", "modern", "increase",
-    "chances", "optimize", "powered", "analysis",
-    "application", "strategy",
-    "ship", "own", "gaps", "improve", "scale",
-    "integrate", "integration", "integrations",
-    "workflow", "workflows",
-    "seeker", "company", "companies",
-    "startup", "startups", "founder",
-    "lemon", "squeezy",
-    "owning", "shipping", "improving", "scaling",
-    "good", "great", "excellent",
-    "need", "needs", "needed",
-    "want", "wants",
-    "ability", "able",
-    "must", "should", "could", "would",
-    "high", "value",
-    "plus", "bonus",
-    "fast", "paced",
-    "environment",
+    "founding", "full", "stack", "fullstack", "full-stack",
+    "pro", "seekers", "team", "looking", "years", "required",
+    "preferred", "talentmatch", "cv", "resume", "engineer",
+    "modern", "increase", "chances", "optimize", "powered",
+    "analysis", "application", "strategy", "ship", "own", "gaps",
+    "improve", "scale", "integrate", "integration", "integrations",
+    "workflow", "workflows", "seeker", "company", "companies",
+    "startup", "startups", "founder", "owning", "shipping",
+    "improving", "scaling", "good", "great", "excellent",
+    "need", "needs", "needed", "want", "wants", "ability",
+    "able", "must", "should", "could", "would", "high", "value",
+    "plus", "bonus", "fast", "paced", "environment",
 }
 
 
@@ -433,17 +431,8 @@ async def recruiter_rank_candidates(
     for uploaded_file in files:
         pdf_bytes = await uploaded_file.read()
 
-        if not pdf_bytes:
-            candidates.append(
-                {
-                    "filename": uploaded_file.filename or "candidate.pdf",
-                    "cv_text": "",
-                }
-            )
-            continue
-
         try:
-            cv_text = extract_text_from_pdf(pdf_bytes)
+            cv_text = extract_text_from_pdf(pdf_bytes) if pdf_bytes else ""
         except Exception as exc:
             print(f"CV EXTRACT ERROR for {uploaded_file.filename}:", repr(exc))
             cv_text = ""
@@ -456,10 +445,7 @@ async def recruiter_rank_candidates(
         )
 
     try:
-        return rank_candidates(
-            candidates=candidates,
-            job_description=job_description,
-        )
+        return rank_candidates(candidates=candidates, job_description=job_description)
     except Exception as exc:
         print("RECRUITER RANKING ERROR:", repr(exc))
         raise HTTPException(status_code=500, detail=f"Recruiter ranking failed: {exc}")
@@ -471,6 +457,17 @@ async def rewrite_cv(
     job_description: str = Form(...),
     current_user: User = Depends(get_current_user),
 ):
+    if not current_user.is_pro:
+        raise HTTPException(
+            status_code=403,
+            detail={
+                "message": "CV Rewrite AI is a Pro feature.",
+                "upgrade_required": True,
+                "plan": current_user.plan,
+                "is_pro": current_user.is_pro,
+            },
+        )
+
     pdf_bytes = await file.read()
 
     if not pdf_bytes:
@@ -483,17 +480,6 @@ async def rewrite_cv(
 
     if not cv_text.strip():
         raise HTTPException(status_code=400, detail="Could not extract text from PDF.")
-
-    if not current_user.is_pro:
-        raise HTTPException(
-            status_code=403,
-            detail={
-                "message": "CV Rewrite AI is a Pro feature.",
-                "upgrade_required": True,
-                "plan": current_user.plan,
-                "is_pro": current_user.is_pro,
-            },
-        )
 
     try:
         return rewrite_cv_with_ai(cv_text, job_description)
@@ -524,18 +510,14 @@ async def create_analysis_pdf_report(
             },
         )
 
-    strengths = parse_json_list(strengths_json)
-    weaknesses = parse_json_list(weaknesses_json)
-    recommendations = parse_json_list(recommendations_json)
-
     try:
         pdf_bytes = build_analysis_pdf_report(
             cv_filename=cv_filename,
             score=score,
             summary=summary,
-            strengths=strengths,
-            weaknesses=weaknesses,
-            recommendations=recommendations,
+            strengths=parse_json_list(strengths_json),
+            weaknesses=parse_json_list(weaknesses_json),
+            recommendations=parse_json_list(recommendations_json),
             job_description=job_description,
         )
     except Exception as exc:
@@ -646,13 +628,13 @@ async def stripe_webhook(
     request: Request,
     db: Session = Depends(get_db),
 ):
+    body = await request.body()
+    signature = request.headers.get("stripe-signature", "")
+
+    print("=== STRIPE WEBHOOK RECEIVED ===")
+    print("SIGNATURE PRESENT:", bool(signature))
+
     try:
-        body = await request.body()
-        signature = request.headers.get("stripe-signature", "")
-
-        print("=== STRIPE WEBHOOK RECEIVED ===")
-        print("SIGNATURE PRESENT:", bool(signature))
-
         result = handle_stripe_webhook(
             body=body,
             signature=signature,
@@ -666,14 +648,14 @@ async def stripe_webhook(
             "result": result,
         }
 
+    except HTTPException:
+        db.rollback()
+        raise
+
     except Exception as exc:
         print("WEBHOOK FATAL ERROR:", repr(exc))
         db.rollback()
-
-        return {
-            "received": False,
-            "error": str(exc),
-        }
+        raise HTTPException(status_code=500, detail=str(exc))
 
 
 if __name__ == "__main__":
