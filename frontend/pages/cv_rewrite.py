@@ -1,7 +1,7 @@
-import os
-
-import requests
 import streamlit as st
+
+from auth_utils import api_post, is_logged_in
+
 
 st.set_page_config(
     page_title="CV Rewrite AI",
@@ -9,10 +9,6 @@ st.set_page_config(
     layout="wide",
 )
 
-BACKEND_URL = os.getenv(
-    "BACKEND_URL",
-    "https://talentmatch-backend-1283.onrender.com",
-).rstrip("/")
 
 DEFAULT_JOB_DESCRIPTION = """
 Founding Full-Stack AI SaaS Engineer
@@ -21,7 +17,7 @@ What you will do:
 - Build and scale a FastAPI + Streamlit product
 - Integrate Firebase authentication and storage
 - Ship AI-powered CV analysis with OpenAI
-- Own billing workflows with Lemon Squeezy
+- Own billing workflows with Paddle
 - Improve product reliability, UX, and deployment pipelines
 
 What we are looking for:
@@ -32,27 +28,42 @@ What we are looking for:
 """.strip()
 
 
-def get_auth_headers() -> dict[str, str]:
-    user = st.session_state.get("user")
+def extract_error_message(response) -> str:
+    """Return a readable backend error message."""
+    status_code = getattr(response, "status_code", None)
+    text = getattr(response, "text", "") or ""
 
-    if not isinstance(user, dict):
-        return {}
+    try:
+        payload = response.json()
+    except Exception:
+        if status_code:
+            return f"{status_code}: {text[:1000]}"
+        return text[:1000] or "Unknown backend error."
 
-    token = user.get("id_token", "")
+    detail = payload.get("detail") if isinstance(payload, dict) else None
+    error = payload.get("error") if isinstance(payload, dict) else None
 
-    if not token:
-        return {}
+    if isinstance(detail, dict):
+        message = detail.get("message") or str(detail)
+    elif detail:
+        message = str(detail)
+    elif error:
+        message = str(error)
+    else:
+        message = str(payload)
 
-    return {"Authorization": f"Bearer {token}"}
+    if status_code:
+        return f"{status_code}: {message}"
+
+    return message
 
 
 st.title("✍️ CV Rewrite AI")
 st.caption("Rewrite your CV summary and bullet points for a specific job description.")
 
-user = st.session_state.get("user")
-
-if not isinstance(user, dict) or not user.get("id_token"):
+if not is_logged_in():
     st.warning("Please login before using CV Rewrite AI.")
+    st.page_link("pages/login.py", label="🔐 Go to Login")
     st.stop()
 
 uploaded_file = st.file_uploader(
@@ -80,12 +91,6 @@ if st.button("Rewrite CV", use_container_width=True):
         st.error("Please paste a job description.")
         st.stop()
 
-    headers = get_auth_headers()
-
-    if not headers:
-        st.error("Missing auth token. Please login again.")
-        st.stop()
-
     files = {
         "file": (
             uploaded_file.name,
@@ -95,27 +100,38 @@ if st.button("Rewrite CV", use_container_width=True):
     }
 
     data = {
-        "job_description": job_description,
+        "job_description": job_description.strip(),
     }
 
     with st.spinner("Rewriting CV content..."):
-        try:
-            response = requests.post(
-                f"{BACKEND_URL}/rewrite-cv",
-                headers=headers,
-                data=data,
-                files=files,
-                timeout=180,
-            )
-        except requests.RequestException as exc:
-            st.error(f"Backend request failed: {exc}")
-            st.stop()
+        response = api_post(
+            "/rewrite-cv",
+            data=data,
+            files=files,
+            timeout=180,
+        )
 
     if response.status_code != 200:
-        st.error(response.text)
+        st.error(f"CV rewrite failed: {extract_error_message(response)}")
+
+        if response.status_code == 403:
+            st.warning("🚀 CV Rewrite AI is a Pro feature.")
+            st.page_link("pages/pricing.py", label="Upgrade to Pro", icon="🚀")
+
         st.stop()
 
-    st.session_state["rewrite_result"] = response.json()
+    try:
+        payload = response.json()
+    except Exception:
+        st.error(f"Backend returned invalid JSON: {response.text[:1000]}")
+        st.stop()
+
+    if not isinstance(payload, dict):
+        st.error("Backend returned invalid response format.")
+        st.json(payload)
+        st.stop()
+
+    st.session_state["rewrite_result"] = payload
     st.success("CV rewrite completed.")
 
 
@@ -126,14 +142,26 @@ if isinstance(result, dict):
     st.header("Rewrite Result")
 
     st.subheader("🎯 Suggested Headline")
-    st.success(result.get("headline", ""))
+    headline = result.get("headline", "")
+    if headline:
+        st.success(headline)
+    else:
+        st.info("No headline returned.")
 
     st.subheader("📝 Rewritten Summary")
-    st.write(result.get("rewritten_summary", ""))
+    rewritten_summary = result.get("rewritten_summary", "")
+    if rewritten_summary:
+        st.write(rewritten_summary)
+    else:
+        st.info("No rewritten summary returned.")
 
     st.subheader("✅ Rewritten Bullet Points")
-    for bullet in result.get("rewritten_bullets", []):
-        st.markdown(f"- {bullet}")
+    rewritten_bullets = result.get("rewritten_bullets", [])
+    if rewritten_bullets:
+        for bullet in rewritten_bullets:
+            st.markdown(f"- {bullet}")
+    else:
+        st.info("No rewritten bullet points returned.")
 
     left, right = st.columns(2)
 
