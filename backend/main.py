@@ -22,7 +22,7 @@ from auth import get_current_user, get_test_user
 from billing.factory import get_billing_provider
 from db import Base, engine, get_db
 from models import AnalysisRecord, User
-from openai_service import analyze_cv_with_ai, rewrite_cv_with_ai
+from openai_service import AIServiceError, analyze_cv_with_ai, rewrite_cv_with_ai
 from pdf_report import build_analysis_pdf_report
 from pdf_utils import extract_text_from_pdf
 from recruiter_service import rank_candidates
@@ -109,6 +109,16 @@ def parse_json_list(value: str) -> list[str]:
     return [str(item).strip() for item in data if str(item).strip()]
 
 
+def raise_ai_http_exception(exc: AIServiceError) -> None:
+    raise HTTPException(
+        status_code=exc.status_code,
+        detail={
+            "message": exc.message,
+            "type": "ai_service_error",
+        },
+    )
+
+
 @app.get("/")
 def root():
     return {
@@ -187,9 +197,9 @@ async def analyze_resume(
 
     try:
         result = analyze_cv_with_ai(cv_text, job_description)
-    except Exception as exc:
+    except AIServiceError as exc:
         print("OPENAI ANALYSIS ERROR:", repr(exc))
-        raise HTTPException(status_code=500, detail=f"AI analysis failed: {exc}")
+        raise_ai_http_exception(exc)
 
     try:
         storage_path = upload_pdf_to_firebase(
@@ -233,12 +243,19 @@ async def analyze_test(
     if not pdf_bytes:
         raise HTTPException(status_code=400, detail="Uploaded PDF is empty.")
 
-    cv_text = extract_text_from_pdf(pdf_bytes)
+    try:
+        cv_text = extract_text_from_pdf(pdf_bytes)
+    except Exception as exc:
+        raise HTTPException(status_code=400, detail=f"Could not extract text from PDF: {exc}")
 
     if not cv_text.strip():
         raise HTTPException(status_code=400, detail="Could not extract text from PDF.")
 
-    return analyze_cv_with_ai(cv_text, job_description)
+    try:
+        return analyze_cv_with_ai(cv_text, job_description)
+    except AIServiceError as exc:
+        print("OPENAI ANALYSIS TEST ERROR:", repr(exc))
+        raise_ai_http_exception(exc)
 
 
 ATS_STOPWORDS = {
@@ -279,7 +296,7 @@ def extract_ats_keywords(text_value: str, limit: int = 30) -> list[str]:
         "firebase", "openai", "saas", "backend", "frontend", "streamlit",
         "auth", "authentication", "storage", "billing", "deployment",
         "cloud", "pdf", "ai", "prompt", "database", "render", "mvp",
-        "ats", "recruiter", "stripe", "supabase", "postgres",
+        "ats", "recruiter", "paddle", "supabase", "postgres",
         "javascript", "typescript", "react", "rest",
     ]
 
@@ -306,7 +323,10 @@ async def ats_test(
     if not pdf_bytes:
         raise HTTPException(status_code=400, detail="Uploaded PDF is empty.")
 
-    cv_text = extract_text_from_pdf(pdf_bytes)
+    try:
+        cv_text = extract_text_from_pdf(pdf_bytes)
+    except Exception as exc:
+        raise HTTPException(status_code=400, detail=f"Could not extract text from PDF: {exc}")
 
     if not cv_text.strip():
         raise HTTPException(status_code=400, detail="Could not extract text from PDF.")
@@ -324,7 +344,6 @@ async def ats_test(
             missing.append(keyword)
 
     coverage = round((len(matched) / len(keywords)) * 100) if keywords else 0
-
     verdict = "ATS Strong" if coverage >= 80 else "ATS Good" if coverage >= 60 else "ATS Weak"
 
     return {
@@ -362,9 +381,20 @@ async def semantic_match(
         raise HTTPException(status_code=403, detail="Semantic matching is a Pro feature.")
 
     pdf_bytes = await file.read()
-    cv_text = extract_text_from_pdf(pdf_bytes)
 
-    return analyze_semantic_match(cv_text, job_description)
+    try:
+        cv_text = extract_text_from_pdf(pdf_bytes)
+    except Exception as exc:
+        raise HTTPException(status_code=400, detail=f"Could not extract text from PDF: {exc}")
+
+    try:
+        return analyze_semantic_match(cv_text, job_description)
+    except AIServiceError as exc:
+        print("SEMANTIC MATCH AI ERROR:", repr(exc))
+        raise_ai_http_exception(exc)
+    except Exception as exc:
+        print("SEMANTIC MATCH ERROR:", repr(exc))
+        raise HTTPException(status_code=500, detail=f"Semantic match failed: {exc}")
 
 
 @app.post("/recruiter/rank-candidates")
@@ -386,7 +416,12 @@ async def recruiter_rank_candidates(
 
     for uploaded_file in files:
         pdf_bytes = await uploaded_file.read()
-        cv_text = extract_text_from_pdf(pdf_bytes) if pdf_bytes else ""
+
+        try:
+            cv_text = extract_text_from_pdf(pdf_bytes) if pdf_bytes else ""
+        except Exception as exc:
+            print(f"CV EXTRACT ERROR for {uploaded_file.filename}:", repr(exc))
+            cv_text = ""
 
         candidates.append(
             {
@@ -395,7 +430,14 @@ async def recruiter_rank_candidates(
             }
         )
 
-    return rank_candidates(candidates=candidates, job_description=job_description)
+    try:
+        return rank_candidates(candidates=candidates, job_description=job_description)
+    except AIServiceError as exc:
+        print("RECRUITER AI ERROR:", repr(exc))
+        raise_ai_http_exception(exc)
+    except Exception as exc:
+        print("RECRUITER RANKING ERROR:", repr(exc))
+        raise HTTPException(status_code=500, detail=f"Recruiter ranking failed: {exc}")
 
 
 @app.post("/rewrite-cv")
@@ -408,9 +450,17 @@ async def rewrite_cv(
         raise HTTPException(status_code=403, detail="CV Rewrite AI is a Pro feature.")
 
     pdf_bytes = await file.read()
-    cv_text = extract_text_from_pdf(pdf_bytes)
 
-    return rewrite_cv_with_ai(cv_text, job_description)
+    try:
+        cv_text = extract_text_from_pdf(pdf_bytes)
+    except Exception as exc:
+        raise HTTPException(status_code=400, detail=f"Could not extract text from PDF: {exc}")
+
+    try:
+        return rewrite_cv_with_ai(cv_text, job_description)
+    except AIServiceError as exc:
+        print("OPENAI CV REWRITE ERROR:", repr(exc))
+        raise_ai_http_exception(exc)
 
 
 @app.post("/reports/analysis-pdf")
@@ -427,15 +477,19 @@ async def create_analysis_pdf_report(
     if not current_user.is_pro:
         raise HTTPException(status_code=403, detail="PDF reports are a Pro feature.")
 
-    pdf_bytes = build_analysis_pdf_report(
-        cv_filename=cv_filename,
-        score=score,
-        summary=summary,
-        strengths=parse_json_list(strengths_json),
-        weaknesses=parse_json_list(weaknesses_json),
-        recommendations=parse_json_list(recommendations_json),
-        job_description=job_description,
-    )
+    try:
+        pdf_bytes = build_analysis_pdf_report(
+            cv_filename=cv_filename,
+            score=score,
+            summary=summary,
+            strengths=parse_json_list(strengths_json),
+            weaknesses=parse_json_list(weaknesses_json),
+            recommendations=parse_json_list(recommendations_json),
+            job_description=job_description,
+        )
+    except Exception as exc:
+        print("PDF REPORT ERROR:", repr(exc))
+        raise HTTPException(status_code=500, detail=f"PDF report failed: {exc}")
 
     safe_filename = re.sub(r"[^a-zA-Z0-9_-]+", "_", cv_filename.replace(".pdf", ""))
     download_name = f"{safe_filename}_talentmatch_report.pdf"
@@ -476,6 +530,24 @@ def get_history(
     ]
 
 
+@app.get("/history-test")
+def get_history_test():
+    return [
+        {
+            "id": 1,
+            "cv_filename": "demo_cv.pdf",
+            "cv_storage_path": None,
+            "job_description": "Founding Full-Stack AI SaaS Engineer",
+            "score": 75,
+            "summary": "Demo analysis history item.",
+            "matched_skills": ["Python", "FastAPI", "APIs"],
+            "missing_skills": ["Paddle", "PostgreSQL production migrations"],
+            "recommendations": ["Add SaaS billing experience.", "Highlight deployment experience."],
+            "created_at": "2026-05-29T12:00:00",
+        }
+    ]
+
+
 @app.post("/billing/create-checkout")
 def create_checkout(current_user: User = Depends(get_current_user)):
     provider = get_billing_provider()
@@ -495,6 +567,8 @@ def demo_upgrade_to_pro(
 ):
     current_user.plan = "pro"
     current_user.is_pro = True
+    current_user.paddle_subscription_status = "demo_pro"
+
     db.add(current_user)
     db.commit()
     db.refresh(current_user)
