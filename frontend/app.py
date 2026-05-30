@@ -139,7 +139,7 @@ def generate_pdf_report(result: dict, job_description: str):
 
         return None
 
-    return response.content
+    return getattr(response, "content", None)
 
 
 profile = maybe_refresh_profile()
@@ -336,7 +336,7 @@ if result:
 
     with download_col2:
         if is_pro:
-            pdf_bytes = generate_pdf_report(result, job_description)
+            pdf_bytes = generate_pdf_report(result, job_description or "")
 
             if pdf_bytes:
                 st.download_button(
