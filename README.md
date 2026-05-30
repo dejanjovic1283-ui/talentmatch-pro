@@ -1,157 +1,284 @@
 # 🚀 TalentMatch Pro
 
-AI-powered SaaS platform for CV analysis, ATS optimization, semantic candidate matching, recruiter workflows, and AI hiring automation.
+<div align="center">
 
-## ✨ Features
+# TalentMatch Pro
 
-### CV Analysis
-- PDF CV upload
-- AI resume analysis
-- Match score generation
-- Strengths and weaknesses detection
-- Improvement recommendations
+### AI-Powered Resume Intelligence & Recruitment Platform
 
-### ATS Checker
-- ATS keyword matching
-- Missing keyword detection
-- Resume optimization insights
+Analyze resumes, optimize ATS performance, perform semantic candidate matching, generate recruiter-ready reports, and accelerate hiring decisions with Artificial Intelligence.
 
-### Semantic Matching
-- Embedding-based matching
-- Candidate ranking
-- Job description similarity scoring
+[![Python](https://img.shields.io/badge/Python-3.13-blue.svg)]()
+[![FastAPI](https://img.shields.io/badge/FastAPI-Backend-green.svg)]()
+[![Streamlit](https://img.shields.io/badge/Streamlit-Frontend-red.svg)]()
+[![PostgreSQL](https://img.shields.io/badge/PostgreSQL-Database-blue.svg)]()
+[![Firebase](https://img.shields.io/badge/Firebase-Authentication-orange.svg)]()
+[![Paddle](https://img.shields.io/badge/Paddle-Billing-purple.svg)]()
+[![Render](https://img.shields.io/badge/Render-Deployment-black.svg)]()
 
-### Recruiter Mode
-- Recruiter workflow tools
-- Candidate overview
-- Hiring optimization
-
-### Billing
-- Stripe integration
-- Pro subscriptions
-- Usage limits
-
-### Authentication
-- Firebase Authentication
-- Firebase Storage
-- Secure file handling
+</div>
 
 ---
 
-## 🏗 Tech Stack
-
-Backend:
-- FastAPI
-- SQLAlchemy
-- SQLite / PostgreSQL
-- OpenAI API
-- Firebase
-- Stripe
+# 🌐 Live Demo
 
 Frontend:
-- Streamlit
-- Python
+https://talentmatch-frontend-dejan.onrender.com
 
-Infrastructure:
-- Render
+Backend API:
+https://talentmatch-backend-1283.onrender.com
+
+Repository:
+https://github.com/dejanjovic1283-ui/talentmatch-pro
+
+---
+
+# 📌 Overview
+
+TalentMatch Pro is a production-ready AI SaaS platform that helps job seekers and recruiters make smarter hiring decisions.
+
+The platform combines:
+- AI Resume Analysis
+- ATS Optimization
+- Semantic Matching
+- Recruiter Tools
+- PDF Reporting
+- Firebase Authentication
+- Paddle Billing
+
+---
+
+# ✨ Features
+
+## 📄 AI Resume Analysis
+
+- PDF upload
+- AI-powered evaluation
+- Match scoring
+- Strength analysis
+- Missing skill detection
+- Recommendations
+
+## 🎯 ATS Checker
+
+- ATS keyword extraction
+- Missing keyword detection
+- ATS readiness scoring
+- Optimization suggestions
+
+## 🧠 Semantic Matching (Pro)
+
+- Resume vs Job Description comparison
+- Semantic similarity scoring
+- AI relevance ranking
+
+## 👔 Recruiter Mode (Pro)
+
+- Candidate ranking
+- Candidate comparison
+- Hiring workflow optimization
+
+## ✍️ AI CV Rewrite (Pro)
+
+- ATS-friendly rewriting
+- Professional wording suggestions
+- Resume enhancement
+
+## 📄 PDF Reports (Pro)
+
+- Downloadable PDF reports
+- Summary
+- Recommendations
+- ATS insights
+
+---
+
+# 💳 Plans
+
+## Free
+
+- Limited analyses
+- ATS Checker
+- Basic recommendations
+
+## Pro ($9/month)
+
+- Unlimited analyses
+- Semantic Matching
+- Recruiter Mode
+- AI CV Rewrite
+- PDF Reports
+- Priority features
+
+---
+
+# 🏗 Architecture
+
+```text
+User
+ │
+ ▼
+Streamlit Frontend
+ │
+ ▼
+FastAPI Backend
+ │
+ ├── OpenAI API
+ ├── Firebase Auth
+ ├── Firebase Storage
+ ├── PostgreSQL
+ └── Paddle Billing
+```
+
+---
+
+# 🛠 Technology Stack
+
+## Backend
+
+- FastAPI
+- SQLAlchemy
+- PostgreSQL
+- OpenAI API
+- Firebase Admin SDK
+- Paddle Billing
+- ReportLab
+
+## Frontend
+
+- Streamlit
+- Pandas
+- Plotly
+- Requests
+
+## Infrastructure
+
 - Docker
+- Render
 - GitHub
 
 ---
 
-## 📁 Project Structure
+# 📁 Project Structure
 
 ```text
-talentmatch-pro/
-
 backend/
-├── auth.py
-├── db.py
-├── firebase.py
-├── main.py
-├── models.py
-├── openai_service.py
-├── pdf_report.py
-├── pdf_utils.py
-├── recruiter_service.py
-├── schemas.py
-├── semantic_service.py
-├── storage.py
-├── stripe_billing.py
-└── usage_service.py
-
 frontend/
-├── .streamlit/
-├── pages/
-│   ├── admin_analytics.py
-│   ├── ats_checker.py
-│   ├── cv_rewrite.py
-│   ├── history.py
-│   ├── landing.py
-│   ├── login.py
-│   ├── pricing.py
-│   ├── recruiter_mode.py
-│   ├── register.py
-│   └── semantic_match.py
-├── app.py
-└── auth_utils.py
+docker-compose.yml
+Dockerfile.backend
+Dockerfile.frontend
+README.md
 ```
 
 ---
 
-## ⚙ Environment Variables
+# 🔌 API Endpoints
 
-Backend:
+## Analysis
 
-```env
-OPENAI_API_KEY=
+POST /analyze-resume
 
-FIREBASE_PROJECT_ID=
-FIREBASE_STORAGE_BUCKET=
+POST /analyze-test
 
-STRIPE_SECRET_KEY=
-STRIPE_WEBHOOK_SECRET=
+## ATS
 
-DATABASE_URL=
-```
+POST /ats-test
 
-Frontend:
+POST /ats-check
 
-```toml
-BACKEND_URL=""
-```
+## Semantic Matching
 
----
+POST /semantic-match
 
-## 🚀 Run Locally
+## Recruiter
 
-Backend
+POST /recruiter/rank-candidates
 
-```bash
-cd backend
+## CV Rewrite
 
-pip install -r requirements.txt
+POST /rewrite-cv
 
-uvicorn main:app --reload
-```
+## Reports
 
-Frontend
+POST /reports/analysis-pdf
 
-```bash
-cd frontend
+## User
 
-pip install -r requirements.txt
+GET /me
 
-streamlit run app.py
-```
+GET /history
+
+## Billing
+
+POST /billing/create-checkout
+
+POST /billing/create-portal
+
+POST /billing/webhook
 
 ---
 
-## 🐳 Docker
+# 🔥 Firebase
 
-```bash
+Used for:
+
+- Authentication
+- User management
+- Storage
+- Resume uploads
+
+Storage example:
+
+users/{user_id}/cvs/{timestamp}_{filename}.pdf
+
+---
+
+# 💳 Paddle Billing
+
+Supported events:
+
+- transaction.completed
+- subscription.created
+- subscription.activated
+- subscription.updated
+- subscription.canceled
+- subscription.past_due
+
+Webhook:
+
+POST /billing/webhook
+
+---
+
+# ⚙ Environment Variables
+
+## Backend
+
+OPENAI_API_KEY
+
+DATABASE_URL
+
+FIREBASE_PROJECT_ID
+
+FIREBASE_STORAGE_BUCKET
+
+FIREBASE_CREDENTIALS
+
+PADDLE_API_KEY
+
+PADDLE_WEBHOOK_SECRET
+
+## Frontend
+
+BACKEND_URL
+
+---
+
+# 🐳 Docker
+
+Build:
+
 docker compose up --build
-```
 
 Frontend:
 
@@ -163,59 +290,98 @@ http://localhost:8000
 
 ---
 
-## 🔥 Firebase
+# 🚀 Render Deployment Guide
 
-Storage structure:
+## Backend
 
-```text
-users/{user_id}/cvs/{timestamp}_{filename}.pdf
-```
+1. Create Web Service
+2. Connect GitHub repository
+3. Root Directory: backend
+4. Build Command:
+
+pip install -r requirements.txt
+
+5. Start Command:
+
+uvicorn main:app --host 0.0.0.0 --port $PORT
+
+## Frontend
+
+1. Create Web Service
+2. Root Directory: frontend
+3. Build Command:
+
+pip install -r requirements.txt
+
+4. Start Command:
+
+streamlit run app.py --server.port $PORT --server.address 0.0.0.0
 
 ---
 
-## 💳 Stripe
+# 📸 Screenshots
 
-Webhook:
+Add screenshots here:
 
-```text
-POST /webhook
-```
+screenshots/home.png
 
-Stripe automatically upgrades users to Pro.
+screenshots/analysis.png
+
+screenshots/ats.png
+
+screenshots/recruiter.png
+
+screenshots/pricing.png
 
 ---
 
-## 🔒 Security
+# 🔒 Security
 
 Never commit:
 
-```text
-backend/.env
+.env
+
 serviceAccountKey.json
+
 frontend/.streamlit/secrets.toml
+
+*.db
+
 .venv/
-```
 
 ---
 
-## 📈 Roadmap
+# 📈 Roadmap
 
-- Better ATS scoring
-- AI CV rewrite improvements
-- Recruiter dashboard expansion
-- PostgreSQL production migration
-- Team recruiter accounts
+- Enterprise plans
+- Team accounts
+- Organization workspaces
+- Interview preparation
+- Hiring analytics
+- Multi-language support
+- Candidate benchmarking
 
 ---
 
-## 👨‍💻 Author
+# 👨‍💻 Author
 
 Dejan Jović
 
 GitHub:
-
 https://github.com/dejanjovic1283-ui
+
+Repository:
+https://github.com/dejanjovic1283-ui/talentmatch-pro
+
+Email:
+dejan.jovic1283@gmail.com
 
 ---
 
-TalentMatch Pro — AI-powered hiring intelligence.
+# 📜 License
+
+MIT License
+
+---
+
+TalentMatch Pro — AI-Powered Hiring Intelligence.
