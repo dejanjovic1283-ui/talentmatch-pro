@@ -1,3 +1,4 @@
+# TalentMatch Pro frontend app.py - fixed navigation/admin/sidebar version
 import json
 import os
 import time
@@ -73,13 +74,17 @@ def maybe_refresh_profile(force: bool = False) -> dict[str, Any]:
 
 
 def current_user_email() -> str:
+    profile = get_profile() or {}
+
+    if isinstance(profile, dict) and profile.get("email"):
+        return str(profile.get("email") or "").strip().lower()
+
     user = st.session_state.get("user")
 
     if isinstance(user, dict):
         return str(user.get("email") or "").strip().lower()
 
-    profile = get_profile() or {}
-    return str(profile.get("email") or "").strip().lower()
+    return ""
 
 
 def is_admin_user() -> bool:
@@ -472,7 +477,7 @@ def account_page() -> None:
         st.metric("Analyses", f"{used}/{limit}")
 
     with col3:
-        st.metric("Admin", "Yes" if is_admin_user() else "No")
+        st.metric("Status", "Signed in")
 
     st.subheader("Profile")
     st.write(f"**Email:** {email or 'Unknown'}")
@@ -632,7 +637,7 @@ def build_navigation():
             )
         ]
 
-    return pages
+    return {section: section_pages for section, section_pages in pages.items() if section_pages}
 
 
 profile = maybe_refresh_profile()
