@@ -21,6 +21,21 @@ ASSETS_DIR = BASE_DIR / "assets"
 LOGO_PATH = ASSETS_DIR / "logo.png"
 FAVICON_PATH = ASSETS_DIR / "favicon.png"
 
+
+def is_valid_image(path: Path) -> bool:
+    if not path.exists() or not path.is_file():
+        return False
+
+    try:
+        from PIL import Image
+
+        with Image.open(path) as image:
+            image.verify()
+        return True
+    except Exception:
+        return False
+
+
 ADMIN_EMAILS = {
     "dejan.jovic1283@gmail.com",
     "dejanjovicjovic5@gmail.com",
@@ -37,8 +52,9 @@ if extra_admins:
 
 st.set_page_config(
     page_title="TalentMatch Pro",
-    page_icon=str(FAVICON_PATH) if FAVICON_PATH.exists() else "🎯",
+    page_icon=str(FAVICON_PATH) if is_valid_image(FAVICON_PATH) else "🎯",
     layout="wide",
+    initial_sidebar_state="expanded",
 )
 
 
@@ -180,7 +196,10 @@ def generate_pdf_report(result: dict, job_description: str):
 
 def render_global_sidebar(profile: dict[str, Any], is_pro: bool) -> None:
     with st.sidebar:
-        st.markdown("# 🎯 TalentMatch Pro")
+        if is_valid_image(LOGO_PATH):
+            st.image(str(LOGO_PATH), use_container_width=True)
+        else:
+            st.markdown("# 🎯 TalentMatch Pro")
 
         st.caption("AI-powered CV analysis and ATS optimization")
         st.divider()
