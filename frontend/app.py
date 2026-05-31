@@ -181,10 +181,7 @@ def generate_pdf_report(result: dict, job_description: str):
 def render_global_sidebar(profile: dict[str, Any], is_pro: bool) -> None:
     with st.sidebar:
         if LOGO_PATH.exists():
-            if hasattr(st, "logo"):
-                st.logo(str(LOGO_PATH), size="large")
-            else:
-                st.image(str(LOGO_PATH), use_container_width=True)
+            st.image(str(LOGO_PATH), use_container_width=True)
         else:
             st.markdown("## 🎯 TalentMatch Pro")
 
