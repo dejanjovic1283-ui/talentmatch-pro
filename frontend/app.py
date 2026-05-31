@@ -196,10 +196,7 @@ def generate_pdf_report(result: dict, job_description: str):
 
 def render_global_sidebar(profile: dict[str, Any], is_pro: bool) -> None:
     with st.sidebar:
-        if is_valid_image(LOGO_PATH):
-            st.image(str(LOGO_PATH), use_container_width=True)
-        else:
-            st.markdown("# 🎯 TalentMatch Pro")
+        st.markdown("# 🎯 TalentMatch Pro")
 
         st.caption("AI-powered CV analysis and ATS optimization")
         st.divider()
