@@ -38,7 +38,6 @@ def is_valid_image(path: Path) -> bool:
 
 ADMIN_EMAILS = {
     "dejan.jovic1283@gmail.com",
-    "dejanjovicjovic5@gmail.com",
 }
 
 extra_admins = os.getenv("ADMIN_EMAILS", "").strip()
@@ -196,7 +195,10 @@ def generate_pdf_report(result: dict, job_description: str):
 
 def render_global_sidebar(profile: dict[str, Any], is_pro: bool) -> None:
     with st.sidebar:
-        st.markdown("# 🎯 TalentMatch Pro")
+        if is_valid_image(LOGO_PATH):
+            st.image(str(LOGO_PATH), use_container_width=True)
+        else:
+            st.markdown("# 🎯 TalentMatch Pro")
 
         st.caption("AI-powered CV analysis and ATS optimization")
         st.divider()
