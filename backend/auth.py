@@ -59,8 +59,8 @@ def get_current_user(
             firebase_uid=firebase_uid,
             email=email,
             full_name=email or None,
-            plan="free",
-            is_pro=False,
+            plan="pro",
+            is_pro=True,
         )
         db.add(user)
         db.commit()
