@@ -72,7 +72,6 @@ def _chat_json_completion(
     *,
     system_prompt: str,
     user_prompt: str,
-    temperature: float,
     max_retries: int = 2,
 ) -> dict:
     client, model = _get_client()
@@ -84,7 +83,6 @@ def _chat_json_completion(
             response = client.chat.completions.create(
                 model=model,
                 response_format={"type": "json_object"},
-                temperature=temperature,
                 messages=[
                     {"role": "system", "content": system_prompt},
                     {"role": "user", "content": user_prompt},
@@ -177,7 +175,6 @@ CV TEXT:
     data = _chat_json_completion(
         system_prompt=SYSTEM_PROMPT,
         user_prompt=user_prompt,
-        temperature=0.2,
     )
 
     score = max(0, min(100, int(data.get("score", 0))))
@@ -215,7 +212,6 @@ CV TEXT:
     data = _chat_json_completion(
         system_prompt=REWRITE_SYSTEM_PROMPT,
         user_prompt=user_prompt,
-        temperature=0.3,
     )
 
     return {
