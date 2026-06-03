@@ -62,7 +62,7 @@ if is_logged_in():
 
     with col1:
         if st.button("Go to App", use_container_width=True):
-            st.switch_page("app.py")
+            st.rerun()
 
     with col2:
         if st.button("Go to Pricing", use_container_width=True):
@@ -116,7 +116,7 @@ with st.container(border=True):
         st.success("Account created successfully.")
         st.info("You can now use ATS Checker and CV Analysis.")
 
-        st.switch_page("app.py")
+        st.rerun()
 
 
 st.divider()

@@ -35,7 +35,7 @@ if is_logged_in():
 
     with col1:
         if st.button("Go to App", use_container_width=True):
-            st.switch_page("app.py")
+            st.rerun()
 
     with col2:
         if st.button("Logout", use_container_width=True):
@@ -89,4 +89,4 @@ if st.button("Login", use_container_width=True):
 
     time.sleep(1)
 
-    st.switch_page("app.py")
+    st.rerun()
