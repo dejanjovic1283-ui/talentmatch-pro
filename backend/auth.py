@@ -59,8 +59,8 @@ def get_current_user(
             firebase_uid=firebase_uid,
             email=email,
             full_name=email or None,
-            plan="pro",
-            is_pro=True,
+            plan="free",
+            is_pro=False,
         )
         db.add(user)
         db.commit()
@@ -79,8 +79,8 @@ def get_test_user(db: Session = Depends(get_db)) -> User:
         firebase_uid="local-test-user",
         email="local-test@talentmatch.dev",
         full_name="Local Test User",
-        plan="pro",
-        is_pro=True,
+        plan="free",
+        is_pro=False,
     )
 
     db.add(user)
