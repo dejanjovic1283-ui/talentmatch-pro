@@ -44,7 +44,7 @@ def _normalise_list(value: Any) -> list[str]:
 
 def _get_client() -> tuple[OpenAI, str]:
     api_key = os.getenv("OPENAI_API_KEY", "").strip()
-    model = os.getenv("OPENAI_MODEL", "gpt-4o-mini").strip()
+    model = os.getenv("OPENAI_MODEL", "gpt-5-mini").strip()
 
     if not api_key:
         raise AIServiceError("OPENAI_API_KEY is missing.", status_code=500)
@@ -100,8 +100,9 @@ def _chat_json_completion(
                 time.sleep(2 + attempt * 3)
                 continue
 
+            message = _extract_openai_message(exc)
             raise AIServiceError(
-                "OpenAI rate limit or quota exceeded. Please try again later.",
+                f"OpenAI rate limit or quota exceeded: {message}",
                 status_code=429,
             ) from exc
 
@@ -122,7 +123,7 @@ def _chat_json_completion(
 
             if status_code == 429:
                 raise AIServiceError(
-                    "OpenAI rate limit or quota exceeded. Please try again later.",
+                    f"OpenAI rate limit or quota exceeded: {message}",
                     status_code=429,
                 ) from exc
 
