@@ -182,7 +182,6 @@ Job description:
 
     response = client.chat.completions.create(
         model=OPENAI_MODEL_CHAT,
-        temperature=0.2,
         messages=[
             {
                 "role": "system",
