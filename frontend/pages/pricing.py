@@ -20,7 +20,7 @@ is_pro = is_pro_user()
 st.markdown("# 🚀 TalentMatch Pro Pricing")
 
 st.info(
-    "Online payments are temporarily unavailable while we migrate to a new billing provider."
+    "Pro subscriptions are currently available via manual activation. Contact us to request Pro access."
 )
 
 free_col, pro_col = st.columns(2)
@@ -78,13 +78,32 @@ with pro_col:
         if is_pro:
             st.success("🚀 You already have Pro.")
         else:
-            st.warning(
-                "Automatic payments are temporarily unavailable."
+            st.warning("To activate Pro, please submit a Pro Plan request.")
+
+            subject = "TalentMatch Pro - Pro Plan Request"
+
+            body = """
+Hello,
+
+I would like to request access to the TalentMatch Pro plan.
+
+Name:
+Email:
+
+Thank you.
+
+Kind regards,
+"""
+
+            mailto = (
+                f"mailto:dejan.jovic1283@gmail.com"
+                f"?subject={subject.replace(' ', '%20')}"
+                f"&body={body.replace(' ', '%20').replace(chr(10), '%0D%0A')}"
             )
 
             st.link_button(
-                "📬 Contact for Pro Access",
-                "mailto:dejan.jovic1283@gmail.com?subject=TalentMatch%20Pro%20Access",
+                "📬 Request Pro Access",
+                mailto,
                 use_container_width=True,
             )
 
@@ -96,8 +115,10 @@ st.markdown(
     """
 **TalentMatch Pro**
 
-Email: dejan.jovic1283@gmail.com
+📧 Email: dejan.jovic1283@gmail.com
 
-Billing Provider Migration: In Progress
+🚀 Pro Plan Requests: Available
+
+💬 Response Time: 24-48 Hours
 """
 )
