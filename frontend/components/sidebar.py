@@ -27,10 +27,9 @@ def render_sidebar():
 
         st.divider()
 
-        st.markdown("### Legal")
-        st.page_link("pages/terms.py", label="📃 Terms")
-        st.page_link("pages/privacy.py", label="🔒 Privacy")
-        st.page_link("pages/refund.py", label="💸 Refund")
+        st.page_link("pages/Terms.py", label="📃 Terms")
+        st.page_link("pages/Privacy.py", label="🔒 Privacy")
+        st.page_link("pages/Refund.py", label="💸 Refund")
 
         st.divider()
 
