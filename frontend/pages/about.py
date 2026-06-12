@@ -1,62 +1,111 @@
 import streamlit as st
 
-st.set_page_config(page_title="About Us")
+st.set_page_config(page_title="About Us", page_icon="🏢", layout="wide")
 
-st.title("ℹ️ About Us")
+st.title("🏢 About Us")
+st.caption("TalentMatch Pro – AI-powered CV analysis and ATS optimization platform")
 
 st.markdown("""
 # TalentMatch Pro – About Us
 
-Last Updated: June 2026
+TalentMatch Pro is an AI-powered platform built to help job seekers improve their CVs, understand how well they match job descriptions, and prepare stronger job applications.
 
-## Our Mission
+Our goal is simple: make professional CV analysis, ATS checking, semantic matching, and recruiter-style insights more accessible, faster, and easier to use.
 
-TalentMatch Pro is an AI-powered career platform designed to help job seekers and recruiters make smarter hiring decisions.
+---
 
-Our goal is to simplify recruitment and career development through artificial intelligence, automation, and data-driven insights.
+## 🚀 Mission
 
-## What We Do
+Our mission is to help job seekers increase their interview chances by giving them clear, practical, and AI-powered feedback about their CV.
 
-TalentMatch Pro provides:
+TalentMatch Pro focuses on:
 
-- CV Analysis
-- ATS Compatibility Checks
-- AI CV Rewrite
-- Semantic Job Matching
-- Recruiter Tools
-- Candidate Ranking
-- PDF Reports
+- CV analysis
+- ATS keyword checking
+- CV rewriting support
+- Semantic job matching
+- Recruiter-style evaluation
+- Candidate ranking insights
+- Downloadable reports
 
-## Our Vision
+---
 
-We believe hiring should be faster, smarter, and more transparent.
+## 🎯 Vision
 
-By combining modern AI technologies with practical recruitment workflows, we help candidates improve their opportunities and help recruiters identify top talent efficiently.
+Our vision is to become a practical AI career assistant for modern job seekers and recruiters.
 
-## Technology
+We want TalentMatch Pro to help users understand:
 
-TalentMatch Pro is powered by:
+- What is strong in their CV
+- What is missing
+- Which keywords matter
+- How well their CV matches a job description
+- What they should improve before applying
 
-- OpenAI
+---
+
+## 🤖 What We Do
+
+TalentMatch Pro uses AI technology to compare CVs with job descriptions and provide structured feedback.
+
+The platform can help users:
+
+- Identify missing skills and keywords
+- Improve ATS compatibility
+- Rewrite CV sections
+- Compare CVs with job descriptions
+- Generate recruiter-ready summaries
+- Rank multiple candidates for a role
+
+---
+
+## 🧠 AI-Powered Technology
+
+TalentMatch Pro is built with modern technologies including:
+
+- Python
 - FastAPI
 - Streamlit
-- PostgreSQL
-- Firebase
-- Render
+- OpenAI APIs
+- Firebase Authentication
+- Firebase Storage
+- SQL / PostgreSQL-ready architecture
+- Render cloud deployment
 
-## Business Information
+The system is designed to be simple, fast, and useful for real-world CV and recruitment workflows.
 
-TalentMatch Pro
+---
 
-Owner: Dejan Jovic
+## 💼 Who It Is For
 
-Country: Serbia
+TalentMatch Pro is designed for:
 
-Business Email:
-dejan.jovic1283@gmail.com
+- Job seekers
+- Students
+- Junior developers
+- Career changers
+- Recruiters
+- HR teams
+- Small businesses
+- Anyone who wants better CV and job matching insights
 
-## Contact
+---
 
-Email:
-dejan.jovic1283@gmail.com
+## ⭐ Why TalentMatch Pro
+
+TalentMatch Pro combines CV analysis, ATS checking, semantic matching, and recruiter-style feedback in one place.
+
+Instead of only checking keywords, the platform also looks at meaning, relevance, skills, gaps, and overall job fit.
+
+---
+
+## 📬 Contact
+
+For support, billing questions, refund requests, partnership opportunities, or Pro plan requests, please contact us:
+
+**Email:** dejan.jovic1283@gmail.com
+
+---
+
+Thank you for using TalentMatch Pro.
 """)
