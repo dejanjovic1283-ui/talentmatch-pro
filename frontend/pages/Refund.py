@@ -1,10 +1,15 @@
 import streamlit as st
 
+from components.footer import render_footer
+from components.sidebar import render_sidebar
+
 st.set_page_config(
     page_title="Refund Policy | TalentMatch Pro",
     page_icon="💸",
     layout="wide",
 )
+
+render_sidebar()
 
 st.title("💸 Refund Policy")
 
@@ -108,3 +113,5 @@ For billing questions, cancellation questions, or refund requests:
 Email: dejan.jovic1283@gmail.com
 """
 )
+
+render_footer()

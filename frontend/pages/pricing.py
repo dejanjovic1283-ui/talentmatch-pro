@@ -1,5 +1,7 @@
 import streamlit as st
 
+from components.footer import render_footer
+
 from auth_utils import (
     is_logged_in,
     is_pro_user,
@@ -126,3 +128,5 @@ st.markdown(
 💬 Response Time: 24-48 Hours
 """
 )
+
+render_footer()

@@ -1,10 +1,15 @@
 import streamlit as st
 
+from components.footer import render_footer
+from components.sidebar import render_sidebar
+
 st.set_page_config(
     page_title="Terms of Service | TalentMatch Pro",
     page_icon="📃",
     layout="wide",
 )
+
+render_sidebar()
 
 st.title("📃 Terms of Service")
 
@@ -158,3 +163,5 @@ For questions regarding these Terms:
 Email: dejan.jovic1283@gmail.com
 """
 )
+
+render_footer()

@@ -1,6 +1,11 @@
 import streamlit as st
 
+from components.footer import render_footer
+from components.sidebar import render_sidebar
+
 st.set_page_config(page_title="About Us", page_icon="🏢", layout="wide")
+
+render_sidebar()
 
 st.title("🏢 About Us")
 st.caption("TalentMatch Pro – AI-powered CV analysis and ATS optimization platform")
@@ -104,8 +109,4 @@ Instead of only checking keywords, the platform also looks at meaning, relevance
 For support, billing questions, refund requests, partnership opportunities, or Pro plan requests, please contact us:
 
 **Email:** dejan.jovic1283@gmail.com
-
----
-
-Thank you for using TalentMatch Pro.
 """)

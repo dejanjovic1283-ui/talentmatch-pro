@@ -1,6 +1,11 @@
 import streamlit as st
 
+from components.footer import render_footer
+from components.sidebar import render_sidebar
+
 st.set_page_config(page_title="Contact Us", page_icon="📬", layout="wide")
+
+render_sidebar()
 
 st.title("📬 Contact Us")
 st.caption("TalentMatch Pro support, billing, Pro plan requests, and general inquiries")
@@ -86,3 +91,5 @@ For CV-related support, describe the issue clearly and include only the informat
 
 Thank you for using TalentMatch Pro.
 """)
+
+render_footer()

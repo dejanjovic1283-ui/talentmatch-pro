@@ -1,10 +1,15 @@
 import streamlit as st
 
+from components.footer import render_footer
+from components.sidebar import render_sidebar
+
 st.set_page_config(
     page_title="Privacy Policy | TalentMatch Pro",
     page_icon="🔒",
     layout="wide",
 )
+
+render_sidebar()
 
 st.title("🔒 Privacy Policy")
 
@@ -141,3 +146,5 @@ For privacy questions, data requests, or support:
 Email: dejan.jovic1283@gmail.com
 """
 )
+
+render_footer()
