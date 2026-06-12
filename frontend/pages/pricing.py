@@ -5,12 +5,16 @@ from auth_utils import (
     is_pro_user,
     refresh_profile,
 )
+from components.sidebar import render_sidebar
+
 
 st.set_page_config(
     page_title="Pricing • TalentMatch Pro",
     page_icon="🚀",
     layout="wide",
 )
+
+render_sidebar()
 
 if is_logged_in():
     refresh_profile()

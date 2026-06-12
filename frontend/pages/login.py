@@ -9,6 +9,7 @@ from auth_utils import (
     is_logged_in,
     save_auth,
 )
+from components.sidebar import render_sidebar
 
 
 st.set_page_config(
@@ -17,10 +18,12 @@ st.set_page_config(
     layout="wide",
 )
 
+render_sidebar()
 
-st.title("🔐 Login")
+st.markdown("# 🔐 Login")
 st.caption("Access your TalentMatch Pro account.")
 
+st.divider()
 
 if is_logged_in():
     email = (
@@ -34,59 +37,62 @@ if is_logged_in():
     col1, col2 = st.columns(2)
 
     with col1:
-        if st.button("Go to App", use_container_width=True):
-            st.rerun()
+        if st.button("🏠 Go to Dashboard", use_container_width=True):
+            st.switch_page("app.py")
 
     with col2:
-        if st.button("Logout", use_container_width=True):
+        if st.button("🚪 Logout", use_container_width=True):
             clear_auth()
             st.rerun()
 
     st.stop()
 
+with st.container(border=True):
+    email = st.text_input("Email")
+    password = st.text_input("Password", type="password")
 
-email = st.text_input("Email")
-password = st.text_input("Password", type="password")
+    if st.button("🔐 Login", use_container_width=True):
+        email_clean = email.strip()
 
+        if not FIREBASE_API_KEY:
+            st.error("FIREBASE_API_KEY is missing in Render environment variables.")
+            st.stop()
 
-if st.button("Login", use_container_width=True):
-    email_clean = email.strip()
+        if not email_clean or not password:
+            st.error("Enter email and password.")
+            st.stop()
 
-    if not FIREBASE_API_KEY:
-        st.error("FIREBASE_API_KEY is missing in Render environment variables.")
-        st.stop()
+        with st.spinner("Logging in..."):
+            data, error = firebase_login(
+                email_clean,
+                password,
+            )
 
-    if not email_clean or not password:
-        st.error("Enter email and password.")
-        st.stop()
+        if error:
+            st.error(error)
+            st.stop()
 
-    with st.spinner("Logging in..."):
-        data, error = firebase_login(
-            email_clean,
-            password,
+        if not data:
+            st.error("Login failed. Empty Firebase response.")
+            st.stop()
+
+        token = data.get("idToken", "")
+
+        if not token:
+            st.error("Login failed. Firebase did not return idToken.")
+            st.stop()
+
+        save_auth(
+            token=token,
+            email=email_clean,
         )
 
-    if error:
-        st.error(error)
-        st.stop()
+        st.success("Login successful.")
 
-    if not data:
-        st.error("Login failed. Empty Firebase response.")
-        st.stop()
+        time.sleep(1)
 
-    token = data.get("idToken", "")
+        st.rerun()
 
-    if not token:
-        st.error("Login failed. Firebase did not return idToken.")
-        st.stop()
+st.divider()
 
-    save_auth(
-        token=token,
-        email=email_clean,
-    )
-
-    st.success("Login successful.")
-
-    time.sleep(1)
-
-    st.rerun()
+st.info("Don't have an account yet? Open Register from the sidebar.")
