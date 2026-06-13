@@ -3,9 +3,6 @@ import time
 
 import streamlit as st
 
-from components.footer import render_footer
-from components.sidebar import render_sidebar
-
 from auth_utils import (
     api_post,
     clear_auth,
@@ -21,8 +18,6 @@ st.set_page_config(
     page_icon="🚀",
     layout="wide",
 )
-
-render_sidebar()
 
 
 def maybe_refresh_profile(force: bool = False) -> dict:
@@ -151,6 +146,25 @@ profile = maybe_refresh_profile()
 is_pro = is_pro_user()
 
 
+with st.sidebar:
+    st.divider()
+    st.markdown("### Authentication")
+
+    if is_logged_in() and isinstance(st.session_state.get("user"), dict):
+        email = st.session_state["user"].get("email", "")
+        st.success(f"Signed in as {email}")
+
+        if st.button("Refresh profile", use_container_width=True):
+            profile = maybe_refresh_profile(force=True)
+            st.rerun()
+
+        if st.button("Logout", use_container_width=True):
+            clear_auth()
+            st.rerun()
+    else:
+        st.warning("Not signed in")
+        if st.button("Login", use_container_width=True):
+            st.switch_page("pages/login.py")
 
 
 st.markdown("# 🚀 TalentMatch Pro")
@@ -366,5 +380,3 @@ if result:
             st.markdown(f"- {item}")
     else:
         st.write("No recommendations returned.")
-
-render_footer()
