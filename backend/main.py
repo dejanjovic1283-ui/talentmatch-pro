@@ -218,6 +218,9 @@ async def analyze_resume(
         print("FIREBASE STORAGE ERROR:", repr(exc))
         storage_path = None
 
+    if result is None:
+        raise HTTPException(status_code=502, detail="AI analysis returned no result.")
+
     record = AnalysisRecord(
         user_id=current_user.id,
         cv_filename=file.filename,
