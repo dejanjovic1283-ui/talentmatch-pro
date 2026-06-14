@@ -201,6 +201,7 @@ async def analyze_resume(
     if not cv_text.strip():
         raise HTTPException(status_code=400, detail="Could not extract text from PDF.")
 
+    result = None
     try:
         result = analyze_cv_with_ai(cv_text, job_description)
     except AIServiceError as exc:
