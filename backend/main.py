@@ -71,7 +71,12 @@ app.add_middleware(
     allow_origins=get_cors_origins(),
     allow_credentials=True,
     allow_methods=["GET", "POST", "OPTIONS"],
-    allow_headers=["Authorization", "Content-Type", "Paddle-Signature"],
+    allow_headers=["Authorization", "Content-Type", "Paddle-Signature",
+        "PAYPAL-TRANSMISSION-ID",
+        "PAYPAL-TRANSMISSION-TIME",
+        "PAYPAL-CERT-URL",
+        "PAYPAL-AUTH-ALGO",
+        "PAYPAL-TRANSMISSION-SIG",],
 )
 
 
@@ -87,11 +92,12 @@ def config_status() -> dict:
         "firebase_project_configured": bool(os.getenv("FIREBASE_PROJECT_ID", "").strip()),
         "firebase_storage_configured": bool(os.getenv("FIREBASE_STORAGE_BUCKET", "").strip()),
         "firebase_credentials_configured": bool(firebase_credentials or google_credentials),
-        "billing_provider": os.getenv("BILLING_PROVIDER", "paddle"),
-        "paddle_api_configured": bool(os.getenv("PADDLE_API_KEY", "").strip()),
-        "paddle_price_configured": bool(os.getenv("PADDLE_PRICE_ID", "").strip()),
-        "paddle_webhook_configured": bool(os.getenv("PADDLE_WEBHOOK_SECRET", "").strip()),
-        "paddle_environment": os.getenv("PADDLE_ENVIRONMENT", "sandbox"),
+        "billing_provider": os.getenv("BILLING_PROVIDER", "paypal"),
+        "paypal_client_configured": bool(os.getenv("PAYPAL_CLIENT_ID", "").strip()),
+        "paypal_secret_configured": bool(os.getenv("PAYPAL_CLIENT_SECRET", "").strip()),
+        "paypal_plan_configured": bool(os.getenv("PAYPAL_PLAN_ID", "").strip()),
+        "paypal_webhook_configured": bool(os.getenv("PAYPAL_WEBHOOK_ID", "").strip()),
+        "paypal_environment": os.getenv("PAYPAL_ENV", "live"),
         "frontend_url_configured": bool(os.getenv("FRONTEND_URL", "").strip()),
         "cors_origins_count": len(get_cors_origins()),
     }
@@ -166,9 +172,9 @@ def get_profile(
         "full_name": user.full_name,
         "plan": user.plan,
         "is_pro": bool(user.is_pro),
-        "paddle_customer_id": user.paddle_customer_id,
-        "paddle_subscription_id": user.paddle_subscription_id,
-        "paddle_subscription_status": user.paddle_subscription_status,
+        "paypal_customer_id": getattr(user, "paypal_customer_id", None),
+        "paypal_subscription_id": getattr(user, "paypal_subscription_id", None),
+        "paypal_subscription_status": getattr(user, "paypal_subscription_status", None),
         **usage,
     }
 
@@ -567,7 +573,8 @@ def demo_upgrade_to_pro(
 ):
     current_user.plan = "pro"
     current_user.is_pro = True
-    current_user.paddle_subscription_status = "demo_pro"
+    if hasattr(current_user, "paypal_subscription_status"):
+        current_user.paypal_subscription_status = "demo_pro"
 
     db.add(current_user)
     db.commit()
@@ -591,8 +598,8 @@ async def billing_webhook(
     return provider.handle_webhook(body=body, headers=dict(request.headers), db=db)
 
 
-@app.post("/paddle/webhook")
-async def paddle_webhook(
+@app.post("/paypal/webhook")
+async def paypal_webhook(
     request: Request,
     db: Session = Depends(get_db),
 ):
