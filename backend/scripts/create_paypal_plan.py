@@ -1,35 +1,47 @@
 import os
+from pathlib import Path
+
 import requests
+from dotenv import load_dotenv
 from requests.auth import HTTPBasicAuth
 
+# Load backend/.env even when this script is started from backend/scripts
+ENV_PATH = Path(__file__).resolve().parents[1] / ".env"
+load_dotenv(dotenv_path=ENV_PATH)
+
 PAYPAL_ENV = os.getenv("PAYPAL_ENV", "live").lower()
-CLIENT_ID = os.environ["PAYPAL_CLIENT_ID"]
-CLIENT_SECRET = os.environ["PAYPAL_CLIENT_SECRET"]
+PAYPAL_CLIENT_ID = os.environ["PAYPAL_CLIENT_ID"]
+PAYPAL_CLIENT_SECRET = os.environ["PAYPAL_CLIENT_SECRET"]
 
-BASE_URL = "https://api-m.paypal.com" if PAYPAL_ENV == "live" else "https://api-m.sandbox.paypal.com"
+BASE_URL = (
+    "https://api-m.paypal.com"
+    if PAYPAL_ENV == "live"
+    else "https://api-m.sandbox.paypal.com"
+)
 
-if not CLIENT_ID or not CLIENT_SECRET:
-    raise RuntimeError("Missing PAYPAL_CLIENT_ID or PAYPAL_CLIENT_SECRET")
 
-
-def get_access_token():
+def get_access_token() -> str:
     response = requests.post(
         f"{BASE_URL}/v1/oauth2/token",
-        auth=HTTPBasicAuth(CLIENT_ID, CLIENT_SECRET),
+        auth=HTTPBasicAuth(PAYPAL_CLIENT_ID, PAYPAL_CLIENT_SECRET),
         data={"grant_type": "client_credentials"},
-        headers={"Accept": "application/json", "Accept-Language": "en_US"},
+        headers={
+            "Accept": "application/json",
+            "Accept-Language": "en_US",
+        },
         timeout=30,
     )
     response.raise_for_status()
     return response.json()["access_token"]
 
 
-def create_product(token):
+def create_product(access_token: str) -> dict:
     response = requests.post(
         f"{BASE_URL}/v1/catalogs/products",
         headers={
-            "Authorization": f"Bearer {token}",
+            "Authorization": f"Bearer {access_token}",
             "Content-Type": "application/json",
+            "Prefer": "return=representation",
         },
         json={
             "name": "TalentMatch Pro",
@@ -43,11 +55,11 @@ def create_product(token):
     return response.json()
 
 
-def create_plan(token, product_id):
+def create_plan(access_token: str, product_id: str) -> dict:
     response = requests.post(
         f"{BASE_URL}/v1/billing/plans",
         headers={
-            "Authorization": f"Bearer {token}",
+            "Authorization": f"Bearer {access_token}",
             "Content-Type": "application/json",
             "Prefer": "return=representation",
         },
@@ -55,6 +67,7 @@ def create_plan(token, product_id):
             "product_id": product_id,
             "name": "TalentMatch Pro Monthly",
             "description": "TalentMatch Pro subscription - $9/month.",
+            "status": "ACTIVE",
             "billing_cycles": [
                 {
                     "frequency": {
@@ -84,13 +97,17 @@ def create_plan(token, product_id):
     return response.json()
 
 
-def main():
-    token = get_access_token()
+def main() -> None:
+    print(f"PayPal environment: {PAYPAL_ENV}")
+    print(f"PayPal API base URL: {BASE_URL}")
+    print()
 
-    product = create_product(token)
+    access_token = get_access_token()
+
+    product = create_product(access_token)
     product_id = product["id"]
 
-    plan = create_plan(token, product_id)
+    plan = create_plan(access_token, product_id)
     plan_id = plan["id"]
 
     print("✅ PayPal Product created:")
@@ -99,7 +116,7 @@ def main():
     print("✅ PayPal Plan created:")
     print(plan_id)
     print()
-    print("Add this to Render backend Environment:")
+    print("Add this to backend/.env and Render Environment:")
     print(f"PAYPAL_PLAN_ID={plan_id}")
 
 
