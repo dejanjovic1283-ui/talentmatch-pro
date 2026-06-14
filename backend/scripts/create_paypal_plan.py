@@ -3,8 +3,8 @@ import requests
 from requests.auth import HTTPBasicAuth
 
 PAYPAL_ENV = os.getenv("PAYPAL_ENV", "live").lower()
-CLIENT_ID = os.getenv("PAYPAL_CLIENT_ID")
-CLIENT_SECRET = os.getenv("PAYPAL_CLIENT_SECRET")
+CLIENT_ID = os.environ["PAYPAL_CLIENT_ID"]
+CLIENT_SECRET = os.environ["PAYPAL_CLIENT_SECRET"]
 
 BASE_URL = "https://api-m.paypal.com" if PAYPAL_ENV == "live" else "https://api-m.sandbox.paypal.com"
 
