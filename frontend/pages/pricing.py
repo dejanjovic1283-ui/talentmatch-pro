@@ -20,8 +20,10 @@ st.set_page_config(
 
 render_sidebar()
 
-if is_logged_in():
+# Refresh profile only once per session on pricing page
+if is_logged_in() and not st.session_state.get("pricing_profile_loaded"):
     refresh_profile()
+    st.session_state["pricing_profile_loaded"] = True
 
 is_pro = is_pro_user()
 
@@ -34,11 +36,16 @@ if paypal_success:
 
     if is_logged_in():
         with st.spinner("Refreshing your account status..."):
-            for _ in range(8):
+            for _ in range(5):
                 time.sleep(2)
                 profile = refresh_profile() or {}
 
-                if profile.get("is_pro") or profile.get("plan") == "pro":
+                if (
+                    profile.get("is_pro")
+                    or profile.get("plan") == "pro"
+                    or profile.get("subscription_status") == "active"
+                    or profile.get("paypal_subscription_status") == "active"
+                ):
                     st.success("🚀 Pro plan is active.")
                     st.balloons()
                     st.rerun()
@@ -137,8 +144,16 @@ with pro_col:
                         st.session_state["paypal_portal_url"] = portal_url
                     else:
                         st.error("PayPal subscription portal URL is missing.")
+                        try:
+                            st.json(response.json())
+                        except Exception:
+                            st.code(response.text)
                 else:
-                    st.error(f"Billing portal failed: {response.status_code} - {response.text}")
+                    st.error(f"Status: {response.status_code}")
+                    try:
+                        st.json(response.json())
+                    except Exception:
+                        st.code(response.text)
 
             if st.session_state.get("paypal_portal_url"):
                 st.link_button(
@@ -172,17 +187,12 @@ with pro_col:
                     st.session_state["paypal_checkout_url"] = checkout_url
                     st.success("PayPal checkout created successfully.")
                 else:
-                    try:
-                        error_payload = response.json()
-                        detail = (
-                            error_payload.get("detail")
-                            or error_payload.get("error")
-                            or error_payload
-                        )
-                    except Exception:
-                        detail = response.text
+                    st.error(f"Status: {response.status_code}")
 
-                    st.error(f"PayPal checkout failed: {response.status_code} - {detail}")
+                    try:
+                        st.json(response.json())
+                    except Exception:
+                        st.code(response.text)
 
             if st.session_state.get("paypal_checkout_url"):
                 st.link_button(
