@@ -13,10 +13,40 @@ from auth_utils import (
 )
 
 
+APP_URL = "https://talentmatch-frontend-dejan.onrender.com"
+APP_DESCRIPTION = (
+    "TalentMatch Pro is an AI-powered SaaS platform for CV analysis, "
+    "ATS optimization, semantic matching, recruiter workflows, and PDF reports."
+)
+
+
 st.set_page_config(
-    page_title="TalentMatch Pro",
-    page_icon="🚀",
+    page_title="TalentMatch Pro - AI CV Analysis & ATS Optimization",
+    page_icon="🎯",
     layout="wide",
+)
+
+
+st.markdown(
+    f"""
+    <meta name="description" content="{APP_DESCRIPTION}">
+    <meta name="keywords" content="AI CV analysis, ATS checker, CV optimization, semantic matching, recruiter mode, job application, resume analysis">
+    <meta name="author" content="TalentMatch Pro">
+    <link rel="canonical" href="{APP_URL}">
+
+    <meta property="og:title" content="TalentMatch Pro - AI CV Analysis Platform">
+    <meta property="og:description" content="{APP_DESCRIPTION}">
+    <meta property="og:type" content="website">
+    <meta property="og:url" content="{APP_URL}">
+    <meta property="og:image" content="{APP_URL}/app/static/logo.png">
+    <meta property="og:site_name" content="TalentMatch Pro">
+
+    <meta name="twitter:card" content="summary_large_image">
+    <meta name="twitter:title" content="TalentMatch Pro - AI CV Analysis Platform">
+    <meta name="twitter:description" content="{APP_DESCRIPTION}">
+    <meta name="twitter:image" content="{APP_URL}/app/static/logo.png">
+    """,
+    unsafe_allow_html=True,
 )
 
 
@@ -338,45 +368,3 @@ if result:
         if is_pro:
             pdf_bytes = generate_pdf_report(result, job_description or "")
 
-            if pdf_bytes:
-                st.download_button(
-                    "📄 Download PDF Report",
-                    data=pdf_bytes,
-                    file_name="talentmatch_report.pdf",
-                    mime="application/pdf",
-                    use_container_width=True,
-                )
-        else:
-            st.button("📄 Download PDF Report (Pro)", use_container_width=True, disabled=True)
-            st.caption("Upgrade to Pro to export PDF reports.")
-
-    st.divider()
-
-    st.markdown("## 📝 Summary")
-    st.write(result.get("summary", "No summary available."))
-
-    col1, col2 = st.columns(2)
-
-    with col1:
-        st.markdown("## ✅ Strengths")
-        if strengths:
-            for item in strengths:
-                st.markdown(f"- {item}")
-        else:
-            st.write("No strengths returned.")
-
-    with col2:
-        st.markdown("## ❌ Missing Skills")
-        if weaknesses:
-            for item in weaknesses:
-                st.markdown(f"- {item}")
-        else:
-            st.write("No missing skills returned.")
-
-    st.markdown("## 💡 Recommendations")
-
-    if recommendations:
-        for item in recommendations:
-            st.markdown(f"- {item}")
-    else:
-        st.write("No recommendations returned.")

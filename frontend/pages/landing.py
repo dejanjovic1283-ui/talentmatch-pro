@@ -1,22 +1,48 @@
 import streamlit as st
 
+APP_URL = "https://talentmatch-frontend-dejan.onrender.com"
+APP_DESCRIPTION = (
+    "TalentMatch Pro is an AI-powered CV analysis platform for ATS optimization, "
+    "semantic matching, CV rewrite suggestions, recruiter workflows, and PDF reports."
+)
+
 st.set_page_config(
-    page_title="TalentMatch Pro • AI CV Matching",
-    page_icon="🚀",
+    page_title="TalentMatch Pro - AI CV Analysis & ATS Optimization",
+    page_icon="🎯",
     layout="wide",
 )
 
-APP_URL = "https://talentmatch-frontend-dejan.onrender.com"
+st.markdown(
+    f"""
+    <meta name="description" content="{APP_DESCRIPTION}">
+    <meta name="keywords" content="AI CV analysis, ATS checker, CV optimization, semantic matching, recruiter mode, resume analysis">
+    <meta name="author" content="TalentMatch Pro">
+    <link rel="canonical" href="{APP_URL}">
+
+    <meta property="og:title" content="TalentMatch Pro - AI CV Analysis & ATS Optimization">
+    <meta property="og:description" content="{APP_DESCRIPTION}">
+    <meta property="og:type" content="website">
+    <meta property="og:url" content="{APP_URL}">
+    <meta property="og:image" content="{APP_URL}/app/static/logo.png">
+    <meta property="og:site_name" content="TalentMatch Pro">
+
+    <meta name="twitter:card" content="summary_large_image">
+    <meta name="twitter:title" content="TalentMatch Pro - AI CV Analysis & ATS Optimization">
+    <meta name="twitter:description" content="{APP_DESCRIPTION}">
+    <meta name="twitter:image" content="{APP_URL}/app/static/logo.png">
+    """,
+    unsafe_allow_html=True,
+)
 
 st.markdown(
     """
     <div style="padding: 42px 0 24px 0;">
         <h1 style="font-size:56px; margin-bottom:10px;">
-            🚀 TalentMatch Pro
+            🎯 TalentMatch Pro
         </h1>
         <p style="font-size:22px; color:#6b7280; max-width:900px;">
-            AI-powered CV analysis, ATS keyword matching, and CV rewrite suggestions
-            for job seekers who want to apply smarter.
+            AI-powered CV analysis, ATS keyword matching, semantic matching,
+            CV rewrite suggestions, and recruiter workflows for smarter job applications.
         </p>
     </div>
     """,
@@ -29,7 +55,7 @@ with col1:
     st.markdown("## Match your CV to real job descriptions")
     st.write(
         "Upload your CV, paste a job description, and get an AI-powered match score, "
-        "missing skills, ATS keywords, and practical improvement recommendations."
+        "missing skills, ATS keywords, semantic insights, and practical improvement recommendations."
     )
 
     cta1, cta2, cta3 = st.columns(3)
@@ -51,9 +77,10 @@ with col2:
         ✅ Match score  
         ✅ Strengths and gaps  
         ✅ ATS keyword coverage  
+        ✅ Semantic matching  
         ✅ CV rewrite suggestions  
         ✅ Downloadable reports  
-        ✅ Application strategy insights  
+        ✅ Recruiter workflow insights  
         """
     )
 
@@ -98,7 +125,7 @@ feature4, feature5, feature6 = st.columns(3)
 with feature4:
     st.container(border=True).markdown(
         """
-        ### 📥 Download Reports
+        ### 📥 PDF Reports
 
         Export a clean analysis report that includes score, summary,
         gaps, recommendations, and job description context.
@@ -108,20 +135,19 @@ with feature4:
 with feature5:
     st.container(border=True).markdown(
         """
-        ### 📊 Admin Analytics
+        ### 🧠 Semantic Match
 
-        Demo SaaS dashboard for product metrics, usage insights,
-        conversion tracking, and keyword trends.
+        Compare meaning and context between your CV and job description using AI embeddings
+        plus keyword overlap.
         """
     )
 
 with feature6:
     st.container(border=True).markdown(
         """
-        ### 🔐 Firebase Auth
+        ### 👥 Recruiter Mode
 
-        Secure email/password authentication powered by Firebase
-        with protected backend routes.
+        Rank multiple candidates, compare profiles, and support recruiter-style workflows.
         """
     )
 
@@ -151,7 +177,7 @@ with free_col:
         """
         ### Free
 
-        - 3 demo CV analyses
+        - 3 CV analyses
         - AI match score
         - Basic recommendations
         - ATS keyword checker
@@ -177,7 +203,7 @@ with pro_col:
         """
     )
 
-    st.page_link("pages/pricing.py", label="💳 Upgrade with Paddle")
+    st.page_link("pages/pricing.py", label="💳 Upgrade with PayPal")
 
 st.markdown("---")
 
@@ -206,10 +232,10 @@ with stack6:
     st.success("Render deploy")
 
 with stack7:
-    st.success("PostgreSQL ready")
+    st.success("PostgreSQL")
 
 with stack8:
-    st.success("Paddle Billing")
+    st.success("PayPal Billing")
 
 st.markdown("---")
 
@@ -231,5 +257,5 @@ with cta_col4:
 
 st.caption(
     "TalentMatch Pro is an AI SaaS MVP built for CV analysis, ATS optimization, "
-    "semantic matching, recruiter workflows, and Paddle-powered subscriptions."
+    "semantic matching, recruiter workflows, and PayPal-powered subscriptions."
 )

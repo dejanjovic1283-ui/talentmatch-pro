@@ -1,0 +1,4 @@
+User-agent: *
+Allow: /
+
+Sitemap: https://talentmatch-frontend-dejan.onrender.com/app/static/sitemap.xml
