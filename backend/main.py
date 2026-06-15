@@ -3,12 +3,13 @@ import os
 import re
 import ssl
 from io import BytesIO
+from pathlib import Path
 
 import certifi
 from dotenv import load_dotenv
 from fastapi import Depends, FastAPI, File, Form, HTTPException, Request, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import StreamingResponse
+from fastapi.responses import FileResponse, StreamingResponse
 from sqlalchemy import text
 from sqlalchemy.orm import Session
 
@@ -33,6 +34,10 @@ from usage_service import ensure_analysis_allowed, get_user_usage
 
 
 Base.metadata.create_all(bind=engine)
+
+
+BASE_DIR = Path(__file__).resolve().parent
+STATIC_DIR = BASE_DIR / "static"
 
 
 def run_lightweight_migrations() -> None:
@@ -71,11 +76,15 @@ app.add_middleware(
     allow_origins=get_cors_origins(),
     allow_credentials=True,
     allow_methods=["GET", "POST", "OPTIONS"],
-    allow_headers=["Authorization", "Content-Type", "PAYPAL-TRANSMISSION-ID",
+    allow_headers=[
+        "Authorization",
+        "Content-Type",
+        "PAYPAL-TRANSMISSION-ID",
         "PAYPAL-TRANSMISSION-TIME",
         "PAYPAL-CERT-URL",
         "PAYPAL-AUTH-ALGO",
-        "PAYPAL-TRANSMISSION-SIG",],
+        "PAYPAL-TRANSMISSION-SIG",
+    ],
 )
 
 
@@ -131,6 +140,34 @@ def root():
         "message": "TalentMatch Pro backend running.",
         **config_status(),
     }
+
+
+@app.get("/robots.txt", include_in_schema=False)
+def robots_txt():
+    robots_file = STATIC_DIR / "robots.txt"
+
+    if not robots_file.exists():
+        raise HTTPException(status_code=404, detail="robots.txt not found.")
+
+    return FileResponse(
+        path=str(robots_file),
+        media_type="text/plain; charset=utf-8",
+        filename="robots.txt",
+    )
+
+
+@app.get("/sitemap.xml", include_in_schema=False)
+def sitemap_xml():
+    sitemap_file = STATIC_DIR / "sitemap.xml"
+
+    if not sitemap_file.exists():
+        raise HTTPException(status_code=404, detail="sitemap.xml not found.")
+
+    return FileResponse(
+        path=str(sitemap_file),
+        media_type="application/xml; charset=utf-8",
+        filename="sitemap.xml",
+    )
 
 
 @app.get("/healthz")
