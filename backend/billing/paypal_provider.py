@@ -273,6 +273,14 @@ class PayPalBillingProvider(BillingProvider):
         db.commit()
         db.refresh(user)
 
+        print("PAYPAL USER UPGRADED TO PRO")
+        print("USER ID:", user.id)
+        print("EMAIL:", user.email)
+        print("PLAN:", user.plan)
+        print("IS_PRO:", bool(user.is_pro))
+        print("PAYPAL SUBSCRIPTION ID:", subscription_id)
+        print("PAYPAL SUBSCRIPTION STATUS:", str(status))
+
         return {
             "status": "ok",
             "message": "User upgraded to Pro via PayPal.",
@@ -295,6 +303,13 @@ class PayPalBillingProvider(BillingProvider):
         db.add(user)
         db.commit()
         db.refresh(user)
+
+        print("PAYPAL USER DOWNGRADED TO FREE")
+        print("USER ID:", user.id)
+        print("EMAIL:", user.email)
+        print("PLAN:", user.plan)
+        print("IS_PRO:", bool(user.is_pro))
+        print("PAYPAL SUBSCRIPTION STATUS:", str(status))
 
         return {
             "status": "ok",
@@ -319,9 +334,20 @@ class PayPalBillingProvider(BillingProvider):
 
         print("=== PAYPAL WEBHOOK RECEIVED ===")
         print("EVENT TYPE:", event_type)
+        print("FULL PAYPAL EVENT:", event)
+        print("RESOURCE:", resource)
 
         if not isinstance(resource, dict):
             raise HTTPException(status_code=400, detail="Invalid PayPal webhook resource.")
+
+        print("CUSTOM ID:", resource.get("custom_id"))
+        print("SUBSCRIPTION ID:", resource.get("id"))
+        print("BILLING AGREEMENT ID:", resource.get("billing_agreement_id"))
+        print("RESOURCE EMAIL:", resource.get("email_address"))
+
+        subscriber = resource.get("subscriber", {}) or {}
+        print("SUBSCRIBER:", subscriber)
+        print("SUBSCRIBER EMAIL:", subscriber.get("email_address"))
 
         activate_events = {
             "BILLING.SUBSCRIPTION.CREATED",
@@ -345,6 +371,17 @@ class PayPalBillingProvider(BillingProvider):
         user = self._find_user(db, resource)
 
         if not user:
+            print("PAYPAL WEBHOOK USER NOT FOUND")
+            print("EVENT TYPE:", event_type)
+            print("CUSTOM ID:", resource.get("custom_id"))
+            print(
+                "SUBSCRIPTION ID:",
+                resource.get("id")
+                or resource.get("billing_agreement_id")
+                or resource.get("subscription_id"),
+            )
+            print("EMAIL:", subscriber.get("email_address") or resource.get("email_address"))
+
             return {
                 "status": "ignored",
                 "reason": "User not found.",
@@ -353,6 +390,7 @@ class PayPalBillingProvider(BillingProvider):
                 "subscription_id": resource.get("id")
                 or resource.get("billing_agreement_id")
                 or resource.get("subscription_id"),
+                "email": subscriber.get("email_address") or resource.get("email_address"),
             }
 
         try:
