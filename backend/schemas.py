@@ -13,9 +13,9 @@ class UserProfileResponse(BaseModel):
     plan: str
     is_pro: bool
 
-    paddle_customer_id: str | None = None
-    paddle_subscription_id: str | None = None
-    paddle_subscription_status: str | None = None
+    paypal_customer_id: str | None = None
+    paypal_subscription_id: str | None = None
+    paypal_subscription_status: str | None = None
 
 
 class AnalysisResponse(BaseModel):

@@ -41,6 +41,7 @@ class PayPalBillingProvider(BillingProvider):
         print(f"=== PAYPAL ERROR: {context} ===")
         print("STATUS:", response.status_code)
         print("BODY:", response.text)
+
         raise HTTPException(
             status_code=response.status_code,
             detail={
@@ -81,6 +82,7 @@ class PayPalBillingProvider(BillingProvider):
 
     def _paypal_headers(self) -> dict[str, str]:
         token = self._get_access_token()
+
         return {
             "Authorization": f"Bearer {token}",
             "Content-Type": "application/json",
@@ -208,6 +210,7 @@ class PayPalBillingProvider(BillingProvider):
             self._raise_paypal_error(response, "PayPal webhook verification failed.")
 
         verification_status = response.json().get("verification_status")
+
         if verification_status != "SUCCESS":
             raise HTTPException(
                 status_code=400,
@@ -226,6 +229,21 @@ class PayPalBillingProvider(BillingProvider):
             except Exception:
                 pass
 
+        subscription_id = (
+            resource.get("id")
+            or resource.get("billing_agreement_id")
+            or resource.get("subscription_id")
+        )
+
+        if subscription_id and hasattr(User, "paypal_subscription_id"):
+            user = (
+                db.query(User)
+                .filter(User.paypal_subscription_id == str(subscription_id))
+                .first()
+            )
+            if user:
+                return user
+
         subscriber = resource.get("subscriber") or {}
         email = subscriber.get("email_address") or resource.get("email_address")
 
@@ -235,15 +253,21 @@ class PayPalBillingProvider(BillingProvider):
         return None
 
     def _set_user_pro(self, db: Session, user: User, resource: dict[str, Any]) -> dict:
-        subscription_id = resource.get("id")
-        status = resource.get("status", "ACTIVE")
+        subscription_id = (
+            resource.get("id")
+            or resource.get("billing_agreement_id")
+            or resource.get("subscription_id")
+        )
+
+        status = resource.get("status") or "ACTIVE"
+        subscriber = resource.get("subscriber") or {}
 
         user.plan = "pro"
         user.is_pro = True
 
         _safe_setattr(user, "paypal_subscription_id", subscription_id)
         _safe_setattr(user, "paypal_subscription_status", str(status))
-        _safe_setattr(user, "paypal_customer_id", (resource.get("subscriber") or {}).get("payer_id"))
+        _safe_setattr(user, "paypal_customer_id", subscriber.get("payer_id"))
 
         db.add(user)
         db.commit()
@@ -261,7 +285,7 @@ class PayPalBillingProvider(BillingProvider):
         }
 
     def _set_user_free(self, db: Session, user: User, resource: dict[str, Any]) -> dict:
-        status = resource.get("status", "inactive")
+        status = resource.get("status") or "inactive"
 
         user.plan = "free"
         user.is_pro = False
@@ -301,6 +325,7 @@ class PayPalBillingProvider(BillingProvider):
 
         activate_events = {
             "BILLING.SUBSCRIPTION.ACTIVATED",
+            "PAYMENT.SALE.COMPLETED",
         }
 
         downgrade_events = {
@@ -324,6 +349,9 @@ class PayPalBillingProvider(BillingProvider):
                 "reason": "User not found.",
                 "event": event_type,
                 "custom_id": resource.get("custom_id"),
+                "subscription_id": resource.get("id")
+                or resource.get("billing_agreement_id")
+                or resource.get("subscription_id"),
             }
 
         try:
@@ -332,6 +360,7 @@ class PayPalBillingProvider(BillingProvider):
 
             if event_type in downgrade_events:
                 return self._set_user_free(db, user, resource)
+
         except Exception as exc:
             db.rollback()
             print("PAYPAL WEBHOOK INTERNAL ERROR:", repr(exc))
