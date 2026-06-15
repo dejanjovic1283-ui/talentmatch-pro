@@ -37,6 +37,19 @@ def _safe_setattr(obj: object, attr: str, value: Any) -> None:
 
 
 class PayPalBillingProvider(BillingProvider):
+    def _raise_paypal_error(self, response: httpx.Response, context: str) -> None:
+        print(f"=== PAYPAL ERROR: {context} ===")
+        print("STATUS:", response.status_code)
+        print("BODY:", response.text)
+        raise HTTPException(
+            status_code=response.status_code,
+            detail={
+                "message": context,
+                "paypal_status_code": response.status_code,
+                "paypal_response": response.text,
+            },
+        )
+
     def _get_access_token(self) -> str:
         if not PAYPAL_CLIENT_ID:
             raise HTTPException(status_code=500, detail="PAYPAL_CLIENT_ID is missing.")
@@ -62,10 +75,7 @@ class PayPalBillingProvider(BillingProvider):
             ) from exc
 
         if response.status_code >= 400:
-            raise HTTPException(
-                status_code=response.status_code,
-                detail=f"PayPal token request failed: {response.text}",
-            )
+            self._raise_paypal_error(response, "PayPal token request failed.")
 
         return response.json()["access_token"]
 
@@ -74,6 +84,8 @@ class PayPalBillingProvider(BillingProvider):
         return {
             "Authorization": f"Bearer {token}",
             "Content-Type": "application/json",
+            "Accept": "application/json",
+            "Prefer": "return=representation",
         }
 
     def create_checkout_url(self, user: User) -> str:
@@ -105,6 +117,11 @@ class PayPalBillingProvider(BillingProvider):
             },
         }
 
+        print("=== CREATING PAYPAL SUBSCRIPTION ===")
+        print("PAYPAL_ENV:", PAYPAL_ENV)
+        print("PAYPAL_PLAN_ID:", PAYPAL_PLAN_ID)
+        print("USER:", user.id, user_email)
+
         try:
             with httpx.Client(timeout=60) as client:
                 response = client.post(
@@ -119,10 +136,7 @@ class PayPalBillingProvider(BillingProvider):
             ) from exc
 
         if response.status_code >= 400:
-            raise HTTPException(
-                status_code=response.status_code,
-                detail=f"PayPal subscription failed: {response.text}",
-            )
+            self._raise_paypal_error(response, "PayPal subscription creation failed.")
 
         data = response.json()
 
@@ -137,6 +151,8 @@ class PayPalBillingProvider(BillingProvider):
                 status_code=502,
                 detail=f"PayPal approval URL missing: {data}",
             )
+
+        print("PAYPAL SUBSCRIPTION CREATED:", data.get("id"))
 
         return approve_url
 
@@ -189,10 +205,7 @@ class PayPalBillingProvider(BillingProvider):
             ) from exc
 
         if response.status_code >= 400:
-            raise HTTPException(
-                status_code=response.status_code,
-                detail=f"PayPal webhook verification failed: {response.text}",
-            )
+            self._raise_paypal_error(response, "PayPal webhook verification failed.")
 
         verification_status = response.json().get("verification_status")
         if verification_status != "SUCCESS":

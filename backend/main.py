@@ -40,9 +40,9 @@ def run_lightweight_migrations() -> None:
         "ALTER TABLE users ADD COLUMN analyses_used INTEGER DEFAULT 0",
         "ALTER TABLE users ADD COLUMN plan VARCHAR DEFAULT 'free'",
         "ALTER TABLE users ADD COLUMN is_pro BOOLEAN DEFAULT 0",
-        "ALTER TABLE users ADD COLUMN paddle_customer_id VARCHAR",
-        "ALTER TABLE users ADD COLUMN paddle_subscription_id VARCHAR",
-        "ALTER TABLE users ADD COLUMN paddle_subscription_status VARCHAR",
+        "ALTER TABLE users ADD COLUMN paypal_customer_id VARCHAR",
+        "ALTER TABLE users ADD COLUMN paypal_subscription_id VARCHAR",
+        "ALTER TABLE users ADD COLUMN paypal_subscription_status VARCHAR",
     ]
 
     for migration in migrations:
@@ -71,8 +71,7 @@ app.add_middleware(
     allow_origins=get_cors_origins(),
     allow_credentials=True,
     allow_methods=["GET", "POST", "OPTIONS"],
-    allow_headers=["Authorization", "Content-Type", "Paddle-Signature",
-        "PAYPAL-TRANSMISSION-ID",
+    allow_headers=["Authorization", "Content-Type", "PAYPAL-TRANSMISSION-ID",
         "PAYPAL-TRANSMISSION-TIME",
         "PAYPAL-CERT-URL",
         "PAYPAL-AUTH-ALGO",
@@ -306,7 +305,7 @@ def extract_ats_keywords(text_value: str, limit: int = 30) -> list[str]:
         "firebase", "openai", "saas", "backend", "frontend", "streamlit",
         "auth", "authentication", "storage", "billing", "deployment",
         "cloud", "pdf", "ai", "prompt", "database", "render", "mvp",
-        "ats", "recruiter", "paddle", "supabase", "postgres",
+        "ats", "recruiter", "paypal", "postgres",
         "javascript", "typescript", "react", "rest",
     ]
 
@@ -551,7 +550,7 @@ def get_history_test():
             "score": 75,
             "summary": "Demo analysis history item.",
             "matched_skills": ["Python", "FastAPI", "APIs"],
-            "missing_skills": ["Paddle", "PostgreSQL production migrations"],
+            "missing_skills": ["PayPal", "PostgreSQL production migrations"],
             "recommendations": ["Add SaaS billing experience.", "Highlight deployment experience."],
             "created_at": "2026-05-29T12:00:00",
         }
@@ -559,9 +558,26 @@ def get_history_test():
 
 
 @app.post("/billing/create-checkout")
-def create_checkout(current_user: User = Depends(get_current_user)):
+def create_checkout(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    print("=== PAYPAL CHECKOUT REQUEST ===")
+    print("USER ID:", current_user.id)
+    print("USER EMAIL:", current_user.email)
+
+    db.expire_all()
+    user = db.query(User).filter(User.id == current_user.id).first()
+
+    if user is None:
+        raise HTTPException(status_code=404, detail="User not found.")
+
     provider = get_billing_provider()
-    return {"checkout_url": provider.create_checkout_url(current_user)}
+    checkout_url = provider.create_checkout_url(user)
+
+    print("PAYPAL CHECKOUT URL CREATED")
+
+    return {"checkout_url": checkout_url}
 
 
 @app.post("/billing/create-portal")

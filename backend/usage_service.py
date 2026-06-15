@@ -27,18 +27,18 @@ def get_user_usage(db: Session, user: User) -> dict:
 
     return {
         "plan": user.plan,
-        "is_pro": user.is_pro,
+        "is_pro": bool(user.is_pro),
         "analyses_used": used,
         "free_limit": FREE_PLAN_ANALYSIS_LIMIT,
         "remaining": remaining,
-        "upgrade_required": not user.is_pro and used >= FREE_PLAN_ANALYSIS_LIMIT,
+        "upgrade_required": not bool(user.is_pro) and used >= FREE_PLAN_ANALYSIS_LIMIT,
     }
 
 
 def ensure_analysis_allowed(db: Session, user: User) -> None:
     usage = get_user_usage(db, user)
 
-    if user.is_pro:
+    if bool(user.is_pro):
         return
 
     if usage["analyses_used"] >= FREE_PLAN_ANALYSIS_LIMIT:
