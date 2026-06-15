@@ -324,6 +324,7 @@ class PayPalBillingProvider(BillingProvider):
             raise HTTPException(status_code=400, detail="Invalid PayPal webhook resource.")
 
         activate_events = {
+            "BILLING.SUBSCRIPTION.CREATED",
             "BILLING.SUBSCRIPTION.ACTIVATED",
             "PAYMENT.SALE.COMPLETED",
         }
