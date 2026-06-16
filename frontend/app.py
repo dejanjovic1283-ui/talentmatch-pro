@@ -367,4 +367,3 @@ if result:
     with download_col2:
         if is_pro:
             pdf_bytes = generate_pdf_report(result, job_description or "")
-
