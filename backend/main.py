@@ -151,8 +151,7 @@ def robots_txt():
 
     return FileResponse(
         path=str(robots_file),
-        media_type="text/plain; charset=utf-8",
-        filename="robots.txt",
+        media_type="text/plain",
     )
 
 
@@ -165,8 +164,7 @@ def sitemap_xml():
 
     return FileResponse(
         path=str(sitemap_file),
-        media_type="application/xml; charset=utf-8",
-        filename="sitemap.xml",
+        media_type="application/xml",
     )
 
 
