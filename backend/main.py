@@ -142,6 +142,11 @@ def root():
     }
 
 
+@app.head("/", include_in_schema=False)
+def root_head():
+    return {}
+
+
 @app.get("/robots.txt", include_in_schema=False)
 def robots_txt():
     robots_file = STATIC_DIR / "robots.txt"
@@ -165,6 +170,22 @@ def sitemap_xml():
     return FileResponse(
         path=str(sitemap_file),
         media_type="application/xml",
+    )
+
+
+@app.get("/googlecf17c88318ff3341.html", include_in_schema=False)
+def google_site_verification():
+    verification_file = STATIC_DIR / "googlecf17c88318ff3341.html"
+
+    if not verification_file.exists():
+        raise HTTPException(
+            status_code=404,
+            detail="Google verification file not found.",
+        )
+
+    return FileResponse(
+        path=str(verification_file),
+        media_type="text/html",
     )
 
 
