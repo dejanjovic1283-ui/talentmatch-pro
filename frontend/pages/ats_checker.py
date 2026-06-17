@@ -1,4 +1,3 @@
-import json
 from typing import Any, Dict, List, Optional, Tuple
 
 import streamlit as st
@@ -37,7 +36,10 @@ def response_to_json(response: Any) -> Tuple[Optional[Dict[str, Any]], Optional[
     if status_code is not None and status_code >= 400:
         try:
             payload = response.json()
-            detail = payload.get("detail") or payload.get("error") or payload
+            if isinstance(payload, dict):
+                detail = payload.get("detail") or payload.get("error") or payload
+            else:
+                detail = payload
             return None, f"ATS check failed: {status_code} - {detail}"
         except Exception:
             return None, f"ATS check failed: {status_code} - {text[:1000]}"
@@ -148,7 +150,7 @@ job_description = st.text_area(
         "- PostgreSQL\n"
         "- Docker\n"
         "- Firebase\n"
-        "- Paddle\n"
+        "- PayPal\n"
         "- Render deployment"
     ),
 )
@@ -163,10 +165,20 @@ run_clicked = st.button(
 )
 
 if run_clicked:
+    cv_file = uploaded_file
+
+    if cv_file is None:
+        st.error("Please upload your CV as a PDF.")
+        st.stop()
+
+    if not job_description.strip():
+        st.error("Please paste the job description.")
+        st.stop()
+
     files = {
         "file": (
-            uploaded_file.name,
-            uploaded_file.getvalue(),
+            cv_file.name,
+            cv_file.getvalue(),
             "application/pdf",
         )
     }

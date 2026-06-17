@@ -1,3 +1,5 @@
+from typing import Any, Dict, List, Tuple, cast
+
 import pandas as pd
 import streamlit as st
 
@@ -20,7 +22,7 @@ What you will do:
 - Build and scale a FastAPI + Streamlit product
 - Integrate Firebase authentication and storage
 - Ship AI-powered CV analysis with OpenAI
-- Own billing workflows with Paddle
+- Own billing workflows with PayPal
 - Improve product reliability, UX, and deployment pipelines
 
 What we are looking for:
@@ -35,7 +37,21 @@ Nice to have:
 """.strip()
 
 
-def extract_error_message(response) -> str:
+UploadFileTuple = Tuple[str, Tuple[str, bytes, str]]
+
+
+def normalize_response(raw: Any) -> Any:
+    """Support api_post implementations that return response or (response, error)."""
+    if isinstance(raw, tuple):
+        if len(raw) >= 2 and raw[1]:
+            raise RuntimeError(str(raw[1]))
+        if len(raw) >= 1:
+            return raw[0]
+        raise RuntimeError("Empty response from backend.")
+    return raw
+
+
+def extract_error_message(response: Any) -> str:
     status_code = getattr(response, "status_code", None)
     text = getattr(response, "text", "") or ""
 
@@ -77,6 +93,13 @@ def score_badge(score: int) -> str:
     return "⚠️"
 
 
+def safe_int(value: Any, default: int = 0) -> int:
+    try:
+        return int(value or default)
+    except Exception:
+        return default
+
+
 st.title("🏆 Recruiter Mode")
 st.caption(
     "Upload multiple CVs and rank candidates against one job description using semantic AI matching."
@@ -115,10 +138,10 @@ if st.button("Rank Candidates", use_container_width=True):
         st.error("Please paste a job description.")
         st.stop()
 
-    files = []
+    files_payload: List[UploadFileTuple] = []
 
     for uploaded_file in uploaded_files:
-        files.append(
+        files_payload.append(
             (
                 "files",
                 (
@@ -134,17 +157,24 @@ if st.button("Rank Candidates", use_container_width=True):
     }
 
     with st.spinner("Ranking candidates..."):
-        response = api_post(
-            "/recruiter/rank-candidates",
-            data=data,
-            files=files,
-            timeout=300,
-        )
+        try:
+            raw_response = api_post(
+                "/recruiter/rank-candidates",
+                data=data,
+                files=cast(Any, files_payload),
+                timeout=300,
+            )
+            response = normalize_response(raw_response)
+        except Exception as exc:
+            st.error(f"Candidate ranking failed: {exc}")
+            st.stop()
 
-    if response.status_code != 200:
+    status_code = getattr(response, "status_code", None)
+
+    if status_code != 200:
         st.error(f"Candidate ranking failed: {extract_error_message(response)}")
 
-        if response.status_code == 403:
+        if status_code == 403:
             st.warning("🚀 Recruiter Mode is a Pro feature.")
             st.page_link("pages/pricing.py", label="Upgrade to Pro", icon="🚀")
 
@@ -153,7 +183,8 @@ if st.button("Rank Candidates", use_container_width=True):
     try:
         payload = response.json()
     except Exception:
-        st.error(f"Backend returned invalid JSON: {response.text[:1000]}")
+        response_text = getattr(response, "text", "") or ""
+        st.error(f"Backend returned invalid JSON: {response_text[:1000]}")
         st.stop()
 
     if not isinstance(payload, dict):
@@ -171,8 +202,8 @@ if isinstance(result, dict):
     st.divider()
     st.header("Candidate Ranking")
 
-    total_candidates = int(result.get("total_candidates", 0) or 0)
-    average_score = int(result.get("average_score", 0) or 0)
+    total_candidates = safe_int(result.get("total_candidates"))
+    average_score = safe_int(result.get("average_score"))
     top_candidate = result.get("top_candidate")
     candidates = result.get("candidates", [])
 
@@ -186,7 +217,7 @@ if isinstance(result, dict):
 
     with col3:
         if isinstance(top_candidate, dict):
-            st.metric("Top Candidate", top_candidate.get("filename", "-"))
+            st.metric("Top Candidate", str(top_candidate.get("filename", "-")))
         else:
             st.metric("Top Candidate", "-")
 
@@ -197,11 +228,15 @@ if isinstance(result, dict):
             f"({top_candidate.get('verdict')})"
         )
 
-    if candidates:
-        table_rows = []
+    if isinstance(candidates, list) and candidates:
+        table_rows: List[Dict[str, Any]] = []
 
-        for candidate in candidates:
-            score = int(candidate.get("combined_score", 0) or 0)
+        for candidate_raw in candidates:
+            if not isinstance(candidate_raw, dict):
+                continue
+
+            candidate: Dict[str, Any] = candidate_raw
+            score = safe_int(candidate.get("combined_score"))
 
             table_rows.append(
                 {
@@ -235,10 +270,14 @@ if isinstance(result, dict):
 
         st.markdown("## Candidate Details")
 
-        for candidate in candidates:
+        for candidate_raw in candidates:
+            if not isinstance(candidate_raw, dict):
+                continue
+
+            candidate = candidate_raw
             rank = candidate.get("rank")
             filename = candidate.get("filename")
-            score = int(candidate.get("combined_score", 0) or 0)
+            score = safe_int(candidate.get("combined_score"))
             verdict = candidate.get("verdict", "")
 
             with st.expander(
@@ -271,7 +310,7 @@ if isinstance(result, dict):
                     st.markdown("### ✅ Matched Themes")
                     matched_themes = candidate.get("matched_themes", [])
 
-                    if matched_themes:
+                    if isinstance(matched_themes, list) and matched_themes:
                         for item in matched_themes:
                             st.markdown(f"- {item}")
                     else:
@@ -281,7 +320,7 @@ if isinstance(result, dict):
                     st.markdown("### ❌ Missing Themes")
                     missing_themes = candidate.get("missing_themes", [])
 
-                    if missing_themes:
+                    if isinstance(missing_themes, list) and missing_themes:
                         for item in missing_themes:
                             st.markdown(f"- {item}")
                     else:
@@ -290,7 +329,7 @@ if isinstance(result, dict):
                 st.markdown("### 💡 Recommendations")
                 recommendations = candidate.get("recommendations", [])
 
-                if recommendations:
+                if isinstance(recommendations, list) and recommendations:
                     for item in recommendations:
                         st.markdown(f"- {item}")
                 else:
@@ -302,8 +341,8 @@ if isinstance(result, dict):
                     st.markdown("### Matched Keywords")
                     matched = candidate.get("matched_keywords", [])
 
-                    if matched:
-                        st.write(", ".join(matched[:30]))
+                    if isinstance(matched, list) and matched:
+                        st.write(", ".join(str(item) for item in matched[:30]))
                     else:
                         st.caption("No matched keywords returned.")
 
@@ -311,7 +350,7 @@ if isinstance(result, dict):
                     st.markdown("### Missing Keywords")
                     missing = candidate.get("missing_keywords", [])
 
-                    if missing:
-                        st.write(", ".join(missing[:30]))
+                    if isinstance(missing, list) and missing:
+                        st.write(", ".join(str(item) for item in missing[:30]))
                     else:
                         st.caption("No missing keywords returned.")
