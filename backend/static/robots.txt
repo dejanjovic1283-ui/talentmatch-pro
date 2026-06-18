@@ -1,4 +1,4 @@
 User-agent: *
 Allow: /
 
-Sitemap: https://talentmatch-backend-1283.onrender.com/sitemap.xml
+Sitemap: https://talentmatchcv.com/sitemap.xml
