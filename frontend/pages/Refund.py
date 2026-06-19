@@ -104,13 +104,13 @@ To request a refund, contact us by email and include:
 TalentMatch Pro  
 Owner: Dejan Jovic  
 Country: Serbia  
-Business Email: dejan.jovic1283@gmail.com
+Business Email: support@talentmatchcv.com
 
 ## 11. Contact
 
 For billing questions, cancellation questions, or refund requests:
 
-Email: dejan.jovic1283@gmail.com
+Email: support@talentmatchcv.com
 """
 )
 

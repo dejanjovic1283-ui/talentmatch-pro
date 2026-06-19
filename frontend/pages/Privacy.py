@@ -137,13 +137,13 @@ Continued use of TalentMatch Pro after updates means you accept the revised poli
 TalentMatch Pro  
 Owner: Dejan Jovic  
 Country: Serbia  
-Business Email: dejan.jovic1283@gmail.com
+Business Email: support@talentmatchcv.com
 
 ## 14. Contact
 
 For privacy questions, data requests, or support:
 
-Email: dejan.jovic1283@gmail.com
+Email: support@talentmatchcv.com
 """
 )
 
