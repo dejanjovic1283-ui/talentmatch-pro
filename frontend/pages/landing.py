@@ -207,6 +207,68 @@ with pro_col:
 
 st.markdown("---")
 
+st.markdown("## What is TalentMatch Pro?")
+
+st.write("""
+TalentMatch Pro is an AI-powered resume optimization platform designed to help job seekers improve their CVs,
+increase ATS compatibility, and better align their experience with real job descriptions.
+
+Many companies use Applicant Tracking Systems (ATS) to automatically scan resumes before a recruiter reviews them.
+A resume that is not ATS-friendly may never reach a hiring manager, even if the candidate is qualified.
+
+TalentMatch Pro helps identify missing keywords, improve resume structure, analyze strengths and weaknesses,
+and provide practical recommendations that increase the chances of passing ATS screening processes.
+""")
+
+st.markdown("## How ATS Resume Analysis Works")
+
+st.write("""
+The ATS Checker compares your resume against a specific job description and identifies important keywords,
+skills, technologies, and competencies.
+
+The platform calculates keyword coverage, highlights missing skills, and provides recommendations for improving
+your resume in a truthful and professional way.
+
+This helps job seekers create ATS-friendly resumes that are easier for automated recruitment systems to understand.
+""")
+
+st.markdown("## AI-Powered Resume Optimization")
+
+st.write("""
+Using advanced artificial intelligence, TalentMatch Pro analyzes resume content, evaluates relevance,
+and generates personalized suggestions for improvement.
+
+The platform can identify experience gaps, optimize resume summaries, improve bullet points,
+and provide actionable feedback tailored to the target position.
+
+This makes TalentMatch Pro useful for software engineers, data analysts, project managers,
+marketing professionals, security specialists, and many other career paths.
+""")
+
+st.markdown("## Semantic Job Matching")
+
+st.write("""
+Traditional ATS systems focus heavily on keywords.
+
+TalentMatch Pro goes beyond simple keyword matching by using semantic analysis to compare the meaning,
+context, and relevance of resume content against job requirements.
+
+This helps users understand how closely their professional experience aligns with a role,
+even when different wording is used.
+""")
+
+st.markdown("## Why Choose TalentMatch Pro?")
+
+st.write("""
+TalentMatch Pro combines AI resume analysis, ATS optimization, semantic matching,
+CV rewrite assistance, recruiter workflows, and downloadable reports into a single platform.
+
+Whether you are applying for your first job, changing careers, or preparing for senior-level positions,
+TalentMatch Pro helps improve resume quality and increase interview opportunities.
+""")
+
+st.markdown("---")
+
 st.markdown("## Built with a modern SaaS stack")
 
 stack1, stack2, stack3, stack4 = st.columns(4)
