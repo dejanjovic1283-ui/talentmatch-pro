@@ -61,7 +61,7 @@ def render_footer() -> None:
                 </div>
                 <div>
                     <div class="tmp-footer-title">📬 Contact</div>
-                    <div>Email: <a href="mailto:dejan.jovic1283@gmail.com">dejan.jovic1283@gmail.com</a></div>
+                    <div>Email: <a href="mailto:support@talentmatchcv.com">support@talentmatchcv.com</a></div>
                     <div>Country: Serbia</div>
                 </div>
                 <div>

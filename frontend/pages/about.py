@@ -108,5 +108,5 @@ Instead of only checking keywords, the platform also looks at meaning, relevance
 
 For support, billing questions, refund requests, partnership opportunities, or Pro plan requests, please contact us:
 
-**Email:** dejan.jovic1283@gmail.com
+**Email:** support@talentmatchcv.com
 """)

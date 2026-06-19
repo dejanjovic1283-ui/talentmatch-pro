@@ -209,7 +209,7 @@ st.markdown(
     """
 **TalentMatch Pro**
 
-📧 Email: dejan.jovic1283@gmail.com
+📧 Email: support@talentmatchcv.com
 
 🚀 Pro Plan: $9/month via PayPal
 

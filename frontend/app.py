@@ -241,7 +241,7 @@ def render_dashboard() -> None:
         st.caption("AI-powered CV analysis, ATS optimization, semantic job matching, and recruiter-ready insights.")
     with footer_col_2:
         st.markdown("### 📬 Contact")
-        st.caption("Email: dejan.jovic1283@gmail.com")
+        st.caption("Email: support@talentmatchcv.com")
         st.caption("Country: Serbia")
     with footer_col_3:
         st.markdown("### 🔐 Legal")

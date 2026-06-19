@@ -20,7 +20,7 @@ You can contact us for support, billing questions, refund requests, account issu
 
 ## 📩 Support Email
 
-**Email:** dejan.jovic1283@gmail.com
+**Email:** support@talentmatchcv.com
 
 ---
 
@@ -62,7 +62,7 @@ Response time may be longer during weekends or holidays.
 **Project:** TalentMatch Pro  
 **Owner:** Dejan Jovic  
 **Country:** Serbia  
-**Email:** dejan.jovic1283@gmail.com
+**Email:** support@talentmatchcv.com
 
 ---
 
