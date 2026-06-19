@@ -1,3 +1,5 @@
+from ast import main
+
 import streamlit as st
 
 APP_URL = "https://talentmatch-frontend-dejan.onrender.com"
@@ -321,3 +323,6 @@ st.caption(
     "TalentMatch Pro is an AI SaaS MVP built for CV analysis, ATS optimization, "
     "semantic matching, recruiter workflows, and PayPal-powered subscriptions."
 )
+
+def render_landing():
+    main()
