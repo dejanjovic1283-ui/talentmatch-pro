@@ -50,6 +50,7 @@ def run_lightweight_migrations() -> None:
         "ALTER TABLE users ADD COLUMN paypal_customer_id VARCHAR",
         "ALTER TABLE users ADD COLUMN paypal_subscription_id VARCHAR",
         "ALTER TABLE users ADD COLUMN paypal_subscription_status VARCHAR",
+        "ALTER TABLE analysis_records ADD COLUMN analysis_type VARCHAR DEFAULT 'cv_analysis'",
     ]
 
     for migration in migrations:
@@ -146,6 +147,7 @@ def save_history_record(
     missing: list[str] | None = None,
     recommendations: list[str] | None = None,
     cv_storage_path: str | None = None,
+    analysis_type: str = "cv_analysis",
 ) -> AnalysisRecord:
     """Save any successful analysis-like result so the History page can display it."""
     record = AnalysisRecord(
@@ -158,6 +160,7 @@ def save_history_record(
         matched_skills=json.dumps(matched or []),
         missing_skills=json.dumps(missing or []),
         recommendations=json.dumps(recommendations or []),
+        analysis_type=analysis_type,
     )
 
     db.add(record)
@@ -309,6 +312,7 @@ async def analyze_resume(
         matched=result["strengths"],
         missing=result["weaknesses"],
         recommendations=result["recommendations"],
+        analysis_type="cv_analysis",
     )
 
     get_user_usage(db, current_user)
@@ -449,6 +453,7 @@ async def ats_test(
         matched=matched,
         missing=missing,
         recommendations=recommendations,
+        analysis_type="ats_checker",
     )
 
     get_user_usage(db, current_user)
@@ -520,6 +525,7 @@ async def semantic_match(
         matched=matched,
         missing=missing,
         recommendations=recommendations,
+        analysis_type="semantic_match",
     )
 
     return result
@@ -607,6 +613,7 @@ async def recruiter_rank_candidates(
         matched=matched,
         missing=missing,
         recommendations=recommendations,
+        analysis_type="recruiter_mode",
     )
 
     return result
@@ -700,6 +707,17 @@ def build_history_query(db: Session, user_id: int, analysis_type: str | None = N
     return query.order_by(AnalysisRecord.created_at.desc())
 
 
+
+
+def history_type_label(analysis_type: str | None) -> str:
+    labels = {
+        "cv_analysis": "CV Analysis",
+        "ats_checker": "ATS",
+        "semantic_match": "Semantic",
+        "recruiter_mode": "Recruiter",
+    }
+    return labels.get((analysis_type or "cv_analysis").strip().lower(), "CV Analysis")
+
 def serialize_history_record(record: AnalysisRecord) -> dict:
     return {
         "id": record.id,
@@ -712,6 +730,7 @@ def serialize_history_record(record: AnalysisRecord) -> dict:
         "missing_skills": safe_json_list(record.missing_skills),
         "recommendations": safe_json_list(record.recommendations),
         "analysis_type": getattr(record, "analysis_type", None) or "cv_analysis",
+        "analysis_type_label": history_type_label(getattr(record, "analysis_type", None)),
         "created_at": record.created_at.isoformat() if record.created_at else None,
     }
 
@@ -739,6 +758,7 @@ def export_history_csv(
         fieldnames=[
             "created_at",
             "analysis_type",
+            "analysis_type_label",
             "cv_filename",
             "score",
             "summary",
@@ -755,6 +775,7 @@ def export_history_csv(
             {
                 "created_at": item["created_at"] or "",
                 "analysis_type": item["analysis_type"],
+                "analysis_type_label": item["analysis_type_label"],
                 "cv_filename": item["cv_filename"] or "",
                 "score": item["score"] or 0,
                 "summary": item["summary"] or "",
@@ -798,7 +819,7 @@ def export_history_pdf(
         for idx, record in enumerate(records, start=1):
             item = serialize_history_record(record)
             story.append(Paragraph(f"{idx}. {item['cv_filename'] or 'CV'}", styles["Heading2"]))
-            story.append(Paragraph(f"Type: {item['analysis_type']} | Score: {item['score']}/100 | Date: {item['created_at'] or ''}", styles["BodyText"]))
+            story.append(Paragraph(f"Type: {item['analysis_type_label']} | Score: {item['score']}/100 | Date: {item['created_at'] or ''}", styles["BodyText"]))
             if item["summary"]:
                 story.append(Paragraph(f"Summary: {item['summary']}", styles["BodyText"]))
             if item["matched_skills"]:
