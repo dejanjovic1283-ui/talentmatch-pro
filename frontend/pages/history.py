@@ -156,3 +156,4 @@ for idx, item in enumerate(items, start=1):
             st.markdown("**💡 Recommendations**")
             for r in recommendations:
                 st.markdown(f"- {r}")
+                
