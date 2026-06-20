@@ -52,3 +52,4 @@ class AnalysisRecord(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
 
     user = relationship("User", back_populates="analyses")
+    

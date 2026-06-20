@@ -2,8 +2,10 @@ import json
 import os
 import re
 import ssl
-from io import BytesIO
+import csv
+from io import BytesIO, StringIO
 from pathlib import Path
+from typing import Any
 
 import certifi
 from dotenv import load_dotenv
@@ -48,7 +50,6 @@ def run_lightweight_migrations() -> None:
         "ALTER TABLE users ADD COLUMN paypal_customer_id VARCHAR",
         "ALTER TABLE users ADD COLUMN paypal_subscription_id VARCHAR",
         "ALTER TABLE users ADD COLUMN paypal_subscription_status VARCHAR",
-        "ALTER TABLE analysis_records ADD COLUMN analysis_type VARCHAR(50) DEFAULT 'cv_analysis'",
     ]
 
     for migration in migrations:
@@ -145,7 +146,6 @@ def save_history_record(
     missing: list[str] | None = None,
     recommendations: list[str] | None = None,
     cv_storage_path: str | None = None,
-    analysis_type: str = "cv_analysis",
 ) -> AnalysisRecord:
     """Save any successful analysis-like result so the History page can display it."""
     record = AnalysisRecord(
@@ -158,7 +158,6 @@ def save_history_record(
         matched_skills=json.dumps(matched or []),
         missing_skills=json.dumps(missing or []),
         recommendations=json.dumps(recommendations or []),
-        analysis_type=analysis_type,
     )
 
     db.add(record)
@@ -450,7 +449,6 @@ async def ats_test(
         matched=matched,
         missing=missing,
         recommendations=recommendations,
-        analysis_type="ats_checker",
     )
 
     get_user_usage(db, current_user)
@@ -496,7 +494,7 @@ async def semantic_match(
     except Exception as exc:
         raise HTTPException(status_code=400, detail=f"Could not extract text from PDF: {exc}")
 
-    result = {}
+    result: dict[str, Any] = {}
     try:
         result = analyze_semantic_match(cv_text, job_description)
     except AIServiceError as exc:
@@ -522,7 +520,6 @@ async def semantic_match(
         matched=matched,
         missing=missing,
         recommendations=recommendations,
-        analysis_type="semantic_match",
     )
 
     return result
@@ -562,7 +559,7 @@ async def recruiter_rank_candidates(
             }
         )
 
-    result = {}
+    result: dict[str, Any] = {}
     try:
         result = rank_candidates(candidates=candidates, job_description=job_description)
     except AIServiceError as exc:
@@ -610,7 +607,6 @@ async def recruiter_rank_candidates(
         matched=matched,
         missing=missing,
         recommendations=recommendations,
-        analysis_type="recruiter_mode",
     )
 
     return result
@@ -623,29 +619,304 @@ async def rewrite_cv(
     current_user: User = Depends(get_current_user),
 ):
     if not current_user.is_pro:
-        raise HTTPException(status_code=403, detail="CV rewriting is a Pro feature.")
+        raise HTTPException(status_code=403, detail="CV Rewrite AI is a Pro feature.")
 
     pdf_bytes = await file.read()
-
-    if not pdf_bytes:
-        raise HTTPException(status_code=400, detail="Uploaded PDF is empty.")
 
     try:
         cv_text = extract_text_from_pdf(pdf_bytes)
     except Exception as exc:
         raise HTTPException(status_code=400, detail=f"Could not extract text from PDF: {exc}")
 
-    if not cv_text.strip():
-        raise HTTPException(status_code=400, detail="Could not extract text from PDF.")
-
-    rewritten_cv = None
     try:
-        rewritten_cv = rewrite_cv_with_ai(cv_text, job_description)
+        return rewrite_cv_with_ai(cv_text, job_description)
     except AIServiceError as exc:
-        print("OPENAI REWRITE ERROR:", repr(exc))
+        print("OPENAI CV REWRITE ERROR:", repr(exc))
         raise_ai_http_exception(exc)
 
-    if not rewritten_cv:
-        raise HTTPException(status_code=500, detail="Failed to generate rewritten CV.")
 
-    return {"rewritten_cv": rewritten_cv}
+@app.post("/reports/analysis-pdf")
+async def create_analysis_pdf_report(
+    cv_filename: str = Form(...),
+    score: int = Form(...),
+    summary: str = Form(...),
+    strengths_json: str = Form("[]"),
+    weaknesses_json: str = Form("[]"),
+    recommendations_json: str = Form("[]"),
+    job_description: str = Form(""),
+    current_user: User = Depends(get_current_user),
+):
+    if not current_user.is_pro:
+        raise HTTPException(status_code=403, detail="PDF reports are a Pro feature.")
+
+    try:
+        pdf_bytes = build_analysis_pdf_report(
+            cv_filename=cv_filename,
+            score=score,
+            summary=summary,
+            strengths=parse_json_list(strengths_json),
+            weaknesses=parse_json_list(weaknesses_json),
+            recommendations=parse_json_list(recommendations_json),
+            job_description=job_description,
+        )
+    except Exception as exc:
+        print("PDF REPORT ERROR:", repr(exc))
+        raise HTTPException(status_code=500, detail=f"PDF report failed: {exc}")
+
+    safe_filename = re.sub(r"[^a-zA-Z0-9_-]+", "_", cv_filename.replace(".pdf", ""))
+    download_name = f"{safe_filename}_talentmatch_report.pdf"
+
+    return StreamingResponse(
+        BytesIO(pdf_bytes),
+        media_type="application/pdf",
+        headers={"Content-Disposition": f'attachment; filename="{download_name}"'},
+    )
+
+
+HISTORY_ANALYSIS_TYPES = {"cv_analysis", "ats_checker", "semantic_match", "recruiter_mode"}
+
+
+def safe_json_list(value: str | None) -> list[str]:
+    if not value:
+        return []
+    try:
+        data = json.loads(value)
+    except Exception:
+        return []
+    if not isinstance(data, list):
+        return []
+    return [str(item).strip() for item in data if str(item).strip()]
+
+
+def build_history_query(db: Session, user_id: int, analysis_type: str | None = None):
+    query = db.query(AnalysisRecord).filter(AnalysisRecord.user_id == user_id)
+
+    if analysis_type:
+        normalized_type = analysis_type.strip().lower()
+        if normalized_type not in HISTORY_ANALYSIS_TYPES:
+            raise HTTPException(status_code=400, detail="Invalid analysis_type filter.")
+        query = query.filter(AnalysisRecord.analysis_type == normalized_type)
+
+    return query.order_by(AnalysisRecord.created_at.desc())
+
+
+def serialize_history_record(record: AnalysisRecord) -> dict:
+    return {
+        "id": record.id,
+        "cv_filename": record.cv_filename,
+        "cv_storage_path": record.cv_storage_path,
+        "job_description": record.job_description,
+        "score": record.score,
+        "summary": record.summary,
+        "matched_skills": safe_json_list(record.matched_skills),
+        "missing_skills": safe_json_list(record.missing_skills),
+        "recommendations": safe_json_list(record.recommendations),
+        "analysis_type": getattr(record, "analysis_type", None) or "cv_analysis",
+        "created_at": record.created_at.isoformat() if record.created_at else None,
+    }
+
+
+@app.get("/history")
+def get_history(
+    analysis_type: str | None = None,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    records = build_history_query(db, current_user.id, analysis_type).all()
+    return [serialize_history_record(record) for record in records]
+
+
+@app.get("/history/export.csv")
+def export_history_csv(
+    analysis_type: str | None = None,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    records = build_history_query(db, current_user.id, analysis_type).all()
+    output = StringIO()
+    writer = csv.DictWriter(
+        output,
+        fieldnames=[
+            "created_at",
+            "analysis_type",
+            "cv_filename",
+            "score",
+            "summary",
+            "matched_skills",
+            "missing_skills",
+            "recommendations",
+        ],
+    )
+    writer.writeheader()
+
+    for record in records:
+        item = serialize_history_record(record)
+        writer.writerow(
+            {
+                "created_at": item["created_at"] or "",
+                "analysis_type": item["analysis_type"],
+                "cv_filename": item["cv_filename"] or "",
+                "score": item["score"] or 0,
+                "summary": item["summary"] or "",
+                "matched_skills": ", ".join(item["matched_skills"]),
+                "missing_skills": ", ".join(item["missing_skills"]),
+                "recommendations": " | ".join(item["recommendations"]),
+            }
+        )
+
+    data = output.getvalue().encode("utf-8-sig")
+    return StreamingResponse(
+        BytesIO(data),
+        media_type="text/csv; charset=utf-8",
+        headers={"Content-Disposition": 'attachment; filename="talentmatch_history.csv"'},
+    )
+
+
+@app.get("/history/export.pdf")
+def export_history_pdf(
+    analysis_type: str | None = None,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    records = build_history_query(db, current_user.id, analysis_type).all()
+
+    try:
+        from reportlab.lib.pagesizes import A4
+        from reportlab.lib.styles import getSampleStyleSheet
+        from reportlab.platypus import Paragraph, SimpleDocTemplate, Spacer
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=f"PDF export is unavailable: {exc}")
+
+    buffer = BytesIO()
+    doc = SimpleDocTemplate(buffer, pagesize=A4, title="TalentMatch Pro History")
+    styles = getSampleStyleSheet()
+    story = [Paragraph("TalentMatch Pro - Analysis History", styles["Title"]), Spacer(1, 12)]
+
+    if not records:
+        story.append(Paragraph("No history records found.", styles["BodyText"]))
+    else:
+        for idx, record in enumerate(records, start=1):
+            item = serialize_history_record(record)
+            story.append(Paragraph(f"{idx}. {item['cv_filename'] or 'CV'}", styles["Heading2"]))
+            story.append(Paragraph(f"Type: {item['analysis_type']} | Score: {item['score']}/100 | Date: {item['created_at'] or ''}", styles["BodyText"]))
+            if item["summary"]:
+                story.append(Paragraph(f"Summary: {item['summary']}", styles["BodyText"]))
+            if item["matched_skills"]:
+                story.append(Paragraph("Matched: " + ", ".join(item["matched_skills"][:20]), styles["BodyText"]))
+            if item["missing_skills"]:
+                story.append(Paragraph("Missing: " + ", ".join(item["missing_skills"][:20]), styles["BodyText"]))
+            if item["recommendations"]:
+                story.append(Paragraph("Recommendations: " + " | ".join(item["recommendations"][:10]), styles["BodyText"]))
+            story.append(Spacer(1, 12))
+
+    doc.build(story)
+    buffer.seek(0)
+    return StreamingResponse(
+        buffer,
+        media_type="application/pdf",
+        headers={"Content-Disposition": 'attachment; filename="talentmatch_history.pdf"'},
+    )
+
+
+@app.get("/history-test")
+def get_history_test():
+    return [
+        {
+            "id": 1,
+            "cv_filename": "demo_cv.pdf",
+            "cv_storage_path": None,
+            "job_description": "Founding Full-Stack AI SaaS Engineer",
+            "score": 75,
+            "summary": "Demo analysis history item.",
+            "matched_skills": ["Python", "FastAPI", "APIs"],
+            "missing_skills": ["PayPal", "PostgreSQL production migrations"],
+            "recommendations": ["Add SaaS billing experience.", "Highlight deployment experience."],
+            "analysis_type": "cv_analysis",
+            "created_at": "2026-05-29T12:00:00",
+        }
+    ]
+
+
+@app.post("/billing/create-checkout")
+def create_checkout(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    print("=== PAYPAL CHECKOUT REQUEST ===")
+    print("USER ID:", current_user.id)
+    print("USER EMAIL:", current_user.email)
+
+    db.expire_all()
+    user = db.query(User).filter(User.id == current_user.id).first()
+
+    if user is None:
+        raise HTTPException(status_code=404, detail="User not found.")
+
+    provider = get_billing_provider()
+    checkout_url = provider.create_checkout_url(user)
+
+    print("PAYPAL CHECKOUT URL CREATED")
+
+    return {"checkout_url": checkout_url}
+
+
+@app.post("/billing/create-portal")
+def create_portal(current_user: User = Depends(get_current_user)):
+    provider = get_billing_provider()
+    return {"portal_url": provider.create_customer_portal_url(current_user)}
+
+
+@app.post("/billing/demo-upgrade")
+def demo_upgrade_to_pro(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    current_user.plan = "pro"
+    current_user.is_pro = True
+    if hasattr(current_user, "paypal_subscription_status"):
+        current_user.paypal_subscription_status = "demo_pro"
+
+    db.add(current_user)
+    db.commit()
+    db.refresh(current_user)
+
+    return {
+        "status": "ok",
+        "message": "Demo upgrade successful.",
+        "plan": current_user.plan,
+        "is_pro": bool(current_user.is_pro),
+    }
+
+
+@app.post("/billing/webhook")
+async def billing_webhook(
+    request: Request,
+    db: Session = Depends(get_db),
+):
+    body = await request.body()
+    provider = get_billing_provider()
+    return provider.handle_webhook(body=body, headers=dict(request.headers), db=db)
+
+
+@app.post("/paypal/webhook")
+async def paypal_webhook(
+    request: Request,
+    db: Session = Depends(get_db),
+):
+    body = await request.body()
+    provider = get_billing_provider()
+    return provider.handle_webhook(body=body, headers=dict(request.headers), db=db)
+
+
+if __name__ == "__main__":
+    import uvicorn
+
+    port = int(os.environ.get("PORT", "10000"))
+
+    uvicorn.run(
+        "main:app",
+        host="0.0.0.0",
+        port=port,
+        reload=False,
+    )
+    
