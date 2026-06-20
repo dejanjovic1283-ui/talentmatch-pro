@@ -47,6 +47,7 @@ class AnalysisRecord(Base):
     matched_skills: Mapped[str] = mapped_column(Text, default="[]")
     missing_skills: Mapped[str] = mapped_column(Text, default="[]")
     recommendations: Mapped[str] = mapped_column(Text, default="[]")
+    analysis_type: Mapped[str] = mapped_column(String(50), default="cv_analysis", index=True)
 
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
 

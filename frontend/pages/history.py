@@ -9,6 +9,20 @@ st.title("📜 Analysis History")
 st.caption("View your previous CV analyses and reports.")
 
 
+TYPE_LABELS = {
+    "cv_analysis": "CV Analysis",
+    "ats_checker": "ATS Checker",
+    "ats": "ATS Checker",
+    "semantic_match": "Semantic Match",
+    "recruiter_mode": "Recruiter Mode",
+}
+
+
+def history_label(item: dict) -> str:
+    analysis_type = str(item.get("analysis_type") or "cv_analysis").strip().lower()
+    return TYPE_LABELS.get(analysis_type, analysis_type.replace("_", " ").title())
+
+
 def parse_history_response(response):
     status_code = getattr(response, "status_code", None)
     text = getattr(response, "text", "") or ""
@@ -76,7 +90,7 @@ for idx, item in enumerate(items, start=1):
         continue
 
     score = item.get("score") or item.get("match_score") or 0
-    verdict = item.get("verdict") or "Analysis"
+    verdict = history_label(item)
 
     cv_file = (
         item.get("cv_filename")

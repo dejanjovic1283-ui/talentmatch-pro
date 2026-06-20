@@ -48,6 +48,7 @@ def run_lightweight_migrations() -> None:
         "ALTER TABLE users ADD COLUMN paypal_customer_id VARCHAR",
         "ALTER TABLE users ADD COLUMN paypal_subscription_id VARCHAR",
         "ALTER TABLE users ADD COLUMN paypal_subscription_status VARCHAR",
+        "ALTER TABLE analysis_records ADD COLUMN analysis_type VARCHAR(50) DEFAULT 'cv_analysis'",
     ]
 
     for migration in migrations:
@@ -131,6 +132,47 @@ def raise_ai_http_exception(exc: AIServiceError) -> None:
             "type": "ai_service_error",
         },
     )
+
+
+def save_history_record(
+    db: Session,
+    user: User,
+    cv_filename: str | None,
+    job_description: str,
+    score: int,
+    summary: str,
+    matched: list[str] | None = None,
+    missing: list[str] | None = None,
+    recommendations: list[str] | None = None,
+    cv_storage_path: str | None = None,
+    analysis_type: str = "cv_analysis",
+) -> AnalysisRecord:
+    """Save any successful analysis-like result so the History page can display it."""
+    record = AnalysisRecord(
+        user_id=user.id,
+        cv_filename=cv_filename or "resume.pdf",
+        cv_storage_path=cv_storage_path,
+        job_description=job_description,
+        score=int(score or 0),
+        summary=summary or "",
+        matched_skills=json.dumps(matched or []),
+        missing_skills=json.dumps(missing or []),
+        recommendations=json.dumps(recommendations or []),
+        analysis_type=analysis_type,
+    )
+
+    db.add(record)
+    db.commit()
+    db.refresh(record)
+    return record
+
+
+def score_verdict(score: int, strong_label: str = "Strong Match", good_label: str = "Good Match", weak_label: str = "Weak Match") -> str:
+    if score >= 80:
+        return strong_label
+    if score >= 60:
+        return good_label
+    return weak_label
 
 
 @app.get("/")
@@ -257,21 +299,18 @@ async def analyze_resume(
     if result is None:
         raise HTTPException(status_code=502, detail="AI analysis returned no result.")
 
-    record = AnalysisRecord(
-        user_id=current_user.id,
+    save_history_record(
+        db=db,
+        user=current_user,
         cv_filename=file.filename,
         cv_storage_path=storage_path,
         job_description=job_description,
         score=result["score"],
         summary=result["summary"],
-        matched_skills=json.dumps(result["strengths"]),
-        missing_skills=json.dumps(result["weaknesses"]),
-        recommendations=json.dumps(result["recommendations"]),
+        matched=result["strengths"],
+        missing=result["weaknesses"],
+        recommendations=result["recommendations"],
     )
-
-    db.add(record)
-    db.commit()
-    db.refresh(record)
 
     get_user_usage(db, current_user)
 
@@ -363,6 +402,8 @@ def extract_ats_keywords(text_value: str, limit: int = 30) -> list[str]:
 async def ats_test(
     file: UploadFile = File(...),
     job_description: str = Form(...),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
 ):
     pdf_bytes = await file.read()
 
@@ -391,6 +432,28 @@ async def ats_test(
 
     coverage = round((len(matched) / len(keywords)) * 100) if keywords else 0
     verdict = "ATS Strong" if coverage >= 80 else "ATS Good" if coverage >= 60 else "ATS Weak"
+    recommendations = [
+        f"Add missing high-value keywords where truthful: {', '.join(missing[:8])}."
+        if missing
+        else "Your CV covers the main ATS keywords well.",
+        "Mirror important job-description terms naturally in your CV summary and experience bullets.",
+        "Use exact tool names where relevant, for example FastAPI, Docker, SQL, Firebase, OpenAI.",
+    ]
+
+    save_history_record(
+        db=db,
+        user=current_user,
+        cv_filename=file.filename,
+        job_description=job_description,
+        score=coverage,
+        summary=f"ATS keyword check completed. Coverage: {coverage}%. Verdict: {verdict}.",
+        matched=matched,
+        missing=missing,
+        recommendations=recommendations,
+        analysis_type="ats_checker",
+    )
+
+    get_user_usage(db, current_user)
 
     return {
         "score": coverage,
@@ -399,13 +462,7 @@ async def ats_test(
         "total_keywords": len(keywords),
         "matched_keywords": matched,
         "missing_keywords": missing,
-        "recommendations": [
-            f"Add missing high-value keywords where truthful: {', '.join(missing[:8])}."
-            if missing
-            else "Your CV covers the main ATS keywords well.",
-            "Mirror important job-description terms naturally in your CV summary and experience bullets.",
-            "Use exact tool names where relevant, for example FastAPI, Docker, SQL, Firebase, OpenAI.",
-        ],
+        "recommendations": recommendations,
     }
 
 
@@ -413,14 +470,17 @@ async def ats_test(
 async def ats_check(
     file: UploadFile = File(...),
     job_description: str = Form(...),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
 ):
-    return await ats_test(file=file, job_description=job_description)
+    return await ats_test(file=file, job_description=job_description, db=db, current_user=current_user)
 
 
 @app.post("/semantic-match")
 async def semantic_match(
     file: UploadFile = File(...),
     job_description: str = Form(...),
+    db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
     if not current_user.is_pro:
@@ -428,13 +488,16 @@ async def semantic_match(
 
     pdf_bytes = await file.read()
 
+    if not pdf_bytes:
+        raise HTTPException(status_code=400, detail="Uploaded PDF is empty.")
+
     try:
         cv_text = extract_text_from_pdf(pdf_bytes)
     except Exception as exc:
         raise HTTPException(status_code=400, detail=f"Could not extract text from PDF: {exc}")
 
     try:
-        return analyze_semantic_match(cv_text, job_description)
+        result = analyze_semantic_match(cv_text, job_description)
     except AIServiceError as exc:
         print("SEMANTIC MATCH AI ERROR:", repr(exc))
         raise_ai_http_exception(exc)
@@ -442,11 +505,33 @@ async def semantic_match(
         print("SEMANTIC MATCH ERROR:", repr(exc))
         raise HTTPException(status_code=500, detail=f"Semantic match failed: {exc}")
 
+    score = int(result.get("combined_score", result.get("score", 0)) or 0)
+    summary = result.get("summary") or result.get("recruiter_summary") or f"Semantic match completed. Score: {score}/100."
+    matched = result.get("matched_themes") or result.get("matched_keywords") or result.get("strengths") or []
+    missing = result.get("missing_themes") or result.get("missing_keywords") or result.get("weaknesses") or []
+    recommendations = result.get("recommendations") or []
+
+    save_history_record(
+        db=db,
+        user=current_user,
+        cv_filename=file.filename,
+        job_description=job_description,
+        score=score,
+        summary=summary,
+        matched=matched,
+        missing=missing,
+        recommendations=recommendations,
+        analysis_type="semantic_match",
+    )
+
+    return result
+
 
 @app.post("/recruiter/rank-candidates")
 async def recruiter_rank_candidates(
     files: list[UploadFile] = File(...),
     job_description: str = Form(...),
+    db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
     if not current_user.is_pro:
@@ -477,7 +562,7 @@ async def recruiter_rank_candidates(
         )
 
     try:
-        return rank_candidates(candidates=candidates, job_description=job_description)
+        result = rank_candidates(candidates=candidates, job_description=job_description)
     except AIServiceError as exc:
         print("RECRUITER AI ERROR:", repr(exc))
         raise_ai_http_exception(exc)
@@ -485,194 +570,51 @@ async def recruiter_rank_candidates(
         print("RECRUITER RANKING ERROR:", repr(exc))
         raise HTTPException(status_code=500, detail=f"Recruiter ranking failed: {exc}")
 
+    rankings = result.get("rankings") or result.get("candidates") or result.get("results") or []
+    top_candidate = None
+    if isinstance(rankings, list) and rankings:
+        top_candidate = rankings[0]
+
+    top_filename = None
+    top_score = 0
+
+    if isinstance(top_candidate, dict):
+        top_filename = top_candidate.get("filename") or top_candidate.get("candidate") or top_candidate.get("name")
+        top_score = int(top_candidate.get("score", top_candidate.get("combined_score", 0)) or 0)
+
+    average_score = int(result.get("average_score", top_score) or 0)
+    history_score = top_score or average_score
+    summary = (
+        result.get("summary")
+        or result.get("recruiter_summary")
+        or f"Recruiter ranking completed for {len(candidates)} candidate(s). Top candidate: {top_filename or candidates[0]['filename']}."
+    )
+
+    matched = []
+    missing = []
+    recommendations = result.get("recommendations") or []
+
+    if isinstance(top_candidate, dict):
+        matched = top_candidate.get("matched_themes") or top_candidate.get("matched_keywords") or top_candidate.get("strengths") or []
+        missing = top_candidate.get("missing_themes") or top_candidate.get("missing_keywords") or top_candidate.get("weaknesses") or []
+
+    save_history_record(
+        db=db,
+        user=current_user,
+        cv_filename=top_filename or candidates[0]["filename"],
+        job_description=job_description,
+        score=history_score,
+        summary=summary,
+        matched=matched,
+        missing=missing,
+        recommendations=recommendations,
+        analysis_type="recruiter_mode",
+    )
+
+    return result
+
 
 @app.post("/rewrite-cv")
 async def rewrite_cv(
     file: UploadFile = File(...),
     job_description: str = Form(...),
-    current_user: User = Depends(get_current_user),
-):
-    if not current_user.is_pro:
-        raise HTTPException(status_code=403, detail="CV Rewrite AI is a Pro feature.")
-
-    pdf_bytes = await file.read()
-
-    try:
-        cv_text = extract_text_from_pdf(pdf_bytes)
-    except Exception as exc:
-        raise HTTPException(status_code=400, detail=f"Could not extract text from PDF: {exc}")
-
-    try:
-        return rewrite_cv_with_ai(cv_text, job_description)
-    except AIServiceError as exc:
-        print("OPENAI CV REWRITE ERROR:", repr(exc))
-        raise_ai_http_exception(exc)
-
-
-@app.post("/reports/analysis-pdf")
-async def create_analysis_pdf_report(
-    cv_filename: str = Form(...),
-    score: int = Form(...),
-    summary: str = Form(...),
-    strengths_json: str = Form("[]"),
-    weaknesses_json: str = Form("[]"),
-    recommendations_json: str = Form("[]"),
-    job_description: str = Form(""),
-    current_user: User = Depends(get_current_user),
-):
-    if not current_user.is_pro:
-        raise HTTPException(status_code=403, detail="PDF reports are a Pro feature.")
-
-    try:
-        pdf_bytes = build_analysis_pdf_report(
-            cv_filename=cv_filename,
-            score=score,
-            summary=summary,
-            strengths=parse_json_list(strengths_json),
-            weaknesses=parse_json_list(weaknesses_json),
-            recommendations=parse_json_list(recommendations_json),
-            job_description=job_description,
-        )
-    except Exception as exc:
-        print("PDF REPORT ERROR:", repr(exc))
-        raise HTTPException(status_code=500, detail=f"PDF report failed: {exc}")
-
-    safe_filename = re.sub(r"[^a-zA-Z0-9_-]+", "_", cv_filename.replace(".pdf", ""))
-    download_name = f"{safe_filename}_talentmatch_report.pdf"
-
-    return StreamingResponse(
-        BytesIO(pdf_bytes),
-        media_type="application/pdf",
-        headers={"Content-Disposition": f'attachment; filename="{download_name}"'},
-    )
-
-
-@app.get("/history", response_model=list[HistoryItemResponse])
-def get_history(
-    db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user),
-):
-    records = (
-        db.query(AnalysisRecord)
-        .filter(AnalysisRecord.user_id == current_user.id)
-        .order_by(AnalysisRecord.created_at.desc())
-        .all()
-    )
-
-    return [
-        {
-            "id": record.id,
-            "cv_filename": record.cv_filename,
-            "cv_storage_path": record.cv_storage_path,
-            "job_description": record.job_description,
-            "score": record.score,
-            "summary": record.summary,
-            "matched_skills": json.loads(record.matched_skills or "[]"),
-            "missing_skills": json.loads(record.missing_skills or "[]"),
-            "recommendations": json.loads(record.recommendations or "[]"),
-            "created_at": record.created_at,
-        }
-        for record in records
-    ]
-
-
-@app.get("/history-test")
-def get_history_test():
-    return [
-        {
-            "id": 1,
-            "cv_filename": "demo_cv.pdf",
-            "cv_storage_path": None,
-            "job_description": "Founding Full-Stack AI SaaS Engineer",
-            "score": 75,
-            "summary": "Demo analysis history item.",
-            "matched_skills": ["Python", "FastAPI", "APIs"],
-            "missing_skills": ["PayPal", "PostgreSQL production migrations"],
-            "recommendations": ["Add SaaS billing experience.", "Highlight deployment experience."],
-            "created_at": "2026-05-29T12:00:00",
-        }
-    ]
-
-
-@app.post("/billing/create-checkout")
-def create_checkout(
-    db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user),
-):
-    print("=== PAYPAL CHECKOUT REQUEST ===")
-    print("USER ID:", current_user.id)
-    print("USER EMAIL:", current_user.email)
-
-    db.expire_all()
-    user = db.query(User).filter(User.id == current_user.id).first()
-
-    if user is None:
-        raise HTTPException(status_code=404, detail="User not found.")
-
-    provider = get_billing_provider()
-    checkout_url = provider.create_checkout_url(user)
-
-    print("PAYPAL CHECKOUT URL CREATED")
-
-    return {"checkout_url": checkout_url}
-
-
-@app.post("/billing/create-portal")
-def create_portal(current_user: User = Depends(get_current_user)):
-    provider = get_billing_provider()
-    return {"portal_url": provider.create_customer_portal_url(current_user)}
-
-
-@app.post("/billing/demo-upgrade")
-def demo_upgrade_to_pro(
-    db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user),
-):
-    current_user.plan = "pro"
-    current_user.is_pro = True
-    if hasattr(current_user, "paypal_subscription_status"):
-        current_user.paypal_subscription_status = "demo_pro"
-
-    db.add(current_user)
-    db.commit()
-    db.refresh(current_user)
-
-    return {
-        "status": "ok",
-        "message": "Demo upgrade successful.",
-        "plan": current_user.plan,
-        "is_pro": bool(current_user.is_pro),
-    }
-
-
-@app.post("/billing/webhook")
-async def billing_webhook(
-    request: Request,
-    db: Session = Depends(get_db),
-):
-    body = await request.body()
-    provider = get_billing_provider()
-    return provider.handle_webhook(body=body, headers=dict(request.headers), db=db)
-
-
-@app.post("/paypal/webhook")
-async def paypal_webhook(
-    request: Request,
-    db: Session = Depends(get_db),
-):
-    body = await request.body()
-    provider = get_billing_provider()
-    return provider.handle_webhook(body=body, headers=dict(request.headers), db=db)
-
-
-if __name__ == "__main__":
-    import uvicorn
-
-    port = int(os.environ.get("PORT", "10000"))
-
-    uvicorn.run(
-        "main:app",
-        host="0.0.0.0",
-        port=port,
-        reload=False,
-    )
