@@ -496,6 +496,7 @@ async def semantic_match(
     except Exception as exc:
         raise HTTPException(status_code=400, detail=f"Could not extract text from PDF: {exc}")
 
+    result = {}
     try:
         result = analyze_semantic_match(cv_text, job_description)
     except AIServiceError as exc:
@@ -561,6 +562,7 @@ async def recruiter_rank_candidates(
             }
         )
 
+    result = {}
     try:
         result = rank_candidates(candidates=candidates, job_description=job_description)
     except AIServiceError as exc:
@@ -618,3 +620,32 @@ async def recruiter_rank_candidates(
 async def rewrite_cv(
     file: UploadFile = File(...),
     job_description: str = Form(...),
+    current_user: User = Depends(get_current_user),
+):
+    if not current_user.is_pro:
+        raise HTTPException(status_code=403, detail="CV rewriting is a Pro feature.")
+
+    pdf_bytes = await file.read()
+
+    if not pdf_bytes:
+        raise HTTPException(status_code=400, detail="Uploaded PDF is empty.")
+
+    try:
+        cv_text = extract_text_from_pdf(pdf_bytes)
+    except Exception as exc:
+        raise HTTPException(status_code=400, detail=f"Could not extract text from PDF: {exc}")
+
+    if not cv_text.strip():
+        raise HTTPException(status_code=400, detail="Could not extract text from PDF.")
+
+    rewritten_cv = None
+    try:
+        rewritten_cv = rewrite_cv_with_ai(cv_text, job_description)
+    except AIServiceError as exc:
+        print("OPENAI REWRITE ERROR:", repr(exc))
+        raise_ai_http_exception(exc)
+
+    if not rewritten_cv:
+        raise HTTPException(status_code=500, detail="Failed to generate rewritten CV.")
+
+    return {"rewritten_cv": rewritten_cv}
