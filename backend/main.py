@@ -186,19 +186,23 @@ def root():
     }
 
 
-@app.get("/robots.txt", include_in_schema=True)
+@app.get("/robots.txt", include_in_schema=False)
 def robots_txt():
     """Public robots.txt used by Google Search Console."""
     robots_content = """User-agent: *
 Allow: /
 
-Sitemap: https://api.talentmatchcv.com/sitemap.xml
 Sitemap: https://talentmatchcv.com/sitemap.xml
 """
 
     return PlainTextResponse(
         content=robots_content,
         media_type="text/plain; charset=utf-8",
+        headers={
+            "Cache-Control": "no-store, no-cache, must-revalidate, max-age=0",
+            "Pragma": "no-cache",
+            "X-Content-Type-Options": "nosniff",
+        },
     )
 
 
@@ -207,7 +211,7 @@ def robots_txt_head():
     return Response(status_code=200, media_type="text/plain; charset=utf-8")
 
 
-@app.get("/sitemap.xml", include_in_schema=True)
+@app.get("/sitemap.xml", include_in_schema=False)
 def sitemap_xml():
     """Public XML sitemap used by Google Search Console."""
     sitemap_content = """<?xml version="1.0" encoding="UTF-8"?>
@@ -249,6 +253,12 @@ def sitemap_xml():
     return Response(
         content=sitemap_content,
         media_type="application/xml; charset=utf-8",
+        headers={
+            "Content-Type": "application/xml; charset=utf-8",
+            "Cache-Control": "no-store, no-cache, must-revalidate, max-age=0",
+            "Pragma": "no-cache",
+            "X-Content-Type-Options": "nosniff",
+        },
     )
 
 
