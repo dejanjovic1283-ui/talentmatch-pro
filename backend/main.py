@@ -11,7 +11,7 @@ import certifi
 from dotenv import load_dotenv
 from fastapi import Depends, FastAPI, File, Form, HTTPException, Request, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import FileResponse, StreamingResponse
+from fastapi.responses import FileResponse, PlainTextResponse, Response, StreamingResponse
 from sqlalchemy import text
 from sqlalchemy.orm import Session
 
@@ -186,32 +186,75 @@ def root():
     }
 
 
-@app.get("/robots.txt", include_in_schema=False)
+@app.get("/robots.txt", include_in_schema=True)
 def robots_txt():
-    robots_file = STATIC_DIR / "robots.txt"
+    """Public robots.txt used by Google Search Console."""
+    robots_content = """User-agent: *
+Allow: /
 
-    if not robots_file.exists():
-        raise HTTPException(status_code=404, detail="robots.txt not found.")
+Sitemap: https://api.talentmatchcv.com/sitemap.xml
+Sitemap: https://talentmatchcv.com/sitemap.xml
+"""
 
-    return FileResponse(
-        path=str(robots_file),
+    return PlainTextResponse(
+        content=robots_content,
         media_type="text/plain; charset=utf-8",
-        filename="robots.txt",
     )
 
 
-@app.get("/sitemap.xml", include_in_schema=False)
+@app.head("/robots.txt", include_in_schema=False)
+def robots_txt_head():
+    return Response(status_code=200, media_type="text/plain; charset=utf-8")
+
+
+@app.get("/sitemap.xml", include_in_schema=True)
 def sitemap_xml():
-    sitemap_file = STATIC_DIR / "sitemap.xml"
+    """Public XML sitemap used by Google Search Console."""
+    sitemap_content = """<?xml version="1.0" encoding="UTF-8"?>
+<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
 
-    if not sitemap_file.exists():
-        raise HTTPException(status_code=404, detail="sitemap.xml not found.")
+  <url>
+    <loc>https://talentmatchcv.com/</loc>
+    <changefreq>daily</changefreq>
+    <priority>1.0</priority>
+  </url>
 
-    return FileResponse(
-        path=str(sitemap_file),
+  <url>
+    <loc>https://talentmatchcv.com/pricing</loc>
+    <changefreq>weekly</changefreq>
+    <priority>0.9</priority>
+  </url>
+
+  <url>
+    <loc>https://talentmatchcv.com/privacy</loc>
+    <changefreq>yearly</changefreq>
+    <priority>0.6</priority>
+  </url>
+
+  <url>
+    <loc>https://talentmatchcv.com/terms</loc>
+    <changefreq>yearly</changefreq>
+    <priority>0.6</priority>
+  </url>
+
+  <url>
+    <loc>https://talentmatchcv.com/refund</loc>
+    <changefreq>yearly</changefreq>
+    <priority>0.6</priority>
+  </url>
+
+</urlset>
+"""
+
+    return Response(
+        content=sitemap_content,
         media_type="application/xml; charset=utf-8",
-        filename="sitemap.xml",
     )
+
+
+@app.head("/sitemap.xml", include_in_schema=False)
+def sitemap_xml_head():
+    return Response(status_code=200, media_type="application/xml; charset=utf-8")
 
 
 @app.get("/healthz")
