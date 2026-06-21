@@ -1,4 +1,0 @@
-User-agent: *
-Allow: /
-
-Sitemap: https://talentmatchcv.com/sitemap.xml
