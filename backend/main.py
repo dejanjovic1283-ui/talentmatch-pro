@@ -152,9 +152,9 @@ def create_analysis_history_record(
     """
     Centralized history writer for:
     - cv_analysis
-    - ats
-    - semantic
-    - recruiter
+    - ats_checker
+    - semantic_match
+    - recruiter_mode
     """
 
     storage_path = None
@@ -412,6 +412,8 @@ def extract_ats_keywords(text_value: str, limit: int = 30) -> list[str]:
 async def ats_test(
     file: UploadFile = File(...),
     job_description: str = Form(...),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
 ):
     pdf_bytes = await file.read()
 
@@ -441,21 +443,39 @@ async def ats_test(
     coverage = round((len(matched) / len(keywords)) * 100) if keywords else 0
     verdict = "ATS Strong" if coverage >= 80 else "ATS Good" if coverage >= 60 else "ATS Weak"
 
-    return {
+    recommendations = [
+        f"Add missing high-value keywords where truthful: {', '.join(missing[:8])}."
+        if missing
+        else "Your CV covers the main ATS keywords well.",
+        "Mirror important job-description terms naturally in your CV summary and experience bullets.",
+        "Use exact tool names where relevant, for example FastAPI, Docker, SQL, Firebase, OpenAI.",
+    ]
+
+    result = {
         "score": coverage,
         "coverage": coverage,
         "verdict": verdict,
         "total_keywords": len(keywords),
         "matched_keywords": matched,
         "missing_keywords": missing,
-        "recommendations": [
-            f"Add missing high-value keywords where truthful: {', '.join(missing[:8])}."
-            if missing
-            else "Your CV covers the main ATS keywords well.",
-            "Mirror important job-description terms naturally in your CV summary and experience bullets.",
-            "Use exact tool names where relevant, for example FastAPI, Docker, SQL, Firebase, OpenAI.",
-        ],
+        "recommendations": recommendations,
     }
+
+    create_analysis_history_record(
+        db,
+        current_user,
+        analysis_type="ats_checker",
+        cv_filename=file.filename,
+        pdf_bytes=pdf_bytes,
+        job_description=job_description,
+        score=coverage,
+        summary=f"ATS keyword check completed. Coverage: {coverage}%. Verdict: {verdict}.",
+        matched_skills=matched,
+        missing_skills=missing,
+        recommendations=recommendations,
+    )
+
+    return result
 
 
 @app.post("/ats-check")
@@ -514,7 +534,7 @@ async def ats_check(
     create_analysis_history_record(
         db,
         current_user,
-        analysis_type="ats",
+        analysis_type="ats_checker",
         cv_filename=file.filename,
         pdf_bytes=pdf_bytes,
         job_description=job_description,
@@ -563,7 +583,7 @@ async def semantic_match(
     create_analysis_history_record(
         db,
         current_user,
-        analysis_type="semantic",
+        analysis_type="semantic_match",
         cv_filename=file.filename,
         pdf_bytes=pdf_bytes,
         job_description=job_description,
@@ -634,7 +654,7 @@ async def recruiter_rank_candidates(
     create_analysis_history_record(
         db,
         current_user,
-        analysis_type="recruiter",
+        analysis_type="recruiter_mode",
         cv_filename=top_filename,
         pdf_bytes=first_pdf_bytes,
         job_description=job_description,
