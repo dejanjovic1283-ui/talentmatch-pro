@@ -4,6 +4,7 @@ import re
 import ssl
 from io import BytesIO
 from pathlib import Path
+from typing import NoReturn
 
 import certifi
 from dotenv import load_dotenv
@@ -48,6 +49,7 @@ def run_lightweight_migrations() -> None:
         "ALTER TABLE users ADD COLUMN paypal_customer_id VARCHAR",
         "ALTER TABLE users ADD COLUMN paypal_subscription_id VARCHAR",
         "ALTER TABLE users ADD COLUMN paypal_subscription_status VARCHAR",
+        "ALTER TABLE analysis_records ADD COLUMN analysis_type VARCHAR DEFAULT 'cv_analysis'",
     ]
 
     for migration in migrations:
@@ -123,7 +125,7 @@ def parse_json_list(value: str) -> list[str]:
     return [str(item).strip() for item in data if str(item).strip()]
 
 
-def raise_ai_http_exception(exc: AIServiceError) -> None:
+def raise_ai_http_exception(exc: AIServiceError) -> NoReturn:
     raise HTTPException(
         status_code=exc.status_code,
         detail={
@@ -131,6 +133,65 @@ def raise_ai_http_exception(exc: AIServiceError) -> None:
             "type": "ai_service_error",
         },
     )
+
+
+def create_analysis_history_record(
+    db: Session,
+    current_user: User,
+    *,
+    analysis_type: str,
+    cv_filename: str | None,
+    pdf_bytes: bytes | None,
+    job_description: str,
+    score: int,
+    summary: str,
+    matched_skills: list[str] | None = None,
+    missing_skills: list[str] | None = None,
+    recommendations: list[str] | None = None,
+) -> AnalysisRecord:
+    """
+    Centralized history writer for:
+    - cv_analysis
+    - ats
+    - semantic
+    - recruiter
+    """
+
+    storage_path = None
+
+    if pdf_bytes:
+        try:
+            storage_path = upload_pdf_to_firebase(
+                pdf_bytes,
+                current_user.id,
+                cv_filename or "resume.pdf",
+            )
+        except Exception as exc:
+            print("FIREBASE STORAGE ERROR:", repr(exc))
+            storage_path = None
+
+    record_kwargs = {
+        "user_id": current_user.id,
+        "cv_filename": cv_filename or "resume.pdf",
+        "cv_storage_path": storage_path,
+        "job_description": job_description,
+        "score": int(score or 0),
+        "summary": summary or "",
+        "matched_skills": json.dumps(matched_skills or []),
+        "missing_skills": json.dumps(missing_skills or []),
+        "recommendations": json.dumps(recommendations or []),
+    }
+
+    if hasattr(AnalysisRecord, "analysis_type"):
+        record_kwargs["analysis_type"] = analysis_type
+
+    record = AnalysisRecord(**record_kwargs)
+
+    db.add(record)
+    db.commit()
+    db.refresh(record)
+
+    return record
 
 
 @app.get("/")
@@ -244,34 +305,22 @@ async def analyze_resume(
         print("OPENAI ANALYSIS ERROR:", repr(exc))
         raise_ai_http_exception(exc)
 
-    try:
-        storage_path = upload_pdf_to_firebase(
-            pdf_bytes,
-            current_user.id,
-            file.filename or "resume.pdf",
-        )
-    except Exception as exc:
-        print("FIREBASE STORAGE ERROR:", repr(exc))
-        storage_path = None
-
     if result is None:
         raise HTTPException(status_code=502, detail="AI analysis returned no result.")
 
-    record = AnalysisRecord(
-        user_id=current_user.id,
+    create_analysis_history_record(
+        db,
+        current_user,
+        analysis_type="cv_analysis",
         cv_filename=file.filename,
-        cv_storage_path=storage_path,
+        pdf_bytes=pdf_bytes,
         job_description=job_description,
         score=result["score"],
         summary=result["summary"],
-        matched_skills=json.dumps(result["strengths"]),
-        missing_skills=json.dumps(result["weaknesses"]),
-        recommendations=json.dumps(result["recommendations"]),
+        matched_skills=result["strengths"],
+        missing_skills=result["weaknesses"],
+        recommendations=result["recommendations"],
     )
-
-    db.add(record)
-    db.commit()
-    db.refresh(record)
 
     get_user_usage(db, current_user)
 
@@ -413,14 +462,77 @@ async def ats_test(
 async def ats_check(
     file: UploadFile = File(...),
     job_description: str = Form(...),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
 ):
-    return await ats_test(file=file, job_description=job_description)
+    pdf_bytes = await file.read()
+
+    if not pdf_bytes:
+        raise HTTPException(status_code=400, detail="Uploaded PDF is empty.")
+
+    try:
+        cv_text = extract_text_from_pdf(pdf_bytes)
+    except Exception as exc:
+        raise HTTPException(status_code=400, detail=f"Could not extract text from PDF: {exc}")
+
+    if not cv_text.strip():
+        raise HTTPException(status_code=400, detail="Could not extract text from PDF.")
+
+    keywords = extract_ats_keywords(job_description)
+    cv_lower = cv_text.lower()
+
+    matched = []
+    missing = []
+
+    for keyword in keywords:
+        if keyword.lower() in cv_lower:
+            matched.append(keyword)
+        else:
+            missing.append(keyword)
+
+    coverage = round((len(matched) / len(keywords)) * 100) if keywords else 0
+    verdict = "ATS Strong" if coverage >= 80 else "ATS Good" if coverage >= 60 else "ATS Weak"
+
+    recommendations = [
+        f"Add missing high-value keywords where truthful: {', '.join(missing[:8])}."
+        if missing
+        else "Your CV covers the main ATS keywords well.",
+        "Mirror important job-description terms naturally in your CV summary and experience bullets.",
+        "Use exact tool names where relevant, for example FastAPI, Docker, SQL, Firebase, OpenAI.",
+    ]
+
+    result = {
+        "score": coverage,
+        "coverage": coverage,
+        "verdict": verdict,
+        "total_keywords": len(keywords),
+        "matched_keywords": matched,
+        "missing_keywords": missing,
+        "recommendations": recommendations,
+    }
+
+    create_analysis_history_record(
+        db,
+        current_user,
+        analysis_type="ats",
+        cv_filename=file.filename,
+        pdf_bytes=pdf_bytes,
+        job_description=job_description,
+        score=coverage,
+        summary=f"ATS keyword check completed. Coverage: {coverage}%. Verdict: {verdict}.",
+        matched_skills=matched,
+        missing_skills=missing,
+        recommendations=recommendations,
+    )
+
+    return result
 
 
 @app.post("/semantic-match")
 async def semantic_match(
     file: UploadFile = File(...),
     job_description: str = Form(...),
+    db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
     if not current_user.is_pro:
@@ -428,13 +540,19 @@ async def semantic_match(
 
     pdf_bytes = await file.read()
 
+    if not pdf_bytes:
+        raise HTTPException(status_code=400, detail="Uploaded PDF is empty.")
+
     try:
         cv_text = extract_text_from_pdf(pdf_bytes)
     except Exception as exc:
         raise HTTPException(status_code=400, detail=f"Could not extract text from PDF: {exc}")
 
+    if not cv_text.strip():
+        raise HTTPException(status_code=400, detail="Could not extract text from PDF.")
+
     try:
-        return analyze_semantic_match(cv_text, job_description)
+        result = analyze_semantic_match(cv_text, job_description)
     except AIServiceError as exc:
         print("SEMANTIC MATCH AI ERROR:", repr(exc))
         raise_ai_http_exception(exc)
@@ -442,11 +560,28 @@ async def semantic_match(
         print("SEMANTIC MATCH ERROR:", repr(exc))
         raise HTTPException(status_code=500, detail=f"Semantic match failed: {exc}")
 
+    create_analysis_history_record(
+        db,
+        current_user,
+        analysis_type="semantic",
+        cv_filename=file.filename,
+        pdf_bytes=pdf_bytes,
+        job_description=job_description,
+        score=result.get("score", result.get("match_score", 0)),
+        summary=result.get("summary", "Semantic match analysis completed."),
+        matched_skills=result.get("matched_skills", result.get("strengths", [])),
+        missing_skills=result.get("missing_skills", result.get("weaknesses", [])),
+        recommendations=result.get("recommendations", []),
+    )
+
+    return result
+
 
 @app.post("/recruiter/rank-candidates")
 async def recruiter_rank_candidates(
     files: list[UploadFile] = File(...),
     job_description: str = Form(...),
+    db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
     if not current_user.is_pro:
@@ -459,9 +594,15 @@ async def recruiter_rank_candidates(
         raise HTTPException(status_code=400, detail="Maximum 10 CV files allowed per ranking run.")
 
     candidates = []
+    first_pdf_bytes = None
+    first_filename = None
 
     for uploaded_file in files:
         pdf_bytes = await uploaded_file.read()
+
+        if first_pdf_bytes is None and pdf_bytes:
+            first_pdf_bytes = pdf_bytes
+            first_filename = uploaded_file.filename or "candidate.pdf"
 
         try:
             cv_text = extract_text_from_pdf(pdf_bytes) if pdf_bytes else ""
@@ -477,13 +618,37 @@ async def recruiter_rank_candidates(
         )
 
     try:
-        return rank_candidates(candidates=candidates, job_description=job_description)
+        result = rank_candidates(candidates=candidates, job_description=job_description)
     except AIServiceError as exc:
         print("RECRUITER AI ERROR:", repr(exc))
         raise_ai_http_exception(exc)
     except Exception as exc:
         print("RECRUITER RANKING ERROR:", repr(exc))
         raise HTTPException(status_code=500, detail=f"Recruiter ranking failed: {exc}")
+
+    ranked_candidates = result.get("candidates", result.get("ranked_candidates", []))
+    top_candidate = ranked_candidates[0] if ranked_candidates else {}
+    top_filename = top_candidate.get("filename", first_filename or "candidate.pdf")
+    top_score = top_candidate.get("score", result.get("score", 0))
+
+    create_analysis_history_record(
+        db,
+        current_user,
+        analysis_type="recruiter",
+        cv_filename=top_filename,
+        pdf_bytes=first_pdf_bytes,
+        job_description=job_description,
+        score=top_score,
+        summary=result.get(
+            "summary",
+            f"Recruiter ranking completed for {len(candidates)} candidate(s). Top candidate: {top_filename}.",
+        ),
+        matched_skills=top_candidate.get("matched_skills", top_candidate.get("strengths", [])),
+        missing_skills=top_candidate.get("missing_skills", top_candidate.get("weaknesses", [])),
+        recommendations=result.get("recommendations", top_candidate.get("recommendations", [])),
+    )
+
+    return result
 
 
 @app.post("/rewrite-cv")
@@ -547,21 +712,23 @@ async def create_analysis_pdf_report(
     )
 
 
-@app.get("/history", response_model=list[HistoryItemResponse])
+@app.get("/history")
 def get_history(
+    analysis_type: str | None = None,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    records = (
-        db.query(AnalysisRecord)
-        .filter(AnalysisRecord.user_id == current_user.id)
-        .order_by(AnalysisRecord.created_at.desc())
-        .all()
-    )
+    query = db.query(AnalysisRecord).filter(AnalysisRecord.user_id == current_user.id)
+
+    if analysis_type and hasattr(AnalysisRecord, "analysis_type"):
+        query = query.filter(AnalysisRecord.analysis_type == analysis_type)
+
+    records = query.order_by(AnalysisRecord.created_at.desc()).all()
 
     return [
         {
             "id": record.id,
+            "analysis_type": getattr(record, "analysis_type", "cv_analysis") or "cv_analysis",
             "cv_filename": record.cv_filename,
             "cv_storage_path": record.cv_storage_path,
             "job_description": record.job_description,
