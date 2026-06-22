@@ -19,7 +19,7 @@ What you will do:
 - Build and scale a FastAPI + Streamlit product
 - Integrate Firebase authentication and storage
 - Ship AI-powered CV analysis with OpenAI
-- Own billing workflows with Paddle
+- Own billing workflows with PayPal
 - Improve product reliability, UX, and deployment pipelines
 
 What we are looking for:

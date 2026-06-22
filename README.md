@@ -12,7 +12,7 @@ Analyze resumes, optimize ATS performance, perform semantic candidate matching, 
 ![Streamlit](https://img.shields.io/badge/Streamlit-Frontend-FF4B4B?style=for-the-badge&logo=streamlit)
 ![PostgreSQL](https://img.shields.io/badge/PostgreSQL-Database-336791?style=for-the-badge&logo=postgresql)
 ![Firebase](https://img.shields.io/badge/Firebase-Authentication-FFCA28?style=for-the-badge&logo=firebase)
-![Paddle](https://img.shields.io/badge/Paddle-Billing-purple?style=for-the-badge)
+![PayPal](https://img.shields.io/badge/PayPal-Billing-00457C?style=for-the-badge&logo=paypal)
 ![Render](https://img.shields.io/badge/Render-Deployment-black?style=for-the-badge)
 
 
@@ -41,7 +41,7 @@ TalentMatch Pro is a production-ready AI SaaS platform for job seekers, recruite
 - AI CV Rewrite
 - PDF Reporting
 - Firebase Authentication
-- Paddle Billing
+- PayPal Billing
 
 ---
 
@@ -109,7 +109,7 @@ FastAPI Backend
  ├── Firebase Auth
  ├── Firebase Storage
  ├── PostgreSQL
- └── Paddle Billing
+ └── PayPal Billing
 ```
 
 ---
@@ -179,7 +179,7 @@ Used for:
 
 ---
 
-# 💳 Paddle Billing
+# 💳 PayPal Billing
 
 Supported:
 - Monthly subscriptions
