@@ -204,7 +204,7 @@ def robots_txt():
     robots_content = """User-agent: *
 Allow: /
 
-Sitemap: https://talentmatchcv.com/sitemap.xml
+Sitemap: https://api.talentmatchcv.com/sitemap.xml
 """
 
     return PlainTextResponse(
@@ -230,7 +230,7 @@ def sitemap_xml():
 <urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
 
   <url>
-    <loc>https://talentmatchcv.com/</loc>
+    <loc>https://api.talentmatchcv.com/</loc>
     <changefreq>daily</changefreq>
     <priority>1.0</priority>
   </url>
