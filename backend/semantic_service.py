@@ -82,7 +82,7 @@ def extract_keywords(text: str, limit: int = 40) -> list[str]:
         "authentication", "auth", "storage", "billing", "deployment",
         "cloud", "pdf", "prompt", "database", "api", "apis", "mvp",
         "react", "typescript", "javascript", "aws", "gcp", "azure",
-        "kubernetes", "redis", "celery", "stripe", "lemonsqueezy",
+        "kubernetes", "redis", "celery", "paypal",
     ]
 
     ordered: list[str] = []
