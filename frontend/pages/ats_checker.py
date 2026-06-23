@@ -132,6 +132,12 @@ st.caption(
     "Check which job-description keywords your CV already covers and which ones are missing."
 )
 
+# TEMP DEBUG - remove after we confirm session/auth state.
+st.write("DEBUG TOKEN:", st.session_state.get("token"))
+st.write("DEBUG ID_TOKEN:", st.session_state.get("id_token"))
+st.write("DEBUG AUTH:", st.session_state.get("authenticated"))
+st.write("DEBUG USER:", st.session_state.get("user"))
+
 if not is_logged_in():
     st.warning("Please login before using ATS Checker.")
     st.stop()
@@ -160,7 +166,7 @@ if uploaded_file is not None:
 
 run_clicked = st.button(
     "Run ATS Checker",
-    use_container_width=True,
+    width="stretch",
     disabled=uploaded_file is None or not job_description.strip(),
 )
 
