@@ -330,7 +330,10 @@ for idx, item in enumerate(items, start=1):
             st.metric(label="Score", value=f"{score}/100")
         with top_right:
             st.caption("Type")
-            st.metric(label="Type", value=history_label(item))
+            st.metric(
+                label="Status",
+                value=history_label(item)
+            )
 
         if summary:
             st.markdown("**Summary**")
