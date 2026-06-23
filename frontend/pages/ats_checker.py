@@ -132,12 +132,6 @@ st.caption(
     "Check which job-description keywords your CV already covers and which ones are missing."
 )
 
-# TEMP DEBUG - remove after we confirm session/auth state.
-st.write("DEBUG TOKEN:", st.session_state.get("token"))
-st.write("DEBUG ID_TOKEN:", st.session_state.get("id_token"))
-st.write("DEBUG AUTH:", st.session_state.get("authenticated"))
-st.write("DEBUG USER:", st.session_state.get("user"))
-
 if not is_logged_in():
     st.warning("Please login before using ATS Checker.")
     st.stop()
