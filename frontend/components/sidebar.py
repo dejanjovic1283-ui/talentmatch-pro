@@ -11,7 +11,8 @@ def render_sidebar():
         st.divider()
 
         st.page_link("app.py", label="🏠 Dashboard")
-        st.page_link("pages/ats_checker.py", label="📄 ATS Checker")
+        st.page_link("pages/cv_analysis.py", label="📄 CV Analysis")
+        st.page_link("pages/ats_checker.py", label="📋 ATS Checker")
         st.page_link("pages/cv_rewrite.py", label="✍ CV Rewrite")
 
         if is_pro_user():
@@ -27,9 +28,9 @@ def render_sidebar():
 
         st.divider()
 
-        st.page_link("pages/Terms.py", label="📃 Terms")
-        st.page_link("pages/Privacy.py", label="🔒 Privacy")
-        st.page_link("pages/Refund.py", label="💸 Refund")
+        st.page_link("pages/terms.py", label="📃 Terms")
+        st.page_link("pages/privacy.py", label="🔒 Privacy")
+        st.page_link("pages/refund.py", label="💸 Refund")
 
         st.divider()
 

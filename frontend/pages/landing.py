@@ -53,7 +53,7 @@ def render_landing():
         cta1, cta2, cta3 = st.columns(3)
 
         with cta1:
-            st.page_link("pages/cv_analysis.py", label="Start CV Analysis", icon="📄")
+            st.page_link("pages/ats_checker.py", label="Start CV Analysis", icon="📄")
 
         with cta2:
             st.page_link("pages/ats_checker.py", label="Run ATS Checker", icon="🎯")
