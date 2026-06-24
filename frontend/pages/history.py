@@ -16,6 +16,7 @@ st.caption("View, filter, and export your previous CV analyses and reports.")
 
 TYPE_LABELS = {
     "cv_analysis": "CV Analysis",
+    "cv_rewrite": "CV Rewrite",
     "ats_checker": "ATS",
     "ats": "ATS",
     "semantic_match": "Semantic",
@@ -28,10 +29,12 @@ FILTER_OPTIONS = {
     "Semantic": "semantic_match",
     "Recruiter": "recruiter_mode",
     "CV Analysis": "cv_analysis",
+    "CV Rewrite": "cv_rewrite",
 }
 
 BADGE_STYLES = {
     "cv_analysis": ("CV Analysis", "#E8F0FE", "#174EA6"),
+    "cv_rewrite": ("CV Rewrite", "#E0F7FA", "#006064"),
     "ats_checker": ("ATS", "#E6F4EA", "#137333"),
     "semantic_match": ("Semantic", "#FEF7E0", "#B06000"),
     "recruiter_mode": ("Recruiter", "#F3E8FD", "#6A1B9A"),
@@ -224,7 +227,10 @@ with left:
         label_visibility="collapsed",
     )
 with right:
-    if st.button("Refresh history", use_container_width=True):
+    if st.button("Refresh history", width="stretch"):
+        for key in list(st.session_state.keys()):
+            if str(key).startswith("history_items::"):
+                st.session_state.pop(key, None)
         st.session_state.pop("history_items", None)
         st.session_state.pop("history_filter", None)
         st.rerun()
@@ -268,14 +274,16 @@ counts = {
     "semantic_match": sum(1 for item in all_items_for_counts if normalize_type(item) == "semantic_match"),
     "recruiter_mode": sum(1 for item in all_items_for_counts if normalize_type(item) == "recruiter_mode"),
     "cv_analysis": sum(1 for item in all_items_for_counts if normalize_type(item) == "cv_analysis"),
+    "cv_rewrite": sum(1 for item in all_items_for_counts if normalize_type(item) == "cv_rewrite"),
 }
 
-m1, m2, m3, m4, m5 = st.columns(5)
+m1, m2, m3, m4, m5, m6 = st.columns(6)
 m1.metric("Total", counts["total"])
 m2.metric("ATS", counts["ats_checker"])
 m3.metric("Semantic", counts["semantic_match"])
 m4.metric("Recruiter", counts["recruiter_mode"])
 m5.metric("CV Analysis", counts["cv_analysis"])
+m6.metric("CV Rewrite", counts["cv_rewrite"])
 
 st.divider()
 
@@ -288,7 +296,7 @@ with export_col1:
         data=csv_bytes,
         file_name="talentmatch_history.csv",
         mime="text/csv",
-        use_container_width=True,
+        width="stretch",
         disabled=not items,
     )
 with export_col2:
@@ -297,7 +305,7 @@ with export_col2:
         data=pdf_bytes or b"PDF export requires reportlab.",
         file_name="talentmatch_history.pdf",
         mime="application/pdf" if pdf_bytes else "text/plain",
-        use_container_width=True,
+        width="stretch",
         disabled=not items,
     )
 

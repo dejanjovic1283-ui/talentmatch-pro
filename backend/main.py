@@ -675,6 +675,7 @@ async def recruiter_rank_candidates(
 async def rewrite_cv(
     file: UploadFile = File(...),
     job_description: str = Form(...),
+    db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
     if not current_user.is_pro:
@@ -682,16 +683,42 @@ async def rewrite_cv(
 
     pdf_bytes = await file.read()
 
+    if not pdf_bytes:
+        raise HTTPException(status_code=400, detail="Uploaded PDF is empty.")
+
     try:
         cv_text = extract_text_from_pdf(pdf_bytes)
     except Exception as exc:
         raise HTTPException(status_code=400, detail=f"Could not extract text from PDF: {exc}")
 
+    if not cv_text.strip():
+        raise HTTPException(status_code=400, detail="Could not extract text from PDF.")
+
     try:
-        return rewrite_cv_with_ai(cv_text, job_description)
+        result = rewrite_cv_with_ai(cv_text, job_description)
     except AIServiceError as exc:
         print("OPENAI CV REWRITE ERROR:", repr(exc))
         raise_ai_http_exception(exc)
+
+    create_analysis_history_record(
+        db,
+        current_user,
+        analysis_type="cv_rewrite",
+        cv_filename=file.filename,
+        pdf_bytes=pdf_bytes,
+        job_description=job_description,
+        score=100,
+        summary="CV Rewrite completed successfully.",
+        matched_skills=[],
+        missing_skills=[],
+        recommendations=[
+            "Review the rewritten CV before sending it to employers.",
+            "Keep all claims accurate and truthful.",
+            "Tailor the final version to the exact job description.",
+        ],
+    )
+
+    return result
 
 
 @app.post("/reports/analysis-pdf")
