@@ -70,12 +70,12 @@ if is_logged_in():
     col_a, col_b = st.columns(2)
 
     with col_a:
-        if st.button("🔄 Refresh profile", use_container_width=True):
+        if st.button("🔄 Refresh profile", width="stretch"):
             refresh_profile()
             st.rerun()
 
     with col_b:
-        if st.button("🚪 Logout", use_container_width=True):
+        if st.button("🚪 Logout", width="stretch"):
             clear_auth()
             st.rerun()
 
