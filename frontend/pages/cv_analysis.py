@@ -1,3 +1,4 @@
+import json
 import os
 from datetime import datetime
 from typing import Any, Dict, Optional
@@ -5,7 +6,7 @@ from typing import Any, Dict, Optional
 import requests
 import streamlit as st
 
-from auth_utils import is_logged_in
+from auth_utils import is_logged_in, is_pro_user
 
 
 BACKEND_URL = os.getenv("BACKEND_URL", "https://api.talentmatchcv.com").rstrip("/")
@@ -76,6 +77,58 @@ def build_text_report(
     return "\n".join(lines)
 
 
+def create_pdf_report(
+    result: Dict[str, Any],
+    cv_filename: str,
+    job_description: str,
+) -> Optional[bytes]:
+    strengths = normalize_list(result.get("strengths") or result.get("matched_skills"))
+    weaknesses = normalize_list(result.get("weaknesses") or result.get("missing_skills"))
+    recommendations = normalize_list(result.get("recommendations"))
+
+    data = {
+        "cv_filename": cv_filename,
+        "score": str(result.get("score", 0)),
+        "summary": result.get("summary") or result.get("analysis") or "",
+        "strengths_json": json.dumps(strengths, ensure_ascii=False),
+        "weaknesses_json": json.dumps(weaknesses, ensure_ascii=False),
+        "recommendations_json": json.dumps(recommendations, ensure_ascii=False),
+        "job_description": job_description,
+    }
+
+    try:
+        response = requests.post(
+            api_url("/reports/analysis-pdf"),
+            headers=get_auth_headers(),
+            data=data,
+            timeout=120,
+        )
+
+        if response.status_code == 403:
+            st.warning("🔒 PDF Report is available in Pro.")
+            st.page_link("pages/pricing.py", label="💳 Upgrade to Pro")
+            return None
+
+        if response.status_code == 401:
+            st.error("You are not logged in or your session expired. Please log in again.")
+            return None
+
+        if response.status_code >= 400:
+            st.error(f"PDF report failed. Backend returned {response.status_code}.")
+            st.code(response.text)
+            return None
+
+        return response.content
+
+    except requests.exceptions.Timeout:
+        st.error("PDF report timed out. Please try again.")
+        return None
+
+    except Exception as exc:
+        st.error(f"PDF report failed: {exc}")
+        return None
+
+
 def render_score(score: Any) -> None:
     try:
         numeric_score = int(float(score))
@@ -138,13 +191,36 @@ def render_analysis_result(
     st.markdown("---")
     st.markdown("### Download Report")
 
-    st.download_button(
-        label="⬇️ Download Report TXT",
-        data=report_text.encode("utf-8"),
-        file_name="talentmatch_cv_analysis_report.txt",
-        mime="text/plain",
-        use_container_width=True,
-    )
+    col_txt, col_pdf = st.columns(2)
+
+    with col_txt:
+        st.download_button(
+            label="⬇️ Download Report TXT",
+            data=report_text.encode("utf-8"),
+            file_name="talentmatch_cv_analysis_report.txt",
+            mime="text/plain",
+            use_container_width=True,
+        )
+
+    with col_pdf:
+        if is_pro_user():
+            pdf_bytes = create_pdf_report(
+                result=result,
+                cv_filename=cv_filename,
+                job_description=job_description,
+            )
+
+            if pdf_bytes:
+                st.download_button(
+                    label="📄 Download PDF Report",
+                    data=pdf_bytes,
+                    file_name="talentmatch_cv_analysis_report.pdf",
+                    mime="application/pdf",
+                    use_container_width=True,
+                )
+        else:
+            st.info("🔒 PDF Report is available in Pro.")
+            st.page_link("pages/pricing.py", label="💳 Upgrade to Pro")
 
     with st.expander("Raw response"):
         st.json(result)
