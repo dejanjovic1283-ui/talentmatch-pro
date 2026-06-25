@@ -53,13 +53,13 @@ def render_landing():
         cta1, cta2, cta3 = st.columns(3)
 
         with cta1:
-            st.page_link("pages/ats_checker.py", label="Start CV Analysis", icon="📄")
+            st.page_link("pages/cv_analysis.py", label="AI CV Analysis", icon="🤖")
 
         with cta2:
-            st.page_link("pages/ats_checker.py", label="Run ATS Checker", icon="🎯")
+            st.page_link("pages/ats_checker.py", label="ATS Checker", icon="📋")
 
         with cta3:
-            st.page_link("pages/pricing.py", label="Upgrade to Pro", icon="💳")
+            st.page_link("pages/pricing.py", label="Go Pro - PDF & Advanced Tools", icon="💳")
 
     with col2:
         st.container(border=True).markdown(
@@ -195,7 +195,7 @@ def render_landing():
             """
         )
 
-        st.page_link("pages/pricing.py", label="💳 Upgrade with PayPal")
+        st.page_link("pages/pricing.py", label="💳 Upgrade with PayPal - $9/month")
 
     st.markdown("---")
 
@@ -314,7 +314,7 @@ def render_landing():
         st.page_link("pages/login.py", label="Login", icon="🔐")
 
     with cta_col3:
-        st.page_link("pages/ats_checker.py", label="ATS Checker", icon="🎯")
+        st.page_link("pages/ats_checker.py", label="ATS Checker", icon="📋")
 
     with cta_col4:
         st.page_link("pages/pricing.py", label="Pricing", icon="💳")
