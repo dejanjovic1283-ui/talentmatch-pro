@@ -16,10 +16,10 @@ def render_sidebar():
         st.page_link("pages/cv_rewrite.py", label="✍ CV Rewrite")
 
         if is_pro_user():
-            st.page_link("pages/semantic_match.py", label="🎯 Semantic Match")
+            st.page_link("pages/semantic_match.py", label="🧠 Semantic Match")
             st.page_link("pages/recruiter_mode.py", label="👥 Recruiter Mode")
         else:
-            st.page_link("pages/pricing.py", label="🎯 Semantic Match 🔒")
+            st.page_link("pages/pricing.py", label="🧠 Semantic Match 🔒")
             st.page_link("pages/pricing.py", label="👥 Recruiter Mode 🔒")
 
         st.page_link("pages/history.py", label="📜 History")

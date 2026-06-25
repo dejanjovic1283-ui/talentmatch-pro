@@ -323,3 +323,4 @@ def render_landing():
         "TalentMatch Pro is an AI SaaS MVP built for CV analysis, ATS optimization, "
         "semantic matching, recruiter workflows, and PayPal-powered subscriptions."
     )
+    
