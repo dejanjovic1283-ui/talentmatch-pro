@@ -4,7 +4,7 @@ from typing import Any, Dict, Optional
 import requests
 import streamlit as st
 
-from auth_utils import is_logged_in, is_pro_user, refresh_profile
+from auth_utils import is_logged_in
 
 
 BACKEND_URL = os.getenv("BACKEND_URL", "https://api.talentmatchcv.com").rstrip("/")
@@ -148,16 +148,7 @@ if not is_logged_in():
     st.page_link("pages/login.py", label="🔐 Login")
     st.stop()
 
-if not is_pro_user():
-    st.warning("CV Analysis is available for Pro users.")
-    col_a, col_b = st.columns(2)
-    with col_a:
-        st.page_link("pages/pricing.py", label="💳 Upgrade to Pro")
-    with col_b:
-        if st.button("🔄 Refresh profile", use_container_width=True):
-            refresh_profile()
-            st.rerun()
-    st.stop()
+
 
 with st.container(border=True):
     uploaded_file = st.file_uploader(
