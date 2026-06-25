@@ -1,17 +1,35 @@
 import csv
 import json
+import os
+from datetime import datetime
 from io import BytesIO, StringIO
 from urllib.parse import urlencode
 
+import requests
 import streamlit as st
 
-from auth_utils import api_get, is_logged_in
+from auth_utils import api_get, is_logged_in, is_pro_user
 
 
 st.set_page_config(page_title="History • TalentMatch Pro", page_icon="📜", layout="wide")
 
 st.title("📜 Analysis History")
 st.caption("View, filter, and export your previous CV analyses and reports.")
+
+
+BACKEND_URL = os.getenv("BACKEND_URL", "https://api.talentmatchcv.com").rstrip("/")
+
+
+def api_url(path: str) -> str:
+    clean_path = path if path.startswith("/") else f"/{path}"
+    return f"{BACKEND_URL}{clean_path}"
+
+
+def get_auth_headers() -> dict[str, str]:
+    token = st.session_state.get("access_token") or st.session_state.get("token")
+    if not token:
+        return {}
+    return {"Authorization": f"Bearer {token}"}
 
 
 TYPE_LABELS = {
@@ -207,6 +225,106 @@ def make_local_pdf(items: list[dict]) -> bytes | None:
     return buffer.getvalue()
 
 
+def build_text_report(item: dict) -> str:
+    cv_filename = item.get("cv_filename") or item.get("filename") or "CV"
+    score = item.get("score") or item.get("match_score") or 0
+    summary = item.get("summary") or item.get("analysis") or ""
+    strengths = safe_list(item.get("strengths") or item.get("matched_skills") or item.get("matched_keywords"))
+    weaknesses = safe_list(item.get("weaknesses") or item.get("missing_skills") or item.get("missing_keywords"))
+    recommendations = safe_list(item.get("recommendations"))
+    job_description = item.get("job_description") or item.get("job") or item.get("description") or ""
+
+    lines = [
+        "TalentMatch Pro - CV Analysis Report",
+        "=" * 42,
+        f"Generated: {datetime.utcnow().isoformat()} UTC",
+        f"CV file: {cv_filename}",
+        f"Type: {history_label(item)}",
+        f"Score: {score}/100",
+        "",
+        "Summary",
+        "-" * 20,
+        summary or "No summary returned.",
+        "",
+        "Strengths",
+        "-" * 20,
+    ]
+
+    lines.extend([f"- {value}" for value in strengths] or ["- No strengths returned."])
+
+    lines.extend(["", "Weaknesses / Gaps", "-" * 20])
+    lines.extend([f"- {value}" for value in weaknesses] or ["- No weaknesses returned."])
+
+    lines.extend(["", "Recommendations", "-" * 20])
+    lines.extend([f"- {value}" for value in recommendations] or ["- No recommendations returned."])
+
+    if job_description:
+        lines.extend(["", "Job Description", "-" * 20, str(job_description)])
+
+    return "\n".join(lines)
+
+
+def create_pdf_report(item: dict) -> bytes | None:
+    strengths = safe_list(item.get("strengths") or item.get("matched_skills") or item.get("matched_keywords"))
+    weaknesses = safe_list(item.get("weaknesses") or item.get("missing_skills") or item.get("missing_keywords"))
+    recommendations = safe_list(item.get("recommendations"))
+
+    data = {
+        "cv_filename": item.get("cv_filename") or item.get("filename") or "CV",
+        "score": str(item.get("score") or item.get("match_score") or 0),
+        "summary": item.get("summary") or item.get("analysis") or "",
+        "strengths_json": json.dumps(strengths, ensure_ascii=False),
+        "weaknesses_json": json.dumps(weaknesses, ensure_ascii=False),
+        "recommendations_json": json.dumps(recommendations, ensure_ascii=False),
+        "job_description": item.get("job_description") or item.get("job") or item.get("description") or "",
+    }
+
+    try:
+        response = requests.post(
+            api_url("/reports/analysis-pdf"),
+            headers=get_auth_headers(),
+            data=data,
+            timeout=120,
+        )
+
+        if response.status_code == 403:
+            st.warning("🔒 PDF Report is available in Pro.")
+            st.page_link("pages/pricing.py", label="💳 Upgrade to Pro")
+            return None
+
+        if response.status_code == 401:
+            st.error("You are not logged in or your session expired. Please log in again.")
+            return None
+
+        if response.status_code >= 400:
+            st.error(f"PDF report failed. Backend returned {response.status_code}.")
+            st.code(response.text)
+            return None
+
+        return response.content
+
+    except requests.exceptions.Timeout:
+        st.error("PDF report timed out. Please try again.")
+        return None
+
+    except Exception as exc:
+        st.error(f"PDF report failed: {exc}")
+        return None
+
+
+def safe_report_filename(cv_filename: str) -> str:
+    safe_name = "".join(
+        char if char.isalnum() or char in {"-", "_"} else "_"
+        for char in cv_filename.replace(".pdf", "")
+    ).strip("_")
+
+    if not safe_name:
+        safe_name = "talentmatch_cv"
+
+    return f"{safe_name}_talentmatch_report"
+
+
+
 def history_endpoint(selected_type: str | None) -> str:
     if not selected_type:
         return "/history"
@@ -368,3 +486,38 @@ for idx, item in enumerate(items, start=1):
             st.markdown("💡 **Recommendations**")
             for rec in recommendations:
                 st.markdown(f"- {rec}")
+
+        st.markdown("---")
+        st.markdown("### Download Report")
+
+        report_text = build_text_report(item)
+        report_filename = safe_report_filename(cv_file)
+
+        report_col1, report_col2 = st.columns(2)
+
+        with report_col1:
+            st.download_button(
+                label="⬇️ Download Report TXT",
+                data=report_text.encode("utf-8"),
+                file_name=f"{report_filename}.txt",
+                mime="text/plain",
+                width="stretch",
+                key=f"history_txt_{idx}_{cv_file}_{created_at}",
+            )
+
+        with report_col2:
+            if is_pro_user():
+                pdf_report_bytes = create_pdf_report(item)
+
+                if pdf_report_bytes:
+                    st.download_button(
+                        label="📄 Download PDF Report",
+                        data=pdf_report_bytes,
+                        file_name=f"{report_filename}.pdf",
+                        mime="application/pdf",
+                        width="stretch",
+                        key=f"history_pdf_{idx}_{cv_file}_{created_at}",
+                    )
+            else:
+                st.info("🔒 PDF Report is available in Pro.")
+                st.page_link("pages/pricing.py", label="💳 Upgrade to Pro")
