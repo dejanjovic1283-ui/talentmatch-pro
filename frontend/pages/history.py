@@ -2,7 +2,7 @@ import csv
 import json
 import os
 from datetime import datetime
-from io import BytesIO, StringIO
+from io import StringIO
 from urllib.parse import urlencode
 
 import requests
@@ -183,46 +183,6 @@ def make_local_csv(items: list[dict]) -> bytes:
         )
 
     return output.getvalue().encode("utf-8-sig")
-
-
-def make_local_pdf(items: list[dict]) -> bytes | None:
-    try:
-        from reportlab.lib.pagesizes import A4
-        from reportlab.lib.styles import getSampleStyleSheet
-        from reportlab.platypus import Paragraph, SimpleDocTemplate, Spacer
-    except Exception:
-        return None
-
-    buffer = BytesIO()
-    doc = SimpleDocTemplate(buffer, pagesize=A4, title="TalentMatch Pro History")
-    styles = getSampleStyleSheet()
-    story = [Paragraph("TalentMatch Pro - Analysis History", styles["Title"]), Spacer(1, 12)]
-
-    if not items:
-        story.append(Paragraph("No history records found.", styles["BodyText"]))
-    else:
-        for idx, item in enumerate(items, start=1):
-            cv_file = item.get("cv_filename") or item.get("filename") or "CV"
-            score = item.get("score") or item.get("match_score") or 0
-            created_at = item.get("created_at") or item.get("date") or ""
-            story.append(Paragraph(f"{idx}. {cv_file}", styles["Heading2"]))
-            story.append(Paragraph(f"Type: {history_label(item)} | Score: {score}/100 | Date: {created_at}", styles["BodyText"]))
-            if item.get("summary"):
-                story.append(Paragraph(f"Summary: {item.get('summary')}", styles["BodyText"]))
-            matched = safe_list(item.get("matched_skills") or item.get("strengths") or item.get("matched_keywords"))
-            missing = safe_list(item.get("missing_skills") or item.get("weaknesses") or item.get("missing_keywords"))
-            recs = safe_list(item.get("recommendations"))
-            if matched:
-                story.append(Paragraph("Matched: " + ", ".join(matched[:20]), styles["BodyText"]))
-            if missing:
-                story.append(Paragraph("Missing: " + ", ".join(missing[:20]), styles["BodyText"]))
-            if recs:
-                story.append(Paragraph("Recommendations: " + " | ".join(recs[:10]), styles["BodyText"]))
-            story.append(Spacer(1, 12))
-
-    doc.build(story)
-    buffer.seek(0)
-    return buffer.getvalue()
 
 
 def build_text_report(item: dict) -> str:
@@ -406,26 +366,15 @@ m6.metric("CV Rewrite", counts["cv_rewrite"])
 st.divider()
 
 csv_bytes = make_local_csv(items)
-pdf_bytes = make_local_pdf(items)
-export_col1, export_col2 = st.columns(2)
-with export_col1:
-    st.download_button(
-        "⬇️ Download History CSV",
-        data=csv_bytes,
-        file_name="talentmatch_history.csv",
-        mime="text/csv",
-        width="stretch",
-        disabled=not items,
-    )
-with export_col2:
-    st.download_button(
-        "📄 Download History PDF",
-        data=pdf_bytes or b"PDF export requires reportlab.",
-        file_name="talentmatch_history.pdf",
-        mime="application/pdf" if pdf_bytes else "text/plain",
-        width="stretch",
-        disabled=not items,
-    )
+
+st.download_button(
+    "⬇️ Download History CSV",
+    data=csv_bytes,
+    file_name="talentmatch_history.csv",
+    mime="text/csv",
+    width="stretch",
+    disabled=not items,
+)
 
 if not items:
     st.info("No analyses found for this filter.")
