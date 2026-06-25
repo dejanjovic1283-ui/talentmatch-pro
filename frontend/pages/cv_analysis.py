@@ -222,9 +222,6 @@ def render_analysis_result(
             st.info("🔒 PDF Report is available in Pro.")
             st.page_link("pages/pricing.py", label="💳 Upgrade to Pro")
 
-    with st.expander("Raw response"):
-        st.json(result)
-
 
 def analyze_resume(uploaded_file, job_description: str) -> Optional[Dict[str, Any]]:
     files = {
