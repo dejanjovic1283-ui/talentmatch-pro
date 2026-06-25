@@ -53,7 +53,7 @@ def render_landing():
         cta1, cta2, cta3 = st.columns(3)
 
         with cta1:
-            st.page_link("pages/cv_analysis.py", label="AI CV Analysis", icon="🤖")
+            st.page_link("pages/cv_analysis.py", label="CV Analysis", icon="📄")
 
         with cta2:
             st.page_link("pages/ats_checker.py", label="ATS Checker", icon="📋")
@@ -95,10 +95,10 @@ def render_landing():
     with feature2:
         st.container(border=True).markdown(
             """
-            ### 🎯 ATS Keyword Checker
+            ### 📋 ATS Checker
 
-            See which important job-description keywords your CV already covers
-            and which keywords are missing.
+            Analyze your CV against a job description and discover
+            which ATS keywords are present and which are missing.
             """
         )
 
