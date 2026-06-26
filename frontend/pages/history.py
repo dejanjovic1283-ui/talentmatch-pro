@@ -4,8 +4,9 @@ import os
 from datetime import datetime
 from io import BytesIO
 from urllib.parse import urlencode
-from typing import Any
+from typing import Any, Dict
 
+import requests
 import streamlit as st
 
 from auth_utils import api_get, is_logged_in, is_pro_user
@@ -455,6 +456,58 @@ def history_endpoint(selected_type: str | None) -> str:
     return "/history?" + urlencode({"analysis_type": selected_type})
 
 
+def get_auth_headers() -> Dict[str, str]:
+    token = st.session_state.get("access_token") or st.session_state.get("token")
+    if not token:
+        return {}
+    return {"Authorization": f"Bearer {token}"}
+
+
+def api_delete(path: str, timeout: int = 60):
+    clean_path = path if path.startswith("/") else f"/{path}"
+    return requests.delete(
+        f"{BACKEND_URL}{clean_path}",
+        headers=get_auth_headers(),
+        timeout=timeout,
+    )
+
+
+def clear_history_cache() -> None:
+    for key in list(st.session_state.keys()):
+        if str(key).startswith("history_items::"):
+            st.session_state.pop(key, None)
+    st.session_state.pop("history_items", None)
+    st.session_state.pop("history_filter", None)
+
+
+def delete_history_record(record_id: int) -> tuple[bool, str]:
+    try:
+        response = api_delete(f"/history/{record_id}")
+        if response.status_code in (200, 204):
+            return True, "History item deleted."
+        try:
+            detail = response.json()
+        except Exception:
+            detail = response.text
+        return False, f"Delete failed: {response.status_code} - {detail}"
+    except Exception as exc:
+        return False, f"Delete failed: {exc}"
+
+
+def delete_all_history_records() -> tuple[bool, str]:
+    try:
+        response = api_delete("/history")
+        if response.status_code in (200, 204):
+            return True, "All history items deleted."
+        try:
+            detail = response.json()
+        except Exception:
+            detail = response.text
+        return False, f"Delete all failed: {response.status_code} - {detail}"
+    except Exception as exc:
+        return False, f"Delete all failed: {exc}"
+
+
 if not is_logged_in():
     st.warning("Please login before viewing history.")
     st.page_link("pages/login.py", label="🔐 Go to Login")
@@ -470,11 +523,7 @@ with left:
     )
 with right:
     if st.button("Refresh history", width="stretch"):
-        for key in list(st.session_state.keys()):
-            if str(key).startswith("history_items::"):
-                st.session_state.pop(key, None)
-        st.session_state.pop("history_items", None)
-        st.session_state.pop("history_filter", None)
+        clear_history_cache()
         st.rerun()
 
 selected_type = FILTER_OPTIONS[selected_label]
@@ -622,6 +671,29 @@ with all_report_col2:
         st.info("🔒 History PDF Report is available in Pro.")
         st.page_link("pages/pricing.py", label="💳 Upgrade to Pro")
 
+st.markdown("## Danger Zone")
+with st.expander("🗑 Delete All History"):
+    st.warning("This deletes all history records for your account. This action cannot be undone.")
+    delete_all_confirm = st.text_input(
+        "Type DELETE ALL to confirm",
+        key="delete_all_history_confirm",
+    )
+    delete_all_disabled = delete_all_confirm.strip() != "DELETE ALL"
+    if st.button(
+        "🗑 Delete All History",
+        type="secondary",
+        width="stretch",
+        disabled=delete_all_disabled or not all_items_for_counts,
+        key="delete_all_history_button",
+    ):
+        ok, message = delete_all_history_records()
+        if ok:
+            st.success(message)
+            clear_history_cache()
+            st.rerun()
+        else:
+            st.error(message)
+
 st.divider()
 
 if not items:
@@ -720,3 +792,30 @@ for idx, item in enumerate(items, start=1):
             else:
                 st.info("🔒 PDF Report is available in Pro.")
                 st.page_link("pages/pricing.py", label="💳 Upgrade to Pro")
+
+        st.markdown("---")
+        st.markdown("### Delete History Item")
+        record_id = item.get("id")
+        if record_id is None:
+            st.info("This history item cannot be deleted because it has no record ID.")
+        else:
+            confirm_key = f"confirm_delete_{record_id}_{idx}"
+            button_key = f"delete_history_{record_id}_{idx}"
+            confirm_delete = st.checkbox(
+                "I understand this will permanently delete this history item.",
+                key=confirm_key,
+            )
+            if st.button(
+                "🗑 Delete this history item",
+                type="secondary",
+                width="stretch",
+                disabled=not confirm_delete,
+                key=button_key,
+            ):
+                ok, message = delete_history_record(int(record_id))
+                if ok:
+                    st.success(message)
+                    clear_history_cache()
+                    st.rerun()
+                else:
+                    st.error(message)
