@@ -495,6 +495,64 @@ items_raw = st.session_state.get(cache_key, [])
 items: list[dict] = items_raw if isinstance(items_raw, list) else []
 all_items_for_counts: list[dict] = items
 
+st.markdown("### 🔍 Search & Sort")
+
+search_col, sort_col = st.columns([2, 1])
+
+with search_col:
+    search_query = st.text_input(
+        "Search by CV filename",
+        placeholder="Example: 20260501_cv2.pdf",
+        label_visibility="collapsed",
+    )
+
+with sort_col:
+    sort_option = st.selectbox(
+        "Sort history",
+        ["Newest first", "Oldest first", "Highest score", "Lowest score"],
+        label_visibility="collapsed",
+    )
+
+filtered_items: list[dict] = items
+
+if search_query.strip():
+    query = search_query.strip().lower()
+    filtered_items = [
+        item
+        for item in filtered_items
+        if query
+        in str(
+            item.get("cv_filename")
+            or item.get("cv_file")
+            or item.get("filename")
+            or item.get("file_name")
+            or ""
+        ).lower()
+    ]
+
+
+def _sort_created_at(item: dict) -> str:
+    return str(item.get("created_at") or item.get("date") or "")
+
+
+def _sort_score(item: dict) -> int:
+    try:
+        return int(float(item.get("score") or item.get("match_score") or 0))
+    except Exception:
+        return 0
+
+
+if sort_option == "Newest first":
+    filtered_items = sorted(filtered_items, key=_sort_created_at, reverse=True)
+elif sort_option == "Oldest first":
+    filtered_items = sorted(filtered_items, key=_sort_created_at)
+elif sort_option == "Highest score":
+    filtered_items = sorted(filtered_items, key=_sort_score, reverse=True)
+elif sort_option == "Lowest score":
+    filtered_items = sorted(filtered_items, key=_sort_score)
+
+items = filtered_items
+
 if selected_type is not None:
     if "history_items::all" not in st.session_state:
         with st.spinner("Loading counters..."):
