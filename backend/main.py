@@ -790,6 +790,61 @@ def get_history(
     ]
 
 
+@app.delete("/history/{record_id}")
+def delete_history_record(
+    record_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    record = (
+        db.query(AnalysisRecord)
+        .filter(
+            AnalysisRecord.id == record_id,
+            AnalysisRecord.user_id == current_user.id,
+        )
+        .first()
+    )
+
+    if record is None:
+        raise HTTPException(
+            status_code=404,
+            detail="History record not found.",
+        )
+
+    db.delete(record)
+    db.commit()
+
+    get_user_usage(db, current_user)
+
+    return {
+        "success": True,
+        "message": "History record deleted.",
+        "deleted_id": record_id,
+    }
+
+
+@app.delete("/history")
+def delete_all_history(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    deleted = (
+        db.query(AnalysisRecord)
+        .filter(AnalysisRecord.user_id == current_user.id)
+        .delete(synchronize_session=False)
+    )
+
+    db.commit()
+
+    get_user_usage(db, current_user)
+
+    return {
+        "success": True,
+        "deleted": deleted,
+        "message": f"{deleted} history record(s) deleted.",
+    }
+
+
 @app.get("/history-test")
 def get_history_test():
     return [
