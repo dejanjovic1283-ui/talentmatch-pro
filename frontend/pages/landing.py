@@ -53,13 +53,13 @@ def render_landing():
         cta1, cta2, cta3 = st.columns(3)
 
         with cta1:
-            st.page_link("pages/cv_analysis.py", label="CV Analysis", icon="📄")
+            st.page_link("pages/ats_checker.py", label="Start CV Analysis", icon="📄")
 
         with cta2:
-            st.page_link("pages/ats_checker.py", label="ATS Checker", icon="📋")
+            st.page_link("pages/ats_checker.py", label="Run ATS Checker", icon="🎯")
 
         with cta3:
-            st.page_link("pages/pricing.py", label="Go Pro - PDF & Advanced Tools", icon="💳")
+            st.page_link("pages/pricing.py", label="Upgrade to Pro", icon="💳")
 
     with col2:
         st.container(border=True).markdown(
@@ -95,10 +95,10 @@ def render_landing():
     with feature2:
         st.container(border=True).markdown(
             """
-            ### 📋 ATS Checker
+            ### 🎯 ATS Keyword Checker
 
-            Analyze your CV against a job description and discover
-            which ATS keywords are present and which are missing.
+            See which important job-description keywords your CV already covers
+            and which keywords are missing.
             """
         )
 
@@ -195,7 +195,7 @@ def render_landing():
             """
         )
 
-        st.page_link("pages/pricing.py", label="💳 Upgrade with PayPal - $9/month")
+        st.page_link("pages/pricing.py", label="💳 Upgrade with PayPal")
 
     st.markdown("---")
 
@@ -314,7 +314,7 @@ def render_landing():
         st.page_link("pages/login.py", label="Login", icon="🔐")
 
     with cta_col3:
-        st.page_link("pages/ats_checker.py", label="ATS Checker", icon="📋")
+        st.page_link("pages/ats_checker.py", label="ATS Checker", icon="🎯")
 
     with cta_col4:
         st.page_link("pages/pricing.py", label="Pricing", icon="💳")
@@ -323,4 +323,3 @@ def render_landing():
         "TalentMatch Pro is an AI SaaS MVP built for CV analysis, ATS optimization, "
         "semantic matching, recruiter workflows, and PayPal-powered subscriptions."
     )
-    
