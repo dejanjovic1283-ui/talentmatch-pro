@@ -56,7 +56,7 @@ def render_landing():
             st.page_link("pages/ats_checker.py", label="Start CV Analysis", icon="📄")
 
         with cta2:
-            st.page_link("pages/ats_checker.py", label="Run ATS Checker", icon="🎯")
+            st.page_link("pages/ats_checker.py",label="ATS Checker",icon="📋")
 
         with cta3:
             st.page_link("pages/pricing.py", label="Upgrade to Pro", icon="💳")
@@ -95,7 +95,7 @@ def render_landing():
     with feature2:
         st.container(border=True).markdown(
             """
-            ### 🎯 ATS Keyword Checker
+            ### 📋 ATS Keyword Checker
 
             See which important job-description keywords your CV already covers
             and which keywords are missing.
@@ -314,7 +314,7 @@ def render_landing():
         st.page_link("pages/login.py", label="Login", icon="🔐")
 
     with cta_col3:
-        st.page_link("pages/ats_checker.py", label="ATS Checker", icon="🎯")
+        st.page_link("pages/ats_checker.py",label="ATS Checker",icon="📋")
 
     with cta_col4:
         st.page_link("pages/pricing.py", label="Pricing", icon="💳")
