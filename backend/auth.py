@@ -1,4 +1,8 @@
+from __future__ import annotations
+
 import os
+from typing import Any
+
 import requests
 from fastapi import Depends, HTTPException
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
@@ -10,32 +14,84 @@ from models import User
 bearer_scheme = HTTPBearer(auto_error=False)
 
 
-def verify_firebase_token_with_rest(token: str) -> dict:
+def _clean_text(value: Any) -> str:
+    """Return a safe, stripped string value."""
+    if value is None:
+        return ""
+    return str(value).strip()
+
+
+def _name_from_email(email: str) -> str:
+    """Create a friendly fallback name from an email address."""
+    local_part = _clean_text(email).split("@", 1)[0]
+    if not local_part:
+        return "TalentMatch User"
+
+    parts = [part for part in local_part.replace(".", " ").replace("_", " ").replace("-", " ").split() if part]
+    if not parts:
+        return "TalentMatch User"
+
+    return " ".join(part.capitalize() for part in parts[:3])
+
+
+def _firebase_display_name(firebase_user: dict[str, Any], email: str) -> str:
+    """Read the best available display name from Firebase lookup data."""
+    direct_name = _clean_text(firebase_user.get("displayName"))
+    if direct_name:
+        return direct_name
+
+    providers = firebase_user.get("providerUserInfo") or []
+    if isinstance(providers, list):
+        for provider in providers:
+            if not isinstance(provider, dict):
+                continue
+            provider_name = _clean_text(provider.get("displayName"))
+            if provider_name:
+                return provider_name
+
+    return _name_from_email(email)
+
+
+def verify_firebase_token_with_rest(token: str) -> dict[str, Any]:
+    """Verify a Firebase ID token through the Firebase Identity Toolkit REST API."""
     api_key = os.getenv("FIREBASE_API_KEY", "")
 
     if not api_key:
         raise HTTPException(status_code=401, detail="FIREBASE_API_KEY missing on backend.")
 
     url = f"https://identitytoolkit.googleapis.com/v1/accounts:lookup?key={api_key}"
-    response = requests.post(url, json={"idToken": token}, timeout=30)
+
+    try:
+        response = requests.post(url, json={"idToken": token}, timeout=30)
+    except requests.RequestException as exc:
+        raise HTTPException(status_code=401, detail=f"Firebase verification failed: {exc}") from exc
 
     if response.status_code != 200:
         print("FIREBASE REST VERIFY ERROR:", response.text)
         raise HTTPException(status_code=401, detail="Invalid Firebase token.")
 
-    data = response.json()
+    try:
+        data = response.json()
+    except Exception as exc:
+        raise HTTPException(status_code=401, detail="Firebase returned invalid verification response.") from exc
+
     users = data.get("users", [])
 
     if not users:
         raise HTTPException(status_code=401, detail="Firebase user not found.")
 
-    return users[0]
+    first_user = users[0]
+    if not isinstance(first_user, dict):
+        raise HTTPException(status_code=401, detail="Invalid Firebase user payload.")
+
+    return first_user
 
 
 def get_current_user(
     credentials: HTTPAuthorizationCredentials | None = Depends(bearer_scheme),
     db: Session = Depends(get_db),
 ) -> User:
+    """Return the authenticated app user and keep profile fields synced."""
     if credentials is None or credentials.scheme.lower() != "bearer":
         raise HTTPException(status_code=401, detail="Missing Authorization Bearer token.")
 
@@ -46,8 +102,9 @@ def get_current_user(
 
     firebase_user = verify_firebase_token_with_rest(token)
 
-    firebase_uid = firebase_user.get("localId")
-    email = firebase_user.get("email", "")
+    firebase_uid = _clean_text(firebase_user.get("localId"))
+    email = _clean_text(firebase_user.get("email")).lower()
+    full_name = _firebase_display_name(firebase_user, email)
 
     if not firebase_uid:
         raise HTTPException(status_code=401, detail="Firebase UID missing.")
@@ -58,10 +115,27 @@ def get_current_user(
         user = User(
             firebase_uid=firebase_uid,
             email=email,
-            full_name=email or None,
+            full_name=full_name,
             plan="free",
             is_pro=False,
         )
+        db.add(user)
+        db.commit()
+        db.refresh(user)
+        return user
+
+    changed = False
+
+    if email and getattr(user, "email", None) != email:
+        user.email = email
+        changed = True
+
+    current_name = _clean_text(getattr(user, "full_name", ""))
+    if full_name and (not current_name or current_name.lower() == email.lower()):
+        user.full_name = full_name
+        changed = True
+
+    if changed:
         db.add(user)
         db.commit()
         db.refresh(user)
@@ -70,6 +144,7 @@ def get_current_user(
 
 
 def get_test_user(db: Session = Depends(get_db)) -> User:
+    """Return a local development user for test-only endpoints."""
     user = db.query(User).filter(User.email == "local-test@talentmatch.dev").first()
 
     if user:
