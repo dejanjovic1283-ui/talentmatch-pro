@@ -141,7 +141,7 @@ st.markdown(
 
 render_hero(
     "Premium PayPal pricing",
-    "Start free. Upgrade when you are ready.",
+    "Start Free. Upgrade Anytime.",
     "TalentMatch Pro gives you a complete AI CV workspace: ATS optimization, CV rewrite, semantic matching, recruiter workflows and professional PDF reports.",
     "💳",
 )

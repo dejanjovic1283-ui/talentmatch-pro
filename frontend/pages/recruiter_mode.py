@@ -189,7 +189,7 @@ def render_results(result: Dict[str, Any]) -> None:
     candidates = result.get("candidates", [])
 
     st.success("Candidate ranking completed.")
-    st.markdown('<div class="tm-section-title">Candidate ranking result</div>', unsafe_allow_html=True)
+    st.markdown('<div class="tm-section-title">Recruiter Ranking Report</div>', unsafe_allow_html=True)
 
     col1, col2, col3 = st.columns(3)
     with col1:
@@ -207,7 +207,7 @@ def render_results(result: Dict[str, Any]) -> None:
         st.markdown(
             f"""
             <div class="tm-card" style="margin:1rem 0">
-                <div class="tm-kicker">Best match</div>
+                <div class="tm-kicker">Top Candidate</div>
                 <div class="tm-card-title">🏆 {safe_html(top_candidate.get('filename', '-'))} — {top_score}/100</div>
                 <div class="tm-muted">{safe_html(top_candidate.get('verdict', 'Top ranked candidate'))}</div>
             </div>
@@ -244,7 +244,7 @@ def render_results(result: Dict[str, Any]) -> None:
 
     csv_data = df.to_csv(index=False).encode("utf-8")
     st.download_button(
-        "📥 Download Ranking CSV",
+        "📥 Export Ranking (.csv)",
         data=csv_data,
         file_name="talentmatch_candidate_ranking.csv",
         mime="text/csv",
@@ -257,9 +257,9 @@ def render_results(result: Dict[str, Any]) -> None:
 
 
 render_hero(
-    "Recruiter intelligence",
     "Recruiter Mode",
-    "Upload up to 10 candidate CVs and rank them against one job description with semantic AI scoring and recruiter-ready summaries.",
+    "Recruiter Mode",
+    "Rank candidates with AI-powered recruiter analysis.",
     "🏆",
 )
 
@@ -282,7 +282,7 @@ with left:
         unsafe_allow_html=True,
     )
     uploaded_files = st.file_uploader(
-        "Upload candidate CVs as PDFs",
+        "Upload Candidate CVs (PDF)",
         type=["pdf"],
         accept_multiple_files=True,
     )
@@ -299,10 +299,10 @@ with right:
         """,
         unsafe_allow_html=True,
     )
-    job_description = st.text_area("Paste the job description", value=DEFAULT_JOB_DESCRIPTION, height=330)
+    job_description = st.text_area("Job Description", value=DEFAULT_JOB_DESCRIPTION, height=330)
 
 if st.button(
-    "🚀 Rank Candidates",
+    "🚀 Analyze Candidates",
     use_container_width=True,
     disabled=not uploaded_files or not job_description.strip(),
 ):

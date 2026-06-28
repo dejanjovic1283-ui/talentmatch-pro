@@ -9,7 +9,7 @@ from components.sidebar import render_sidebar
 from components.ui import apply_global_styles, render_hero, safe_html
 
 
-st.set_page_config(page_title="ATS Checker • TalentMatch Pro", page_icon="🎯", layout="wide")
+st.set_page_config(page_title="ATS Checker • TalentMatch Pro", page_icon="📋", layout="wide")
 apply_global_styles()
 render_sidebar()
 
@@ -165,7 +165,7 @@ def render_results(data: Dict[str, Any]) -> None:
     st.progress(numeric_score)
     st.caption(message)
 
-    st.markdown('<div class="tm-section-title">Keyword coverage</div>', unsafe_allow_html=True)
+    st.markdown('<div class="tm-section-title">ATS Coverage</div>', unsafe_allow_html=True)
     col1, col2 = st.columns(2)
     with col1:
         render_keyword_group(
@@ -184,7 +184,7 @@ def render_results(data: Dict[str, Any]) -> None:
             green=False,
         )
 
-    st.markdown('<div class="tm-section-title">AI recommendations</div>', unsafe_allow_html=True)
+    st.markdown('<div class="tm-section-title">AI Improvements</div>', unsafe_allow_html=True)
     render_recommendations(recommendations)
 
     report_lines = [
@@ -205,7 +205,7 @@ def render_results(data: Dict[str, Any]) -> None:
     ]
 
     st.download_button(
-        "📥 Download ATS Summary",
+        "📥 Export ATS Report (.txt)",
         data="\n".join(report_lines),
         file_name="talentmatch_ats_checker_summary.txt",
         mime="text/plain",
@@ -214,10 +214,10 @@ def render_results(data: Dict[str, Any]) -> None:
 
 
 render_hero(
-    "ATS keyword intelligence",
     "ATS Checker",
-    "Upload your CV, paste a job description and see which keywords are matched, missing and worth adding before you apply.",
-    "🎯",
+    "ATS Checker",
+    "Optimize your CV before every application.",
+    "📋",
 )
 
 if not is_logged_in():
@@ -238,7 +238,7 @@ with left:
         """,
         unsafe_allow_html=True,
     )
-    uploaded_file = st.file_uploader("Upload your CV as a PDF", type=["pdf"])
+    uploaded_file = st.file_uploader("Upload CV (PDF)", type=["pdf"])
     if uploaded_file is not None:
         st.success(f"Selected file: {uploaded_file.name} ({uploaded_file.size / 1024:.1f} KB)")
 
@@ -253,13 +253,13 @@ with right:
         unsafe_allow_html=True,
     )
     job_description = st.text_area(
-        "Paste the job description",
+        "Job Description",
         height=310,
         placeholder=EXAMPLE_JOB_DESCRIPTION,
     )
 
 run_clicked = st.button(
-    "🚀 Run ATS Checker",
+    "🚀 Analyze ATS Match",
     use_container_width=True,
     disabled=uploaded_file is None or not job_description.strip(),
 )

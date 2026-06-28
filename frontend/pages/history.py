@@ -21,9 +21,9 @@ apply_global_styles()
 render_sidebar()
 
 render_hero(
-    "Analysis history",
+    "History",
     "Your saved TalentMatch Pro reports",
-    "Search, filter, sort and export previous CV analyses with branded PDF reports.",
+    "Browse, search and export your TalentMatch reports.",
     "📜",
 )
 
@@ -657,7 +657,7 @@ with control_left:
     )
 
 with control_right:
-    if st.button("🔄 Refresh history", use_container_width=True):
+    if st.button("🔄 Refresh", use_container_width=True):
         clear_history_cache()
         st.rerun()
 
@@ -716,8 +716,8 @@ search_col, sort_col = st.columns([2, 1])
 
 with search_col:
     search_query = st.text_input(
-        "Search by CV filename",
-        placeholder="Example: dejan_cv.pdf",
+        "Search reports",
+        placeholder="Search by filename...",
         label_visibility="collapsed",
     )
 
@@ -763,7 +763,7 @@ download_col1, download_col2 = st.columns(2)
 
 with download_col1:
     st.download_button(
-        "⬇️ Download History TXT",
+        "⬇️ Export History (.txt)",
         data=history_txt.encode("utf-8"),
         file_name="talentmatch_history.txt",
         mime="text/plain",
@@ -774,7 +774,7 @@ with download_col1:
 with download_col2:
     if is_pro_user():
         st.download_button(
-            "📄 Download History PDF Report",
+            "📄 Export History PDF",
             data=history_pdf or b"PDF export requires reportlab.",
             file_name="talentmatch_history_report.pdf",
             mime="application/pdf" if history_pdf else "text/plain",
@@ -885,13 +885,13 @@ for idx, item in enumerate(items, start=1):
                 st.markdown(f"- {recommendation}")
 
         st.markdown("---")
-        st.markdown("### Download Report")
+        st.markdown("### Export Report")
 
         report_col1, report_col2 = st.columns(2)
 
         with report_col1:
             st.download_button(
-                label="⬇️ Download Report TXT",
+                label="⬇️ Export Report (.txt)",
                 data=report_text.encode("utf-8"),
                 file_name=f"{report_filename}.txt",
                 mime="text/plain",
@@ -902,7 +902,7 @@ for idx, item in enumerate(items, start=1):
         with report_col2:
             if is_pro_user():
                 st.download_button(
-                    label="📄 Download PDF Report",
+                    label="📄 Export PDF Report",
                     data=item_pdf_bytes or b"PDF export requires reportlab.",
                     file_name=f"{report_filename}.pdf",
                     mime="application/pdf" if item_pdf_bytes else "text/plain",

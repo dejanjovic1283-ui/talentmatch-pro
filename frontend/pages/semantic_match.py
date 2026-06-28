@@ -158,7 +158,7 @@ def render_results(result: Dict[str, Any]) -> None:
     label, message, icon = verdict_level(combined_score)
 
     st.success("Semantic match completed.")
-    st.markdown('<div class="tm-section-title">Semantic match result</div>', unsafe_allow_html=True)
+    st.markdown('<div class="tm-section-title">AI Match Report</div>', unsafe_allow_html=True)
 
     st.markdown(
         f"""
@@ -184,7 +184,7 @@ def render_results(result: Dict[str, Any]) -> None:
     summary = str(result.get("summary") or "")
     render_text_card("Recruiter summary", summary, "📝")
 
-    st.markdown('<div class="tm-section-title">Theme coverage</div>', unsafe_allow_html=True)
+    st.markdown('<div class="tm-section-title">Semantic Coverage</div>', unsafe_allow_html=True)
     left, right = st.columns(2)
     with left:
         render_chip_group("Matched themes", extract_list(result, "matched_themes"), "No matched themes returned.", "✅", True)
@@ -194,7 +194,7 @@ def render_results(result: Dict[str, Any]) -> None:
     st.markdown('<div class="tm-section-title">AI recommendations</div>', unsafe_allow_html=True)
     render_recommendations(extract_list(result, "recommendations"))
 
-    st.markdown('<div class="tm-section-title">Keyword details</div>', unsafe_allow_html=True)
+    st.markdown('<div class="tm-section-title">Keyword Analysis</div>', unsafe_allow_html=True)
     kw_left, kw_right = st.columns(2)
     with kw_left:
         render_chip_group("Matched keywords", extract_list(result, "matched_keywords"), "No matched keywords returned.", "✅", True)
@@ -223,7 +223,7 @@ def render_results(result: Dict[str, Any]) -> None:
         *[f"- {item}" for item in extract_list(result, "recommendations")],
     ]
     st.download_button(
-        "📥 Download Semantic Match Summary",
+        "📥 Export Semantic Report (.txt)",
         data="\n".join(report_lines),
         file_name="talentmatch_semantic_match_summary.txt",
         mime="text/plain",
@@ -232,9 +232,9 @@ def render_results(result: Dict[str, Any]) -> None:
 
 
 render_hero(
-    "AI semantic intelligence",
     "Semantic Match",
-    "Compare your CV with a job description using semantic AI matching, keyword coverage and recruiter-style recommendations.",
+    "Semantic Match",
+    "Compare your CV with AI-powered semantic matching.",
     "🧠",
 )
 
@@ -256,7 +256,7 @@ with left:
         """,
         unsafe_allow_html=True,
     )
-    uploaded_file = st.file_uploader("Upload your CV as a PDF", type=["pdf"], accept_multiple_files=False)
+    uploaded_file = st.file_uploader("Upload CV (PDF)", type=["pdf"], accept_multiple_files=False)
     if uploaded_file is not None:
         file_size_kb = len(uploaded_file.getvalue()) / 1024
         st.success(f"Selected file: {uploaded_file.name} ({file_size_kb:.1f} KB)")
@@ -271,10 +271,10 @@ with right:
         """,
         unsafe_allow_html=True,
     )
-    job_description = st.text_area("Paste the job description", value=DEFAULT_JOB_DESCRIPTION, height=330)
+    job_description = st.text_area("Job Description", value=DEFAULT_JOB_DESCRIPTION, height=330)
 
 if st.button(
-    "🚀 Run Semantic Match",
+    "🚀 Analyze Semantic Match",
     use_container_width=True,
     disabled=uploaded_file is None or not job_description.strip(),
 ):

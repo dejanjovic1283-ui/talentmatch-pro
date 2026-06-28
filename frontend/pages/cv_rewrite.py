@@ -166,7 +166,7 @@ def render_rewrite_result(result: Dict[str, Any]) -> None:
     )
 
     st.download_button(
-        "📥 Download Rewrite",
+        "📥 Export Rewrite (.txt)",
         data=report,
         file_name="talentmatch_cv_rewrite.txt",
         mime="text/plain",
@@ -200,7 +200,7 @@ with left:
         unsafe_allow_html=True,
     )
     uploaded_file = st.file_uploader(
-        "Upload your CV as a PDF",
+        "Upload CV (PDF)",
         type=["pdf"],
         accept_multiple_files=False,
     )
@@ -219,7 +219,7 @@ with right:
         unsafe_allow_html=True,
     )
     job_description = st.text_area(
-        "Paste the job description",
+        "Job Description",
         value=DEFAULT_JOB_DESCRIPTION,
         height=330,
     )
