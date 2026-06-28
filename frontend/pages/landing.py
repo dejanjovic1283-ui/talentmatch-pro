@@ -61,12 +61,13 @@ def _feature_chip(text: str, green: bool = False) -> str:
 
 
 def _status_row(label: str, value: str, icon: str = "✅") -> str:
-    return f"""
-        <div style="display:flex;align-items:center;justify-content:space-between;gap:1rem;padding:.72rem 0;border-bottom:1px solid rgba(148,163,184,.18)">
-            <div style="font-weight:850;color:#0f172a">{safe_html(icon)} {safe_html(label)}</div>
-            <div class="tm-muted">{safe_html(value)}</div>
-        </div>
-    """
+    return (
+        '<div style="display:flex;align-items:center;justify-content:space-between;gap:1rem;'
+        'padding:.72rem 0;border-bottom:1px solid rgba(148,163,184,.18)">'
+        f'<div style="font-weight:850;color:#0f172a">{safe_html(icon)} {safe_html(label)}</div>'
+        f'<div class="tm-muted">{safe_html(value)}</div>'
+        '</div>'
+    )
 
 
 def _render_seo_tags() -> None:
@@ -129,7 +130,7 @@ def _render_quick_actions() -> None:
     with q1:
         _action_card(
             "ATS Checker",
-            "Upload a CV and compare keyword coverage against a job description.",
+            "Upload a CV and compare ATS keyword coverage against a job description.",
             "🎯",
             "pages/ats_checker.py",
             "🚀 Start ATS Checker",
@@ -234,7 +235,7 @@ def _render_core_features() -> None:
         )
     with f2:
         _html_card(
-            "ATS Keyword Checker",
+            "ATS Checker",
             "Find covered and missing keywords so your CV is easier for applicant tracking systems to understand.",
             "🎯",
         )
