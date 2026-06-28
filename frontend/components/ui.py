@@ -21,40 +21,89 @@ import streamlit as st
 
 def get_user_email() -> str:
     """Return the best available user email from Streamlit session state."""
-    return (
+    user = st.session_state.get("user")
+    profile = st.session_state.get("profile")
+
+    user_email = user.get("email", "") if isinstance(user, dict) else ""
+    profile_email = profile.get("email", "") if isinstance(profile, dict) else ""
+
+    return str(
         st.session_state.get("email")
         or st.session_state.get("user_email")
-        or st.session_state.get("user", {}).get("email", "")
-        or st.session_state.get("profile", {}).get("email", "")
+        or user_email
+        or profile_email
         or ""
-    )
+    ).strip()
 
 
 
-def get_display_name(default: str = "Dejan Jovic") -> str:
-    """Return a friendly display name, falling back to a parsed email local part."""
-    for key in ("display_name", "name", "full_name"):
-        value = st.session_state.get(key)
-        if value:
-            return str(value).strip()
+def _split_compact_name(value: str) -> str:
+    """Convert compact names like DejanJovic1283 into Dejan Jovic."""
+    text = str(value or "").strip()
+    if not text:
+        return ""
 
-    for source in (st.session_state.get("user", {}), st.session_state.get("profile", {})):
-        if isinstance(source, dict):
-            for key in ("display_name", "name", "full_name"):
-                value = source.get(key)
-                if value:
-                    return str(value).strip()
+    text = re.sub(r"[0-9]+", "", text)
+    text = text.replace(".", " ").replace("_", " ").replace("-", " ")
+    text = re.sub(r"(?<=[a-z])(?=[A-Z])", " ", text)
+    text = re.sub(r"\s+", " ", text).strip()
 
-    email = get_user_email()
-    if email:
-        local = email.split("@")[0]
-        compact = re.sub(r"[^a-zA-Z]", "", local).lower()
+    parts = [part for part in text.split() if part]
+    if not parts:
+        return ""
+
+    return " ".join(part[:1].upper() + part[1:].lower() for part in parts[:3])
+
+
+
+def _clean_display_name(value: Any) -> str:
+    """Return a clean, human-friendly display name for the UI."""
+    text = str(value or "").strip()
+    if not text:
+        return ""
+
+    if "@" in text:
+        text = text.split("@", 1)[0]
+
+    cleaned = _split_compact_name(text)
+    if cleaned:
+        compact = re.sub(r"[^a-zA-Z]", "", cleaned).lower()
         if "dejan" in compact and "jovic" in compact:
             return "Dejan Jovic"
-        clean = re.sub(r"[0-9]+", "", local)
-        clean = clean.replace(".", " ").replace("_", " ").replace("-", " ")
-        parsed = " ".join(part.capitalize() for part in clean.split() if part)
-        return parsed or default
+        return cleaned
+
+    return ""
+
+
+
+def get_display_name(default: str = "TalentMatch User") -> str:
+    """Return one consistent friendly display name across all frontend pages."""
+    priority_values: list[Any] = []
+
+    profile = st.session_state.get("profile")
+    if isinstance(profile, dict):
+        priority_values.extend(
+            profile.get(key) for key in ("full_name", "display_name", "name")
+        )
+
+    user = st.session_state.get("user")
+    if isinstance(user, dict):
+        priority_values.extend(
+            user.get(key) for key in ("full_name", "display_name", "name")
+        )
+
+    priority_values.extend(
+        st.session_state.get(key) for key in ("full_name", "display_name", "name")
+    )
+
+    for value in priority_values:
+        display_name = _clean_display_name(value)
+        if display_name:
+            return display_name
+
+    email_name = _clean_display_name(get_user_email())
+    if email_name:
+        return email_name
 
     return default
 

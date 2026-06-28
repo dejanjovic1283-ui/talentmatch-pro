@@ -60,23 +60,96 @@ class FakeResponse:
 # Session auth helpers
 # =========================
 
-def save_auth(token: str, email: str = "") -> None:
+
+def _clean_display_name(value: Any) -> str:
+    """Return a clean display name like 'Dejan Jovic' from profile/Firebase values."""
+    raw = str(value or "").strip()
+    if not raw:
+        return ""
+
+    if "@" in raw:
+        raw = raw.split("@", 1)[0]
+
+    raw = raw.replace(".", " ").replace("_", " ").replace("-", " ")
+    raw = __import__("re").sub(r"[0-9]+", "", raw)
+    raw = __import__("re").sub(r"(?<=[a-z])(?=[A-Z])", " ", raw)
+    raw = __import__("re").sub(r"\s+", " ", raw).strip()
+
+    if not raw:
+        return ""
+
+    parts = [part for part in raw.split() if part]
+    display_name = " ".join(part[:1].upper() + part[1:].lower() for part in parts[:3])
+    compact = __import__("re").sub(r"[^a-zA-Z]", "", display_name).lower()
+    if "dejan" in compact and "jovic" in compact:
+        return "Dejan Jovic"
+    return display_name
+
+
+def _sync_profile_to_session(profile: dict) -> None:
+    """Keep profile identity fields available for all frontend pages."""
+    if not isinstance(profile, dict):
+        return
+
+    email = str(profile.get("email") or "").strip()
+    full_name = _clean_display_name(
+        profile.get("full_name") or profile.get("display_name") or profile.get("name")
+    )
+
+    if email:
+        st.session_state["email"] = email
+        st.session_state["user_email"] = email
+
+    if full_name:
+        st.session_state["full_name"] = full_name
+        st.session_state["display_name"] = full_name
+        st.session_state["name"] = full_name
+
+    user_state = st.session_state.get("user")
+    if not isinstance(user_state, dict):
+        user_state = {}
+
+    if email:
+        user_state["email"] = email
+    if full_name:
+        user_state["full_name"] = full_name
+        user_state["display_name"] = full_name
+        user_state["name"] = full_name
+
+    st.session_state["user"] = user_state
+
+def save_auth(token: str, email: str = "", full_name: str = "") -> None:
     """
     Save authentication data in Streamlit session state.
 
     Multiple keys are stored for compatibility across old and new frontend pages.
     """
+    clean_email = str(email or "").strip().lower()
+    clean_name = _clean_display_name(full_name)
+
     st.session_state["token"] = token
     st.session_state["id_token"] = token
 
-    st.session_state["email"] = email
-    st.session_state["user_email"] = email
+    st.session_state["email"] = clean_email
+    st.session_state["user_email"] = clean_email
+
+    if clean_name:
+        st.session_state["full_name"] = clean_name
+        st.session_state["display_name"] = clean_name
+        st.session_state["name"] = clean_name
 
     st.session_state["authenticated"] = True
 
-    st.session_state["user"] = {
-        "email": email,
-    }
+    user_state = {"email": clean_email}
+    if clean_name:
+        user_state.update(
+            {
+                "full_name": clean_name,
+                "display_name": clean_name,
+                "name": clean_name,
+            }
+        )
+    st.session_state["user"] = user_state
 
 
 def clear_auth() -> None:
@@ -91,6 +164,9 @@ def clear_auth() -> None:
         "authenticated",
         "profile",
         "user",
+        "full_name",
+        "display_name",
+        "name",
     ]
 
     for key in keys:
@@ -221,6 +297,8 @@ def refresh_profile() -> Optional[dict]:
     try:
         profile = response.json()
         st.session_state["profile"] = profile
+        if isinstance(profile, dict):
+            _sync_profile_to_session(profile)
         return profile
     except Exception:
         return None

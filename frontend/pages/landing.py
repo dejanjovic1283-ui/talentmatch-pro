@@ -1,6 +1,6 @@
 import streamlit as st
 
-from auth_utils import is_logged_in, is_pro_user
+from auth_utils import is_logged_in, is_pro_user, refresh_profile
 from components.ui import apply_global_styles, card, get_display_name, get_initials, render_hero, safe_html
 
 
@@ -43,9 +43,13 @@ def render_landing():
         unsafe_allow_html=True,
     )
 
+    if is_logged_in() and not st.session_state.get("landing_profile_loaded"):
+        refresh_profile()
+        st.session_state["landing_profile_loaded"] = True
+
     name = get_display_name()
     plan = "PRO" if is_pro_user() else "FREE"
-    title = f"Welcome: {name}" if is_logged_in() else "Build a job-winning CV with AI"
+    title = f"Welcome back, {name}" if is_logged_in() else "Build a job-winning CV with AI"
     subtitle = (
         "Your premium CV command center: ATS analysis, keyword coverage, semantic matching, "
         "CV rewrite suggestions, recruiter workflow and polished PDF reports."
