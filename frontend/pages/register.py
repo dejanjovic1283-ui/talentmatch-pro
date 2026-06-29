@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import time
-from typing import Optional
 
 import requests
 import streamlit as st
@@ -19,6 +18,33 @@ st.set_page_config(
 
 apply_global_styles()
 render_sidebar()
+
+
+def firebase_error_message(error: str) -> str:
+    """Translate Firebase REST error codes into user-friendly production messages."""
+    normalized_error = (error or "").strip().upper()
+
+    mapping = {
+        "EMAIL_EXISTS": (
+            "This email is already registered. "
+            "Please log in or use another email address."
+        ),
+        "INVALID_EMAIL": "Please enter a valid email address.",
+        "WEAK_PASSWORD": "Password is too weak. Please use at least 6 characters.",
+        "OPERATION_NOT_ALLOWED": "Email/password registration is currently unavailable.",
+        "TOO_MANY_ATTEMPTS_TRY_LATER": "Too many attempts. Please try again later.",
+        "USER_DISABLED": "This account has been disabled. Please contact support.",
+        "INVALID_PASSWORD": "The password is incorrect. Please try again.",
+        "USER_NOT_FOUND": "No account was found for this email address.",
+    }
+
+    if normalized_error.startswith("WEAK_PASSWORD"):
+        return mapping["WEAK_PASSWORD"]
+
+    return mapping.get(
+        normalized_error,
+        "Registration failed. Please check your details and try again.",
+    )
 
 
 def firebase_register(email: str, password: str, full_name: str = "") -> tuple[dict | None, str | None]:
@@ -44,10 +70,11 @@ def firebase_register(email: str, password: str, full_name: str = "") -> tuple[d
 
     if response.status_code != 200:
         try:
-            error_message = response.json().get("error", {}).get("message", response.text)
+            firebase_error = response.json().get("error", {}).get("message", "")
         except Exception:
-            error_message = response.text
-        return None, error_message
+            firebase_error = ""
+
+        return None, firebase_error_message(firebase_error)
 
     try:
         data = response.json()
