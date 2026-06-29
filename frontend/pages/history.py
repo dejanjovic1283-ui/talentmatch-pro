@@ -34,15 +34,15 @@ BACKEND_URL = os.getenv("BACKEND_URL", "https://api.talentmatchcv.com").rstrip("
 TYPE_LABELS = {
     "cv_analysis": "CV Analysis",
     "cv_rewrite": "CV Rewrite",
-    "ats_checker": "ATS",
-    "ats": "ATS",
+    "ats_checker": "ATS Checker",
+    "ats": "ATS Checker",
     "semantic_match": "Semantic",
     "recruiter_mode": "Recruiter",
 }
 
 FILTER_OPTIONS = {
     "All": None,
-    "ATS": "ats_checker",
+    "ATS Checker": "ats_checker",
     "Semantic": "semantic_match",
     "Recruiter": "recruiter_mode",
     "CV Analysis": "cv_analysis",
@@ -52,8 +52,8 @@ FILTER_OPTIONS = {
 BADGE_STYLES = {
     "cv_analysis": ("CV Analysis", "#E8F0FE", "#174EA6"),
     "cv_rewrite": ("CV Rewrite", "#E0F7FA", "#006064"),
-    "ats_checker": ("ATS", "#E6F4EA", "#137333"),
-    "ats": ("ATS", "#E6F4EA", "#137333"),
+    "ats_checker": ("ATS Checker", "#E6F4EA", "#137333"),
+    "ats": ("ATS Checker", "#E6F4EA", "#137333"),
     "semantic_match": ("Semantic", "#FEF7E0", "#B06000"),
     "recruiter_mode": ("Recruiter", "#F3E8FD", "#6A1B9A"),
 }
@@ -312,7 +312,7 @@ def build_history_text_report(
         [
             "Summary",
             "-" * 20,
-            f"ATS: {counts['ats_checker']}",
+            f"ATS Checker: {counts['ats_checker']}",
             f"Semantic: {counts['semantic_match']}",
             f"Recruiter: {counts['recruiter_mode']}",
             f"CV Analysis: {counts['cv_analysis']}",
@@ -701,7 +701,7 @@ metric_cols = st.columns(6)
 with metric_cols[0]:
     render_history_info_card("Total", str(counts["total"]), "Saved reports", "📊")
 with metric_cols[1]:
-    render_history_info_card("ATS", str(counts["ats_checker"]), "Keyword checks", "🎯")
+    render_history_info_card("ATS Checker", str(counts["ats_checker"]), "Keyword checks", "📋")
 with metric_cols[2]:
     render_history_info_card("Semantic", str(counts["semantic_match"]), "AI matches", "🧠")
 with metric_cols[3]:
