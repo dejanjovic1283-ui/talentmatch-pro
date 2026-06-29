@@ -237,9 +237,14 @@ def analyze_semantic_match(cv_text: str, job_description: str) -> dict[str, Any]
     )
 
     return {
+        # Primary score aliases used by frontend, History and exports.
+        # Keeping all aliases makes the response backwards compatible.
+        "score": combined_score,
+        "match_score": combined_score,
+        "combined_score": combined_score,
         "semantic_score": semantic,
         "keyword_score": keyword_score_value,
-        "combined_score": combined_score,
+        "analysis_type": "semantic_match",
         "verdict": get_verdict(combined_score),
         "total_keywords": keywords["total_keywords"],
         "matched_keywords": keywords["matched_keywords"],

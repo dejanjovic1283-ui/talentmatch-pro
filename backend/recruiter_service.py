@@ -42,6 +42,8 @@ def rank_candidates(
             ranked.append(
                 {
                     "filename": filename,
+                    "score": 0,
+                    "match_score": 0,
                     "combined_score": 0,
                     "semantic_score": 0,
                     "keyword_score": 0,
@@ -68,6 +70,8 @@ def rank_candidates(
         ranked.append(
             {
                 "filename": filename,
+                "score": combined_score,
+                "match_score": combined_score,
                 "combined_score": combined_score,
                 "semantic_score": int(analysis.get("semantic_score", 0) or 0),
                 "keyword_score": int(analysis.get("keyword_score", 0) or 0),
@@ -100,9 +104,24 @@ def rank_candidates(
         else 0
     )
 
+    top_score = int(top_candidate.get("combined_score", 0) or 0) if top_candidate else 0
+    summary = (
+        f"Recruiter ranking completed for {len(ranked)} candidate(s). "
+        f"Top candidate: {top_candidate.get('filename', 'candidate.pdf')}."
+        if top_candidate
+        else "Recruiter ranking completed for 0 candidate(s)."
+    )
+
     return {
-        "total_candidates": len(ranked),
+        # Primary score aliases used by frontend, History and exports.
+        # For recruiter mode, the top candidate score is the most useful report score.
+        "score": top_score,
+        "match_score": top_score,
+        "combined_score": top_score,
         "average_score": average_score,
+        "analysis_type": "recruiter_mode",
+        "summary": summary,
+        "total_candidates": len(ranked),
         "top_candidate": top_candidate,
         "candidates": ranked,
     }
