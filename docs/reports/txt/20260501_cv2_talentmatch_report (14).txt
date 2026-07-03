@@ -1,0 +1,47 @@
+TalentMatch Pro - Recruiter Report
+==================================
+Generated: 2026-06-30T04:34:54.574533 UTC
+CV file: 20260501_cv2.pdf
+Type: Recruiter
+Score: 50/100
+
+Summary
+--------------------
+Recruiter ranking completed for 1 candidate(s). Top candidate: 20260501_cv2.pdf.
+
+Strengths / Matched Skills
+--------------------
+- No strengths returned.
+
+Weaknesses / Gaps
+--------------------
+- No weaknesses returned.
+
+Recommendations
+--------------------
+- Ship a FastAPI + Streamlit MVP to demonstrate end-to-end UX and independent product delivery.
+- Add an OpenAI-powered CV-vs-JD gap analyzer that ingests PDFs with clear prompt strategy and evaluation.
+- Integrate PayPal subscriptions into the SaaS project and update the CV to highlight 0-to-1 ownership and outcomes.
+
+Job Description
+--------------------
+Founding Full-Stack AI SaaS Engineer
+
+We are building TalentMatch Pro, an AI-powered SaaS platform that helps job seekers compare their CVs against real job descriptions, identify gaps, and improve their application strategy.
+
+What you will do:
+- Build and scale a FastAPI + Streamlit product
+- Integrate Firebase authentication and storage
+- Ship AI-powered CV analysis with OpenAI
+- Own billing workflows with PayPal
+- Improve product reliability, UX, and deployment pipelines
+
+What we are looking for:
+- Strong Python backend fundamentals
+- Experience with APIs, auth, databases, and SaaS integrations
+- Product mindset and ability to ship independently
+- Familiarity with cloud deployment and developer tooling
+
+Nice to have:
+- Experience with AI products, prompt design, and PDF/document processing
+- Experience building MVPs from zero to first users

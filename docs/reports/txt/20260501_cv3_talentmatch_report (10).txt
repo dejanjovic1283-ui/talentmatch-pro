@@ -1,0 +1,93 @@
+TalentMatch Pro - ATS Checker Report
+====================================
+Generated: 2026-06-30T04:32:10.570493 UTC
+CV file: 20260501_cv3.pdf
+Type: ATS Checker
+Score: 33/100
+
+Summary
+--------------------
+ATS keyword check completed. Coverage: 33%. Verdict: ATS Weak.
+
+Strengths / Matched Skills
+--------------------
+- python
+- fastapi
+- api
+- apis
+- docker
+- openai
+- saas
+- backend
+- applications
+- ai-powered
+
+Weaknesses / Gaps
+--------------------
+- sql
+- postgresql
+- firebase
+- frontend
+- streamlit
+- authentication
+- storage
+- deployment
+- cloud
+- render
+- ats
+- paypal
+- rest
+- developer
+- join
+- engineering
+- help
+- scalable
+- web
+- services
+
+Recommendations
+--------------------
+- Add missing high-value keywords where truthful: sql, postgresql, firebase, frontend, streamlit, authentication, storage, deployment.
+- Mirror important job-description terms naturally in your CV summary and experience bullets.
+- Use exact tool names where relevant, for example FastAPI, Docker, SQL, Firebase, OpenAI.
+
+Job Description
+--------------------
+Python Backend Developer (FastAPI)
+We are looking for a Python Backend Developer to join our engineering team and help build scalable web applications and AI-powered services.
+Responsibilities
+Design, develop and maintain REST APIs using FastAPI.
+Build scalable backend services with Python.
+Integrate PostgreSQL databases and optimize SQL queries.
+Work with Firebase Authentication and Firebase Storage.
+Integrate third-party APIs including OpenAI and PayPal.
+Collaborate with frontend developers using Streamlit.
+Write clean, maintainable and well-tested code.
+Participate in code reviews and improve application performance.
+Deploy and maintain applications on Render.
+Troubleshoot production issues and monitor application health.
+Requirements
+2+ years of Python development experience.
+Strong knowledge of FastAPI.
+Experience with PostgreSQL.
+Experience with REST API development.
+Experience with Git and GitHub.
+Experience with Docker.
+Knowledge of authentication and authorization.
+Familiarity with cloud deployment.
+Understanding of software architecture and clean code principles.
+Good English communication skills.
+Nice to Have
+Experience with OpenAI APIs.
+Experience with Firebase.
+Experience with Streamlit.
+Experience with PayPal subscriptions.
+Knowledge of ATS optimization.
+Experience with AI or LLM applications.
+Benefits
+Remote work.
+Flexible working hours.
+Competitive salary.
+Professional development.
+Modern AI technology stack.
+Opportunity to work on innovative SaaS products.

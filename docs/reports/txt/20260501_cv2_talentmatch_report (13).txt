@@ -1,0 +1,81 @@
+TalentMatch Pro - CV Analysis Report
+====================================
+Generated: 2026-06-30T04:31:11.872868 UTC
+CV file: 20260501_cv2.pdf
+Type: CV Analysis
+Score: 74/100
+
+Summary
+--------------------
+Solid core match on Python/FastAPI, PostgreSQL, REST, Docker, and Firebase; gaps in Git/GitHub, testing, Render deployment, monitoring, and Nice-to-Haves (OpenAI, PayPal, Streamlit).
+
+Strengths / Matched Skills
+--------------------
+- Practical FastAPI API development experience
+- PostgreSQL and query optimization
+- Firebase Authentication and Storage integration
+- Dockerized workflows and deployment pipelines
+- Experience building SaaS backend and auth/billing flows
+- Emphasis on clean architecture and performance
+
+Weaknesses / Gaps
+--------------------
+- No explicit mention of Git/GitHub usage
+- Testing practices (unit/integration, pytest) not stated
+- No Render or specific cloud deployment details
+- No monitoring/observability or production troubleshooting noted
+- No stated experience with OpenAI, PayPal, or Streamlit
+- Years of experience not specified
+- Collaboration/code reviews not mentioned
+
+Recommendations
+--------------------
+- List Git/GitHub explicitly and link to representative repos.
+- State total years of Python experience and team size/scope of projects.
+- Add testing details (pytest, coverage, CI) and examples of testable design.
+- Document deployments (Render preferred; otherwise AWS/Heroku) and include infra steps.
+- Include monitoring/alerting experience (Sentry, Prometheus/Grafana, logs) and incident handling.
+- Clarify auth expertise (OAuth2, JWT, role-based access) and security hardening.
+- Build a small demo integrating OpenAI and PayPal subscriptions; optionally pair with a Streamlit UI.
+- Quantify performance wins (e.g., SQL optimizations, response-time reductions) and add metrics.
+
+Job Description
+--------------------
+Python Backend Developer (FastAPI)
+We are looking for a Python Backend Developer to join our engineering team and help build scalable web applications and AI-powered services.
+Responsibilities
+Design, develop and maintain REST APIs using FastAPI.
+Build scalable backend services with Python.
+Integrate PostgreSQL databases and optimize SQL queries.
+Work with Firebase Authentication and Firebase Storage.
+Integrate third-party APIs including OpenAI and PayPal.
+Collaborate with frontend developers using Streamlit.
+Write clean, maintainable and well-tested code.
+Participate in code reviews and improve application performance.
+Deploy and maintain applications on Render.
+Troubleshoot production issues and monitor application health.
+Requirements
+2+ years of Python development experience.
+Strong knowledge of FastAPI.
+Experience with PostgreSQL.
+Experience with REST API development.
+Experience with Git and GitHub.
+Experience with Docker.
+Knowledge of authentication and authorization.
+Familiarity with cloud deployment.
+Understanding of software architecture and clean code principles.
+Good English communication skills.
+Nice to Have
+Experience with OpenAI APIs.
+Experience with Firebase.
+Experience with Streamlit.
+Experience with PayPal subscriptions.
+Knowledge of ATS optimization.
+Experience with AI or LLM applications.
+Benefits
+Remote work.
+Flexible working hours.
+Competitive salary.
+Professional development.
+Modern AI technology stack.
+Opportunity to work on innovative SaaS products.

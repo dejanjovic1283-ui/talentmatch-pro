@@ -1,0 +1,47 @@
+TalentMatch Pro - Semantic Report
+=================================
+Generated: 2026-06-30T04:33:59.568117 UTC
+CV file: 20260501_cv3.pdf
+Type: Semantic
+Score: 52/100
+
+Summary
+--------------------
+AI/ML engineer with strong Python/FastAPI and OpenAI/LLM experience, plus relevant CV/document analysis for SaaS. Missing key full-stack elements (Streamlit UI, Firebase auth/storage, PayPal billing, cloud deployment) expected of a founding engineer. Strong backend/AI fit if willing to quickly own front end, auth, billing, and prod ops.
+
+Strengths / Matched Skills
+--------------------
+- No strengths returned.
+
+Weaknesses / Gaps
+--------------------
+- No weaknesses returned.
+
+Recommendations
+--------------------
+- Build and deploy a small TalentMatch-style MVP: FastAPI backend + Streamlit UI with Firebase Auth/Storage and PayPal billing; deploy on AWS/GCP with CI/CD, logging, and monitoring.
+- Enhance the resume analysis project to include robust PDF ingestion (PyPDF2/pdfminer, layout parsing), explicit prompt design/versioning, and evaluation/guardrails; showcase results and metrics.
+- Update the CV to list databases used, auth patterns, deployment stack (Docker, cloud provider, CI/CD), and any 0-to-1 ownership; highlight shipping cadence, reliability improvements, and user impact.
+
+Job Description
+--------------------
+Founding Full-Stack AI SaaS Engineer
+
+We are building TalentMatch Pro, an AI-powered SaaS platform that helps job seekers compare their CVs against real job descriptions, identify gaps, and improve their application strategy.
+
+What you will do:
+- Build and scale a FastAPI + Streamlit product
+- Integrate Firebase authentication and storage
+- Ship AI-powered CV analysis with OpenAI
+- Own billing workflows with PayPal
+- Improve product reliability, UX, and deployment pipelines
+
+What we are looking for:
+- Strong Python backend fundamentals
+- Experience with APIs, auth, databases, and SaaS integrations
+- Product mindset and ability to ship independently
+- Familiarity with cloud deployment and developer tooling
+
+Nice to have:
+- Experience with AI products, prompt design, and PDF/document processing
+- Experience building MVPs from zero to first users
