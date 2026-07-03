@@ -8,6 +8,10 @@ Production SaaS Portfolio Documentation
 
 # 🚀 TalentMatch Pro
 
+<p align="center">
+  <img src="docs/README-assets/banner.png" alt="TalentMatch Pro Banner" width="100%">
+</p>
+
 ### AI-Powered Resume Intelligence & Recruitment Platform
 
 **Analyze resumes. Improve ATS compatibility. Match candidates semantically. Rank applicants. Export professional reports.**
