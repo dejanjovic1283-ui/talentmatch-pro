@@ -70,6 +70,8 @@ The platform combines:
 | Frontend Render Service | https://talentmatch-frontend-dejan.onrender.com |
 | Backend Render Service | https://talentmatch-backend-1283.onrender.com |
 | Repository | https://github.com/dejanjovic1283-ui/talentmatch-pro |
+| Health Endpoint | https://talentmatch-backend-1283.onrender.com/healthz |
+| Ready Endpoint | https://talentmatch-backend-1283.onrender.com/readyz |
 
 ---
 
@@ -108,6 +110,16 @@ The platform combines:
 - [Founder](#-founder)
 - [Support](#-support)
 - [Acknowledgements](#-acknowledgements)
+- [Application Showcase](#-application-showcase)
+- [Report Gallery](#-report-gallery)
+- [Documentation & Assets](#-documentation--assets)
+- [Project Statistics](#-project-statistics)
+- [Production Highlights](#-production-highlights)
+- [Project Showcase](#-project-showcase)
+- [Repository Highlights](#-repository-highlights)
+- [Why TalentMatch Pro?](#-why-talentmatch-pro)
+- [Project Goals](#-project-goals)
+- [Built With Passion](#-built-with-passion)
 
 ---
 
@@ -416,14 +428,16 @@ TalentMatch Pro is designed as a complete production-ready SaaS platform rather 
 | Deployment | Render |
 | Custom Domain | talentmatchcv.com |
 | Reports | PDF + TXT |
-| Resume Analysis | ✅ |
-| ATS Checker | ✅ |
-| Semantic Matching | ✅ |
-| Recruiter Mode | ✅ |
-| History | ✅ |
-| Account Management | ✅ |
-| Pricing & Billing | ✅ |
-| Production Deployment | ✅ |
+| Capability | Status |
+|------------|--------|
+| Resume Analysis | Production |
+| ATS Checker | Production |
+| Semantic Matching | Production |
+| Recruiter Mode | Production |
+| PDF Reports | Production |
+| TXT Reports | Production |
+| Authentication | Production |
+| Subscription Billing | Production |
 
 ---
 
@@ -979,47 +993,87 @@ erDiagram
 
 ---
 
-## 📁 Folder Structure
+## 📁 Project Folder Structure
 
 ```text
 talentmatch-pro/
 ├── backend/
 │   ├── billing/
+│   │   ├── __init__.py
 │   │   ├── factory.py
-│   │   └── paypal_provider.py
+│   │   ├── paypal_provider.py
+│   │   └── provider.py
+│   ├── scripts/
+│   │   ├── create_paypal_plan.py
+│   │   └── set_user_pro.py
 │   ├── static/
 │   │   ├── robots.txt
 │   │   └── sitemap.xml
+│   ├── auth.py
+│   ├── db.py
+│   ├── firebase.py
 │   ├── main.py
 │   ├── models.py
-│   ├── schemas.py
-│   ├── auth.py
 │   ├── openai_service.py
+│   ├── pdf_report.py
+│   ├── pdf_utils.py
+│   ├── recruiter_service.py
+│   ├── schemas.py
 │   ├── semantic_service.py
+│   ├── storage.py
 │   └── usage_service.py
 │
 ├── frontend/
 │   ├── assets/
-│   │   ├── logo.png
-│   │   └── favicon.png
+│   │   ├── favicon.png
+│   │   └── logo.png
+│   ├── components/
+│   │   ├── analytics.py
+│   │   ├── footer.py
+│   │   ├── sidebar.py
+│   │   └── ui.py
 │   ├── pages/
-│   │   ├── ats_checker.py
-│   │   ├── cv_rewrite.py
-│   │   ├── semantic_match.py
-│   │   ├── recruiter_mode.py
-│   │   ├── history.py
-│   │   ├── pricing.py
+│   │   ├── about.py
 │   │   ├── account.py
+│   │   ├── admin_analytics.py
+│   │   ├── ats_checker.py
+│   │   ├── contact.py
+│   │   ├── cv_analysis.py
+│   │   ├── cv_rewrite.py
+│   │   ├── history.py
+│   │   ├── landing.py
 │   │   ├── login.py
-│   │   └── register.py
+│   │   ├── pricing.py
+│   │   ├── privacy.py
+│   │   ├── recruiter_mode.py
+│   │   ├── refund.py
+│   │   ├── register.py
+│   │   ├── semantic_match.py
+│   │   └── terms.py
 │   ├── .streamlit/
-│   │   └── config.toml
-│   └── app.py
+│   │   ├── config.toml
+│   │   └── secrets.toml
+│   ├── app.py
+│   ├── auth_utils.py
+│   └── requirements.txt
 │
 ├── docs/
+│   ├── architecture/
+│   │   └── architecture.md
+│   ├── gifs/
+│   ├── README-assets/
+│   ├── reports/
+│   │   ├── pdf/
+│   │   ├── txt/
+│   │   └── README.md
 │   ├── screenshots/
-│   └── gifs/
+│   └── README.md
 │
+├── .gitignore
+├── docker-compose.yml
+├── Dockerfile.backend
+├── Dockerfile.frontend
+├── get_token.py
 ├── README.md
 └── requirements.txt
 ```
@@ -1040,6 +1094,12 @@ https://talentmatch-backend-1283.onrender.com
 |---|---|---|
 | GET | `/healthz` | Basic health check |
 | GET | `/readyz` | Readiness check |
+
+> **Authentication**
+>
+> All protected endpoints require a valid Firebase Bearer token supplied in the `Authorization` header.
+>
+> Public endpoints such as `/healthz` and `/readyz` do not require authentication.
 
 ### Resume and AI Endpoints
 
