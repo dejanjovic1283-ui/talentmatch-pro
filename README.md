@@ -128,6 +128,465 @@ That makes the output useful for:
 
 ---
 
+## 📸 Application Showcase
+
+Below are selected screenshots demonstrating the primary TalentMatch Pro workflows and user experience.
+
+---
+
+## 🏠 Dashboard Overview
+
+![Dashboard Overview](docs/screenshots/01_dashboard_overview.png)
+
+Production dashboard showing subscription status, available AI tools, quick actions, and workspace overview.
+
+---
+
+## 📊 Dashboard Features
+
+![Dashboard Features](docs/screenshots/02_dashboard_features.png)
+
+Overview of the main workspace and feature navigation.
+
+---
+
+## 📄 ATS Checker
+
+### Input
+
+![ATS Input](docs/screenshots/03_ats_checker_input.png)
+
+### Results
+
+![ATS Results](docs/screenshots/04_ats_checker_results.png)
+
+The ATS Checker evaluates keyword coverage, missing skills, and overall ATS compatibility.
+
+---
+
+## ✍️ CV Rewrite
+
+### Input
+
+![CV Rewrite Input](docs/screenshots/05_cv_rewrite_input.png)
+
+### Results
+
+![CV Rewrite Results](docs/screenshots/06_cv_rewrite_results.png)
+
+AI-assisted resume rewriting while preserving truthful candidate experience.
+
+---
+
+## 🧠 Semantic Match
+
+### Input
+
+![Semantic Match Input](docs/screenshots/07_semantic_match_input.png)
+
+### Results
+
+![Semantic Match Results](docs/screenshots/08_semantic_match_results.png)
+
+Semantic similarity analysis compares contextual meaning between the resume and the target job description.
+
+---
+
+## 👥 Recruiter Mode
+
+### Candidate Upload
+
+![Recruiter Upload](docs/screenshots/09_recruiter_mode_input.png)
+
+### Candidate Ranking
+
+![Recruiter Ranking](docs/screenshots/10_recruiter_mode_ranking.png)
+
+Recruiters can rank multiple candidates against a single job description.
+
+---
+
+## 📜 Reports & History
+
+### History Overview
+
+![History](docs/screenshots/11_reports_history_overview.png)
+
+### Report Details
+
+![Report Details](docs/screenshots/12_report_detail.png)
+
+Generated reports remain available through the authenticated history page.
+
+---
+
+## 💳 Pricing
+
+### Pricing Overview
+
+![Pricing Overview](docs/screenshots/13_pricing_overview.png)
+
+### Plan Comparison
+
+![Pricing Comparison](docs/screenshots/14_pricing_comparison.png)
+
+TalentMatch Pro uses PayPal subscriptions for production billing.
+
+---
+
+## ⚙️ Account
+
+![Account](docs/screenshots/15_account_overview.png)
+
+Users can manage their profile, subscription, and account settings.
+
+---
+
+## ❤️ System Health
+
+![System Health](docs/screenshots/16_usage_and_system_health.png)
+
+Administrative overview showing platform usage and operational status.
+
+---
+
+## 📑 Report Gallery
+
+TalentMatch Pro generates professional downloadable reports for every completed analysis.
+
+Reports are available in both **PDF** and **TXT** formats and are stored in the authenticated user history.
+
+## 📄 Sample PDF Reports
+
+| Report | Description |
+|---------|-------------|
+| CV Analysis Report | AI-powered resume evaluation |
+| ATS Checker Report | ATS compatibility and keyword coverage |
+| Semantic Match Report | Contextual resume-to-job comparison |
+| Recruiter Ranking Report | Candidate ranking and recruiter insights |
+| History Export | Complete user analysis history |
+
+📂 Sample reports:
+
+- [`docs/reports/pdf/`](docs/reports/pdf/)
+
+---
+
+## 📝 Sample TXT Reports
+
+TXT reports contain the same structured analysis in lightweight text format.
+
+📂 Sample reports:
+
+- [`docs/reports/txt/`](docs/reports/txt/)
+
+---
+
+### Report Features
+
+- Professional PDF formatting
+- Clean TXT export
+- AI-generated summaries
+- ATS recommendations
+- Semantic analysis
+- Recruiter insights
+- Downloadable from History
+- Production-ready report generation
+
+---
+
+## 📚 Documentation & Assets
+
+TalentMatch Pro includes a complete documentation package located in the `docs/` directory.
+
+This repository contains production-ready documentation, screenshots, sample reports, and architecture diagrams.
+
+## 📂 Documentation Structure
+
+```text
+docs/
+├── screenshots/
+├── reports/
+│   ├── pdf/
+│   └── txt/
+├── architecture/
+├── gifs/
+└── README-assets/
+```
+
+## 📸 Screenshots
+
+Application screenshots:
+
+- Dashboard
+- ATS Checker
+- CV Rewrite
+- Semantic Match
+- Recruiter Mode
+- Reports
+- Pricing
+- Account
+- System Health
+
+📁 Location:
+
+```text
+docs/screenshots/
+```
+
+---
+
+## 📑 Reports
+
+Example generated reports:
+
+- PDF Analysis Reports
+- TXT Analysis Reports
+- History Reports
+
+📁 Location:
+
+```text
+docs/reports/
+```
+
+---
+
+## 🏗️ Architecture
+
+The complete architecture documentation is available here:
+
+```text
+docs/architecture/architecture.md
+```
+
+Architecture documentation includes:
+
+- System Architecture
+- Deployment Architecture
+- Billing Flow
+- Mermaid Diagrams
+
+---
+
+## 🎬 GIF Demonstrations
+
+Animated product demonstrations can be stored in:
+
+```text
+docs/gifs/
+```
+
+---
+
+## 🎨 README Assets
+
+Static assets used by the README:
+
+```text
+docs/README-assets/
+```
+
+This folder can contain:
+
+- GitHub Banner
+- Social Preview
+- Icons
+- SVG Assets
+- Diagrams
+
+---
+
+## 📈 Project Statistics
+
+TalentMatch Pro is designed as a complete production-ready SaaS platform rather than a single-feature AI demo.
+
+| Category | Details |
+|----------|---------|
+| Project Type | AI SaaS Platform |
+| Status | Production |
+| Architecture | Full-Stack |
+| Frontend | Streamlit |
+| Backend | FastAPI |
+| Database | PostgreSQL |
+| Authentication | Firebase Authentication |
+| Storage | Firebase Storage |
+| AI Engine | OpenAI |
+| Billing | PayPal |
+| Deployment | Render |
+| Custom Domain | talentmatchcv.com |
+| Reports | PDF + TXT |
+| Resume Analysis | ✅ |
+| ATS Checker | ✅ |
+| Semantic Matching | ✅ |
+| Recruiter Mode | ✅ |
+| History | ✅ |
+| Account Management | ✅ |
+| Pricing & Billing | ✅ |
+| Production Deployment | ✅ |
+
+---
+
+## 🚀 Production Highlights
+
+TalentMatch Pro is not a prototype.
+
+It is a fully deployed SaaS application demonstrating modern AI-assisted recruitment workflows.
+
+### Highlights
+
+- Production deployment on Render
+- Custom production domain
+- Secure Firebase Authentication
+- PostgreSQL persistent storage
+- OpenAI-powered resume intelligence
+- PayPal subscription billing
+- AI Resume Analysis
+- ATS Optimization
+- Semantic Matching
+- Recruiter Candidate Ranking
+- Downloadable PDF Reports
+- Downloadable TXT Reports
+- Professional GitHub Documentation
+- Complete API Documentation
+- Mermaid Architecture Diagrams
+- Docker Support
+- Production Monitoring
+- Security Best Practices
+
+---
+
+## ⭐ Project Showcase
+
+TalentMatch Pro demonstrates a complete end-to-end AI SaaS workflow, from authentication and subscription management to AI-powered resume analysis and professional report generation.
+
+## End-to-End User Journey
+
+```text
+User Registration
+        │
+        ▼
+Firebase Authentication
+        │
+        ▼
+Dashboard
+        │
+        ▼
+Upload Resume
+        │
+        ▼
+Paste Job Description
+        │
+        ▼
+Choose AI Workflow
+        │
+        ├── Resume Analysis
+        ├── ATS Checker
+        ├── CV Rewrite
+        ├── Semantic Match
+        └── Recruiter Mode
+        │
+        ▼
+OpenAI Processing
+        │
+        ▼
+Structured Analysis
+        │
+        ▼
+Save History
+        │
+        ▼
+Generate PDF / TXT Report
+        │
+        ▼
+Download Results
+```
+
+---
+
+## Available AI Workflows
+
+| Workflow | Status |
+|----------|--------|
+| Resume Analysis | ✅ |
+| ATS Checker | ✅ |
+| CV Rewrite | ✅ |
+| Semantic Match | ✅ |
+| Recruiter Ranking | ✅ |
+| Report Generation | ✅ |
+| History | ✅ |
+| PayPal Billing | ✅ |
+
+---
+
+## 📊 Repository Highlights
+
+TalentMatch Pro was built as a production-oriented software engineering project.
+
+### Highlights
+
+- Production SaaS Architecture
+- AI-Powered Resume Intelligence
+- FastAPI REST Backend
+- Streamlit Frontend
+- PostgreSQL Persistence
+- Firebase Authentication
+- Firebase Storage
+- OpenAI Integration
+- PayPal Subscription Billing
+- Docker Support
+- Render Deployment
+- Custom Domain
+- Professional Documentation
+- Architecture Diagrams
+- Sample Reports
+- Screenshot Gallery
+
+---
+
+## 🌟 Why TalentMatch Pro?
+
+TalentMatch Pro was built to demonstrate how modern AI can support resume optimization and recruitment workflows in a practical, production-ready SaaS application.
+
+Unlike isolated AI demos, TalentMatch Pro combines:
+
+- AI-powered resume intelligence
+- ATS optimization
+- Semantic matching
+- Recruiter workflows
+- Subscription billing
+- Persistent history
+- Professional report generation
+- Secure authentication
+- Production deployment
+- Complete technical documentation
+
+The project emphasizes software architecture, maintainability, security, and user experience while providing realistic end-to-end workflows for both job seekers and recruiters.
+
+---
+
+## 🎯 Project Goals
+
+- Deliver a production-ready AI SaaS platform.
+- Demonstrate modern full-stack Python architecture.
+- Showcase practical OpenAI integration.
+- Provide realistic recruiter and job seeker workflows.
+- Follow secure authentication and billing practices.
+- Maintain clean documentation and modular code.
+- Serve as a portfolio-grade engineering project.
+
+---
+
+## ❤️ Built With Passion
+
+TalentMatch Pro is the result of continuous design, development, testing, deployment, and documentation.
+
+The project demonstrates not only technical implementation but also product thinking, production deployment, maintainability, and long-term scalability.
+
+Every major component—from authentication and AI processing to billing, reporting, and documentation—has been designed as part of a complete SaaS ecosystem.
+
+---
+
 ## ✨ Core Features
 
 ### 📄 AI Resume Analysis
