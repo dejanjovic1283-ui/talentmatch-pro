@@ -1,8 +1,30 @@
+from __future__ import annotations
+
 import os
-from typing import Any, Optional
+import re
+from typing import IO, Any, Mapping, Optional, Sequence, TypeAlias
 
 import requests
 import streamlit as st
+
+
+# =========================
+# Type aliases
+# =========================
+
+Headers: TypeAlias = dict[str, str]
+QueryParams: TypeAlias = Mapping[str, Any]
+JsonPayload: TypeAlias = Mapping[str, Any]
+FormData: TypeAlias = Mapping[str, Any]
+
+FileTuple: TypeAlias = (
+    tuple[str, bytes, str]
+    | tuple[str, bytes, str, Mapping[str, str]]
+    | tuple[str, IO[Any], str]
+    | tuple[str, IO[Any], str, Mapping[str, str]]
+)
+FileValue: TypeAlias = bytes | IO[Any] | FileTuple
+RequestFiles: TypeAlias = Mapping[str, FileValue] | Sequence[tuple[str, FileValue]]
 
 
 # =========================
@@ -23,14 +45,15 @@ def get_config(key: str, default: str = "") -> str:
         return value
 
     try:
-        return st.secrets.get(key, default)
+        secret_value = st.secrets.get(key, default)
+        return str(secret_value or default)
     except Exception:
         return default
 
 
 BACKEND_URL = get_config(
     "BACKEND_URL",
-    "https://talentmatch-backend-1283.onrender.com"
+    "https://api.talentmatchcv.com",
 ).rstrip("/")
 
 FIREBASE_API_KEY = get_config("FIREBASE_API_KEY")
@@ -43,13 +66,17 @@ FIREBASE_API_KEY = get_config("FIREBASE_API_KEY")
 class FakeResponse:
     """
     Small response-like object used when a request fails before reaching the server.
+
+    It intentionally exposes the same minimal attributes/methods used across the
+    frontend pages: status_code, text, headers and json().
     """
 
     def __init__(self, status_code: int, message: str):
         self.status_code = status_code
         self.text = message
+        self.headers: Headers = {"content-type": "application/json"}
 
-    def json(self) -> dict:
+    def json(self) -> dict[str, str]:
         return {
             "detail": self.text,
             "error": self.text,
@@ -71,24 +98,26 @@ def _clean_display_name(value: Any) -> str:
         raw = raw.split("@", 1)[0]
 
     raw = raw.replace(".", " ").replace("_", " ").replace("-", " ")
-    raw = __import__("re").sub(r"[0-9]+", "", raw)
-    raw = __import__("re").sub(r"(?<=[a-z])(?=[A-Z])", " ", raw)
-    raw = __import__("re").sub(r"\s+", " ", raw).strip()
+    raw = re.sub(r"[0-9]+", "", raw)
+    raw = re.sub(r"(?<=[a-z])(?=[A-Z])", " ", raw)
+    raw = re.sub(r"\s+", " ", raw).strip()
 
     if not raw:
         return ""
 
     parts = [part for part in raw.split() if part]
     display_name = " ".join(part[:1].upper() + part[1:].lower() for part in parts[:3])
-    compact = __import__("re").sub(r"[^a-zA-Z]", "", display_name).lower()
+    compact = re.sub(r"[^a-zA-Z]", "", display_name).lower()
+
     if "dejan" in compact and "jovic" in compact:
         return "Dejan Jovic"
+
     return display_name
 
 
-def _sync_profile_to_session(profile: dict) -> None:
+def _sync_profile_to_session(profile: Mapping[str, Any]) -> None:
     """Keep profile identity fields available for all frontend pages."""
-    if not isinstance(profile, dict):
+    if not isinstance(profile, Mapping):
         return
 
     email = str(profile.get("email") or "").strip()
@@ -118,6 +147,7 @@ def _sync_profile_to_session(profile: dict) -> None:
 
     st.session_state["user"] = user_state
 
+
 def save_auth(token: str, email: str = "", full_name: str = "") -> None:
     """
     Save authentication data in Streamlit session state.
@@ -140,7 +170,7 @@ def save_auth(token: str, email: str = "", full_name: str = "") -> None:
 
     st.session_state["authenticated"] = True
 
-    user_state = {"email": clean_email}
+    user_state: dict[str, str] = {"email": clean_email}
     if clean_name:
         user_state.update(
             {
@@ -149,13 +179,12 @@ def save_auth(token: str, email: str = "", full_name: str = "") -> None:
                 "name": clean_name,
             }
         )
+
     st.session_state["user"] = user_state
 
 
 def clear_auth() -> None:
-    """
-    Remove authentication state.
-    """
+    """Remove authentication state."""
     keys = [
         "token",
         "id_token",
@@ -174,13 +203,8 @@ def clear_auth() -> None:
 
 
 def restore_auth() -> bool:
-    """
-    Restore auth state from Streamlit session state.
-    """
-    token = (
-        st.session_state.get("token")
-        or st.session_state.get("id_token")
-    )
+    """Restore auth state from Streamlit session state."""
+    token = st.session_state.get("token") or st.session_state.get("id_token")
 
     if token:
         st.session_state["token"] = token
@@ -193,41 +217,27 @@ def restore_auth() -> bool:
 
 
 def get_token() -> str:
-    """
-    Return active auth token.
-    """
-    return (
-        st.session_state.get("token")
-        or st.session_state.get("id_token")
-        or ""
-    )
+    """Return active auth token."""
+    return str(st.session_state.get("token") or st.session_state.get("id_token") or "")
 
 
 def is_logged_in() -> bool:
-    """
-    Check whether user is logged in.
-    """
+    """Check whether user is logged in."""
     return bool(get_token())
 
 
-def get_auth_headers() -> dict:
-    """
-    Return Authorization headers for backend requests.
-    """
+def get_auth_headers() -> Headers:
+    """Return Authorization headers for backend requests."""
     token = get_token()
 
     if not token:
         return {}
 
-    return {
-        "Authorization": f"Bearer {token}",
-    }
+    return {"Authorization": f"Bearer {token}"}
 
 
-def get_headers() -> dict:
-    """
-    Compatibility alias used by older files.
-    """
+def get_headers() -> Headers:
+    """Compatibility alias used by older files."""
     return get_auth_headers()
 
 
@@ -235,57 +245,78 @@ def get_headers() -> dict:
 # Backend API helpers
 # =========================
 
-def api_get(endpoint: str, params: Optional[dict] = None, timeout: int = 60):
-    """
-    Safe GET request helper.
-    """
+
+def _build_url(endpoint: str) -> str:
+    """Build a backend URL from either '/path' or 'path'."""
+    clean_endpoint = str(endpoint or "").strip()
+    if not clean_endpoint:
+        clean_endpoint = "/"
+    if not clean_endpoint.startswith("/"):
+        clean_endpoint = f"/{clean_endpoint}"
+    return f"{BACKEND_URL}{clean_endpoint}"
+
+
+def api_get(
+    endpoint: str,
+    params: QueryParams | None = None,
+    timeout: int = 60,
+) -> requests.Response | FakeResponse:
+    """Safe GET request helper."""
     try:
         return requests.get(
-            f"{BACKEND_URL}{endpoint}",
+            _build_url(endpoint),
             headers=get_auth_headers(),
             params=params,
             timeout=timeout,
         )
-    except Exception as e:
-        return FakeResponse(500, str(e))
+    except Exception as exc:
+        return FakeResponse(500, str(exc))
 
 
 def api_post(
     endpoint: str,
-    payload: Optional[dict] = None,
-    json: Optional[dict] = None,
-    data: Optional[dict] = None,
-    files: Optional[dict] = None,
+    payload: JsonPayload | None = None,
+    json: JsonPayload | None = None,
+    data: FormData | None = None,
+    files: RequestFiles | None = None,
     timeout: int = 120,
-):
+) -> requests.Response | FakeResponse:
     """
     Safe POST request helper.
 
-    Supports JSON payloads, form data, file uploads, and timeout.
+    Supports:
+    - JSON payloads: api_post('/endpoint', payload={...}) or api_post('/endpoint', json={...})
+    - Form data: api_post('/endpoint', data={...})
+    - Single file upload for ATS/CV/Semantic pages:
+        files={'file': ('cv.pdf', b'...', 'application/pdf')}
+    - Multiple files under the same field for Recruiter Mode:
+        files=[('files', ('a.pdf', b'...', 'application/pdf')), ...]
+
+    The files type is intentionally compatible with requests.post(), so Pylance
+    accepts both dictionary and list-of-tuples upload formats.
     """
     try:
         request_json = json if json is not None else payload
 
         return requests.post(
-            f"{BACKEND_URL}{endpoint}",
+            _build_url(endpoint),
             headers=get_auth_headers(),
             json=request_json if files is None else None,
             data=data,
             files=files,
             timeout=timeout,
         )
-    except Exception as e:
-        return FakeResponse(500, str(e))
+    except Exception as exc:
+        return FakeResponse(500, str(exc))
 
 
 # =========================
 # Profile helpers
 # =========================
 
-def refresh_profile() -> Optional[dict]:
-    """
-    Reload user profile from backend.
-    """
+
+def refresh_profile() -> dict[str, Any] | None:
+    """Reload user profile from backend."""
     if not is_logged_in():
         return None
 
@@ -296,46 +327,48 @@ def refresh_profile() -> Optional[dict]:
 
     try:
         profile = response.json()
-        st.session_state["profile"] = profile
-        if isinstance(profile, dict):
-            _sync_profile_to_session(profile)
-        return profile
     except Exception:
         return None
 
+    if not isinstance(profile, dict):
+        return None
 
-def get_profile() -> Optional[dict]:
-    """
-    Get cached profile or refresh it.
-    """
+    st.session_state["profile"] = profile
+    _sync_profile_to_session(profile)
+    return profile
+
+
+def get_profile() -> dict[str, Any] | None:
+    """Get cached profile or refresh it."""
     profile = st.session_state.get("profile")
 
-    if profile:
+    if isinstance(profile, dict):
         return profile
 
     return refresh_profile()
 
 
-def load_profile() -> Optional[dict]:
-    """
-    Compatibility alias for older imports.
-    """
+def load_profile() -> dict[str, Any] | None:
+    """Compatibility alias for older imports."""
     return get_profile()
 
 
 def is_pro_user() -> bool:
-    """
-    Check if current user has Pro access.
-    """
+    """Check if current user has Pro access."""
     profile = get_profile()
 
     if not profile:
         return False
 
+    subscription_status = str(profile.get("subscription_status") or "").lower()
+    paypal_status = str(profile.get("paypal_subscription_status") or "").lower()
+    plan = str(profile.get("plan") or "").lower()
+
     return bool(
         profile.get("is_pro")
-        or profile.get("plan") == "pro"
-        or profile.get("subscription_status") == "active"
+        or plan == "pro"
+        or subscription_status in {"active", "approved"}
+        or paypal_status in {"active", "approved"}
     )
 
 
@@ -343,7 +376,8 @@ def is_pro_user() -> bool:
 # Firebase login
 # =========================
 
-def firebase_login(email: str, password: str) -> tuple[Optional[dict], Optional[str]]:
+
+def firebase_login(email: str, password: str) -> tuple[dict[str, Any] | None, str | None]:
     """
     Login with Firebase REST API.
 
@@ -379,9 +413,13 @@ def firebase_login(email: str, password: str) -> tuple[Optional[dict], Optional[
             except Exception:
                 message = response.text
 
-            return None, message
+            return None, str(message)
 
-        return response.json(), None
+        firebase_payload = response.json()
+        if not isinstance(firebase_payload, dict):
+            return None, "Firebase returned invalid response."
 
-    except Exception as e:
-        return None, str(e)
+        return firebase_payload, None
+
+    except Exception as exc:
+        return None, str(exc)
