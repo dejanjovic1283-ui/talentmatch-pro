@@ -20,7 +20,7 @@ PAYPAL_WEBHOOK_ID = os.getenv("PAYPAL_WEBHOOK_ID", "").strip()
 
 FRONTEND_URL = os.getenv(
     "FRONTEND_URL",
-    "https://talentmatch-frontend-dejan.onrender.com",
+    "https://talentmatchcv.com",
 ).rstrip("/")
 
 
@@ -159,7 +159,7 @@ class PayPalBillingProvider(BillingProvider):
         return approve_url
 
     def create_customer_portal_url(self, user: User) -> str:
-        return "https://www.paypal.com/myaccount/autopay/"
+        return f"{FRONTEND_URL}/customer-portal"
 
     def _verify_webhook_signature(self, body: bytes, headers: dict) -> None:
         if not PAYPAL_WEBHOOK_ID:
