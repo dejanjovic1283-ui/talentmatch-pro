@@ -8,7 +8,7 @@ from auth_utils import clear_auth, is_logged_in, is_pro_user, refresh_profile
 from components.ui import get_display_name, get_initials, safe_html
 
 
-APP_VERSION = "v1.0"
+APP_VERSION = "v2.0"
 
 
 def _sidebar_css() -> None:
@@ -354,9 +354,11 @@ def _render_navigation() -> None:
     if is_pro_user():
         st.page_link("pages/semantic_match.py", label="🧠 Semantic Match")
         st.page_link("pages/recruiter_mode.py", label="👥 Recruiter Mode")
+        st.page_link("pages/candidate_database.py", label="🗂 Candidate Database")
     else:
         st.page_link("pages/pricing.py", label="🧠 Semantic Match 🔒")
         st.page_link("pages/pricing.py", label="👥 Recruiter Mode 🔒")
+        st.page_link("pages/pricing.py", label="🗂 Candidate Database 🔒")
 
     _section("Account")
     st.page_link("pages/history.py", label="📜 History")
