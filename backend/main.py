@@ -23,7 +23,7 @@ load_dotenv()
 from auth import get_current_user, get_test_user
 from billing.factory import get_billing_provider
 from db import Base, engine, get_db
-from models import AnalysisRecord, User
+from models import AnalysisRecord, RecruiterCandidate, User
 from openai_service import AIServiceError, analyze_cv_with_ai, rewrite_cv_with_ai
 from pdf_report import build_analysis_pdf_report
 from pdf_utils import extract_text_from_pdf
@@ -50,6 +50,46 @@ def run_lightweight_migrations() -> None:
         "ALTER TABLE users ADD COLUMN paypal_subscription_id VARCHAR",
         "ALTER TABLE users ADD COLUMN paypal_subscription_status VARCHAR",
         "ALTER TABLE analysis_records ADD COLUMN analysis_type VARCHAR DEFAULT 'cv_analysis'",
+
+        # TalentMatch Pro v2.0 - Recruiter Workspace / Candidate Database.
+        # This table stores every candidate returned by Recruiter Mode, not only the top result.
+        """
+        CREATE TABLE IF NOT EXISTS recruiter_candidates (
+            id INTEGER PRIMARY KEY,
+            user_id INTEGER NOT NULL,
+            filename VARCHAR(255) NOT NULL,
+            cv_storage_path VARCHAR(500),
+            job_description TEXT NOT NULL,
+            rank INTEGER DEFAULT 0,
+            score INTEGER DEFAULT 0,
+            match_score INTEGER DEFAULT 0,
+            combined_score INTEGER DEFAULT 0,
+            semantic_score INTEGER DEFAULT 0,
+            keyword_score INTEGER DEFAULT 0,
+            verdict VARCHAR(100) DEFAULT '',
+            summary TEXT DEFAULT '',
+            matched_skills TEXT DEFAULT '[]',
+            missing_skills TEXT DEFAULT '[]',
+            recommendations TEXT DEFAULT '[]',
+            matched_keywords TEXT DEFAULT '[]',
+            missing_keywords TEXT DEFAULT '[]',
+            favorite BOOLEAN DEFAULT FALSE,
+            status VARCHAR(50) DEFAULT 'new',
+            notes TEXT DEFAULT '',
+            tags TEXT DEFAULT '[]',
+            source VARCHAR(100) DEFAULT 'recruiter_mode',
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY(user_id) REFERENCES users(id)
+        )
+        """,
+        "CREATE INDEX IF NOT EXISTS ix_recruiter_candidates_user_id ON recruiter_candidates (user_id)",
+        "CREATE INDEX IF NOT EXISTS ix_recruiter_candidates_filename ON recruiter_candidates (filename)",
+        "CREATE INDEX IF NOT EXISTS ix_recruiter_candidates_rank ON recruiter_candidates (rank)",
+        "CREATE INDEX IF NOT EXISTS ix_recruiter_candidates_score ON recruiter_candidates (score)",
+        "CREATE INDEX IF NOT EXISTS ix_recruiter_candidates_favorite ON recruiter_candidates (favorite)",
+        "CREATE INDEX IF NOT EXISTS ix_recruiter_candidates_status ON recruiter_candidates (status)",
+        "CREATE INDEX IF NOT EXISTS ix_recruiter_candidates_created_at ON recruiter_candidates (created_at)",
     ]
 
     for migration in migrations:
