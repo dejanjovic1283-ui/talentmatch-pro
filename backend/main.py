@@ -11,6 +11,7 @@ from dotenv import load_dotenv
 from fastapi import Depends, FastAPI, File, Form, HTTPException, Request, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, StreamingResponse
+from pydantic import BaseModel, Field
 from sqlalchemy import text
 from sqlalchemy.orm import Session
 
@@ -117,7 +118,7 @@ app.add_middleware(
     CORSMiddleware,
     allow_origins=get_cors_origins(),
     allow_credentials=True,
-    allow_methods=["GET", "POST", "OPTIONS"],
+    allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],
     allow_headers=[
         "Authorization",
         "Content-Type",
@@ -173,6 +174,100 @@ def raise_ai_http_exception(exc: AIServiceError) -> NoReturn:
             "type": "ai_service_error",
         },
     )
+
+
+class CandidateCreateRequest(BaseModel):
+    filename: str = Field(default="candidate.pdf")
+    cv_storage_path: str | None = None
+    job_description: str = Field(default="")
+    rank: int = 0
+    score: int = 0
+    match_score: int = 0
+    combined_score: int = 0
+    semantic_score: int = 0
+    keyword_score: int = 0
+    verdict: str = ""
+    summary: str = ""
+    matched_skills: list[str] = Field(default_factory=list)
+    missing_skills: list[str] = Field(default_factory=list)
+    recommendations: list[str] = Field(default_factory=list)
+    matched_keywords: list[str] = Field(default_factory=list)
+    missing_keywords: list[str] = Field(default_factory=list)
+    favorite: bool = False
+    status: str = "new"
+    notes: str = ""
+    tags: list[str] = Field(default_factory=list)
+
+
+class CandidateUpdateRequest(BaseModel):
+    filename: str | None = None
+    cv_storage_path: str | None = None
+    job_description: str | None = None
+    rank: int | None = None
+    score: int | None = None
+    match_score: int | None = None
+    combined_score: int | None = None
+    semantic_score: int | None = None
+    keyword_score: int | None = None
+    verdict: str | None = None
+    summary: str | None = None
+    matched_skills: list[str] | None = None
+    missing_skills: list[str] | None = None
+    recommendations: list[str] | None = None
+    matched_keywords: list[str] | None = None
+    missing_keywords: list[str] | None = None
+    favorite: bool | None = None
+    status: str | None = None
+    notes: str | None = None
+    tags: list[str] | None = None
+
+
+def normalize_json_list(value: object) -> str:
+    if value is None:
+        return "[]"
+
+    if isinstance(value, str):
+        try:
+            parsed = json.loads(value)
+            if isinstance(parsed, list):
+                return json.dumps(parsed)
+        except Exception:
+            return json.dumps([item.strip() for item in value.split(",") if item.strip()])
+
+    if isinstance(value, list):
+        return json.dumps([str(item).strip() for item in value if str(item).strip()])
+
+    return "[]"
+
+
+def recruiter_candidate_to_dict(candidate: RecruiterCandidate) -> dict:
+    return {
+        "id": candidate.id,
+        "user_id": candidate.user_id,
+        "filename": candidate.filename,
+        "cv_storage_path": candidate.cv_storage_path,
+        "job_description": candidate.job_description,
+        "rank": candidate.rank,
+        "score": candidate.score,
+        "match_score": candidate.match_score,
+        "combined_score": candidate.combined_score,
+        "semantic_score": candidate.semantic_score,
+        "keyword_score": candidate.keyword_score,
+        "verdict": candidate.verdict,
+        "summary": candidate.summary,
+        "matched_skills": parse_json_list(candidate.matched_skills),
+        "missing_skills": parse_json_list(candidate.missing_skills),
+        "recommendations": parse_json_list(candidate.recommendations),
+        "matched_keywords": parse_json_list(candidate.matched_keywords),
+        "missing_keywords": parse_json_list(candidate.missing_keywords),
+        "favorite": bool(candidate.favorite),
+        "status": candidate.status,
+        "notes": candidate.notes,
+        "tags": parse_json_list(candidate.tags),
+        "source": candidate.source,
+        "created_at": candidate.created_at.isoformat() if candidate.created_at else None,
+        "updated_at": candidate.updated_at.isoformat() if candidate.updated_at else None,
+    }
 
 
 def create_analysis_history_record(
@@ -635,6 +730,234 @@ async def semantic_match(
     return result
 
 
+
+@app.post("/recruiter/candidates/save")
+def save_recruiter_candidate(
+    payload: CandidateCreateRequest,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    if not current_user.is_pro:
+        raise HTTPException(status_code=403, detail="Candidate Database is a Pro feature.")
+
+    candidate = RecruiterCandidate(
+        user_id=current_user.id,
+        filename=payload.filename or "candidate.pdf",
+        cv_storage_path=payload.cv_storage_path,
+        job_description=payload.job_description or "",
+        rank=int(payload.rank or 0),
+        score=int(payload.score or payload.combined_score or payload.match_score or 0),
+        match_score=int(payload.match_score or 0),
+        combined_score=int(payload.combined_score or payload.score or 0),
+        semantic_score=int(payload.semantic_score or 0),
+        keyword_score=int(payload.keyword_score or 0),
+        verdict=payload.verdict or "",
+        summary=payload.summary or "",
+        matched_skills=normalize_json_list(payload.matched_skills),
+        missing_skills=normalize_json_list(payload.missing_skills),
+        recommendations=normalize_json_list(payload.recommendations),
+        matched_keywords=normalize_json_list(payload.matched_keywords),
+        missing_keywords=normalize_json_list(payload.missing_keywords),
+        favorite=bool(payload.favorite),
+        status=payload.status or "new",
+        notes=payload.notes or "",
+        tags=normalize_json_list(payload.tags),
+        source="recruiter_mode",
+    )
+
+    db.add(candidate)
+    db.commit()
+    db.refresh(candidate)
+
+    return recruiter_candidate_to_dict(candidate)
+
+
+@app.get("/recruiter/candidates")
+def list_recruiter_candidates(
+    search: str | None = None,
+    status: str | None = None,
+    favorite: bool | None = None,
+    min_score: int = 0,
+    limit: int = 100,
+    offset: int = 0,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    if not current_user.is_pro:
+        raise HTTPException(status_code=403, detail="Candidate Database is a Pro feature.")
+
+    query = db.query(RecruiterCandidate).filter(RecruiterCandidate.user_id == current_user.id)
+
+    if status:
+        query = query.filter(RecruiterCandidate.status == status)
+
+    if favorite is not None:
+        query = query.filter(RecruiterCandidate.favorite == favorite)
+
+    if min_score:
+        query = query.filter(RecruiterCandidate.score >= int(min_score))
+
+    if search:
+        like_value = f"%{search.strip()}%"
+        query = query.filter(
+            (RecruiterCandidate.filename.ilike(like_value))
+            | (RecruiterCandidate.summary.ilike(like_value))
+            | (RecruiterCandidate.notes.ilike(like_value))
+            | (RecruiterCandidate.tags.ilike(like_value))
+        )
+
+    total = query.count()
+
+    candidates = (
+        query.order_by(RecruiterCandidate.created_at.desc())
+        .offset(max(int(offset), 0))
+        .limit(min(max(int(limit), 1), 250))
+        .all()
+    )
+
+    return {
+        "candidates": [recruiter_candidate_to_dict(candidate) for candidate in candidates],
+        "total": total,
+        "limit": limit,
+        "offset": offset,
+    }
+
+
+@app.get("/recruiter/candidates/{candidate_id}")
+def get_recruiter_candidate(
+    candidate_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    if not current_user.is_pro:
+        raise HTTPException(status_code=403, detail="Candidate Database is a Pro feature.")
+
+    candidate = (
+        db.query(RecruiterCandidate)
+        .filter(
+            RecruiterCandidate.id == candidate_id,
+            RecruiterCandidate.user_id == current_user.id,
+        )
+        .first()
+    )
+
+    if candidate is None:
+        raise HTTPException(status_code=404, detail="Candidate not found.")
+
+    return recruiter_candidate_to_dict(candidate)
+
+
+@app.get("/recruiter/candidate/{candidate_id}")
+def get_recruiter_candidate_legacy_alias(
+    candidate_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    return get_recruiter_candidate(candidate_id, db, current_user)
+
+
+@app.put("/recruiter/candidates/{candidate_id}")
+def update_recruiter_candidate(
+    candidate_id: int,
+    payload: CandidateUpdateRequest,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    if not current_user.is_pro:
+        raise HTTPException(status_code=403, detail="Candidate Database is a Pro feature.")
+
+    candidate = (
+        db.query(RecruiterCandidate)
+        .filter(
+            RecruiterCandidate.id == candidate_id,
+            RecruiterCandidate.user_id == current_user.id,
+        )
+        .first()
+    )
+
+    if candidate is None:
+        raise HTTPException(status_code=404, detail="Candidate not found.")
+
+    scalar_fields = [
+        "filename",
+        "cv_storage_path",
+        "job_description",
+        "rank",
+        "score",
+        "match_score",
+        "combined_score",
+        "semantic_score",
+        "keyword_score",
+        "verdict",
+        "summary",
+        "favorite",
+        "status",
+        "notes",
+    ]
+
+    updates = payload.model_dump(exclude_unset=True)
+
+    for field_name in scalar_fields:
+        if field_name in updates:
+            setattr(candidate, field_name, updates[field_name])
+
+    json_fields = [
+        "matched_skills",
+        "missing_skills",
+        "recommendations",
+        "matched_keywords",
+        "missing_keywords",
+        "tags",
+    ]
+
+    for field_name in json_fields:
+        if field_name in updates:
+            setattr(candidate, field_name, normalize_json_list(updates[field_name]))
+
+    db.commit()
+    db.refresh(candidate)
+
+    return recruiter_candidate_to_dict(candidate)
+
+
+@app.delete("/recruiter/candidates/{candidate_id}")
+def delete_recruiter_candidate(
+    candidate_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    if not current_user.is_pro:
+        raise HTTPException(status_code=403, detail="Candidate Database is a Pro feature.")
+
+    candidate = (
+        db.query(RecruiterCandidate)
+        .filter(
+            RecruiterCandidate.id == candidate_id,
+            RecruiterCandidate.user_id == current_user.id,
+        )
+        .first()
+    )
+
+    if candidate is None:
+        raise HTTPException(status_code=404, detail="Candidate not found.")
+
+    db.delete(candidate)
+    db.commit()
+
+    return {"status": "deleted", "id": candidate_id}
+
+
+@app.delete("/recruiter/candidate/{candidate_id}")
+def delete_recruiter_candidate_legacy_alias(
+    candidate_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    return delete_recruiter_candidate(candidate_id, db, current_user)
+
+
+
+
 @app.post("/recruiter/rank-candidates")
 async def recruiter_rank_candidates(
     files: list[UploadFile] = File(...),
@@ -983,4 +1306,3 @@ if __name__ == "__main__":
         port=port,
         reload=False,
     )
-    

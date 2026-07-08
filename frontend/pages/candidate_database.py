@@ -345,7 +345,7 @@ if render_sidebar:
     try:
         render_sidebar()
     except TypeError:
-        render_sidebar(app_name=APP_NAME)
+        render_sidebar()
     except Exception:
         st.sidebar.title(APP_NAME)
 else:
