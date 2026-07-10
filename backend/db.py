@@ -7,7 +7,10 @@ from sqlalchemy.orm import DeclarativeBase, sessionmaker
 # Load environment variables before the database engine is created.
 load_dotenv()
 
-DATABASE_URL = os.getenv("DATABASE_URL", "sqlite:///./talentmatch.db")
+DATABASE_URL = os.getenv(
+    "DATABASE_URL",
+    "sqlite:////app/data/talentmatch.db",
+)
 
 # SQLite needs this flag for local threaded development.
 connect_args = {}
