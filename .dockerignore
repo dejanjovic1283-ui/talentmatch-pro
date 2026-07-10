@@ -1,0 +1,60 @@
+# Git and editor metadata
+.git
+.gitignore
+.gitattributes
+.github
+.vscode
+.idea
+*.code-workspace
+
+# Python cache and test output
+**/__pycache__/
+**/*.py[cod]
+**/.pytest_cache/
+**/.mypy_cache/
+**/.ruff_cache/
+**/.coverage
+**/htmlcov/
+
+# Virtual environments
+.venv/
+venv/
+env/
+**/.venv/
+**/venv/
+
+# Local databases and runtime files
+*.db
+*.sqlite
+*.sqlite3
+*.log
+*.pid
+
+# Secrets and local environment files
+.env
+.env.*
+**/.env
+**/.env.*
+**/.streamlit/secrets.toml
+**/service-account*.json
+**/*firebase*credentials*.json
+
+# OS files
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Build and package output
+build/
+dist/
+*.egg-info/
+
+# Project documentation and generated media are not needed at runtime
+docs/
+screenshots/
+*.zip
+
+# Docker files should not be copied into the image
+Dockerfile*
+docker-compose*.yml
+.dockerignore
