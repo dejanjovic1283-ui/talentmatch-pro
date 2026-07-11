@@ -10,6 +10,8 @@ import certifi
 from dotenv import load_dotenv
 from fastapi import Depends, FastAPI, File, Form, HTTPException, Request, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
+from starlette.middleware.httpsredirect import HTTPSRedirectMiddleware
+from starlette.middleware.trustedhost import TrustedHostMiddleware
 from fastapi.responses import FileResponse, StreamingResponse
 from pydantic import BaseModel, Field
 from sqlalchemy import text
@@ -106,13 +108,78 @@ run_lightweight_migrations()
 app = FastAPI(title="TalentMatch Pro API", version="0.1.0")
 
 
+def get_environment() -> str:
+    return os.getenv("ENVIRONMENT", os.getenv("APP_ENV", "development")).strip().lower()
+
+
+def env_flag(name: str, default: bool = False) -> bool:
+    raw_value = os.getenv(name)
+
+    if raw_value is None:
+        return default
+
+    return raw_value.strip().lower() in {"1", "true", "yes", "on"}
+
+
+def get_allowed_hosts() -> list[str]:
+    raw = os.getenv(
+        "ALLOWED_HOSTS",
+        ",".join(
+            [
+                "localhost",
+                "127.0.0.1",
+                "backend",
+                "testserver",
+                "api.talentmatchcv.com",
+                "talentmatchcv.com",
+                "www.talentmatchcv.com",
+                "*.talentmatchcv.com",
+                "*.onrender.com",
+            ]
+        ),
+    )
+
+    hosts = []
+    for host in raw.split(","):
+        normalized = host.strip().lower().rstrip(".")
+        if normalized and normalized not in hosts:
+            hosts.append(normalized)
+
+    if not hosts:
+        raise RuntimeError("ALLOWED_HOSTS must contain at least one trusted host.")
+
+    return hosts
+
+
+def should_force_https() -> bool:
+    default = get_environment() in {"production", "prod"}
+    return env_flag("FORCE_HTTPS", default=default)
+
+
 def get_cors_origins() -> list[str]:
     raw = os.getenv(
         "CORS_ORIGINS",
-        "http://localhost:8501,http://127.0.0.1:8501,https://talentmatch-frontend-dejan.onrender.com",
+        ",".join(
+            [
+                "http://localhost:8501",
+                "http://127.0.0.1:8501",
+                "https://talentmatchcv.com",
+                "https://www.talentmatchcv.com",
+                "https://talentmatch-frontend-dejan.onrender.com",
+            ]
+        ),
     )
     return [origin.strip().rstrip("/") for origin in raw.split(",") if origin.strip()]
 
+
+app.add_middleware(
+    TrustedHostMiddleware,
+    allowed_hosts=get_allowed_hosts(),
+    www_redirect=False,
+)
+
+if should_force_https():
+    app.add_middleware(HTTPSRedirectMiddleware)
 
 app.add_middleware(
     CORSMiddleware,
@@ -137,7 +204,9 @@ def config_status() -> dict:
     google_credentials = os.getenv("GOOGLE_APPLICATION_CREDENTIALS", "").strip()
 
     return {
-        "environment": os.getenv("ENVIRONMENT", os.getenv("APP_ENV", "development")),
+        "environment": get_environment(),
+        "https_redirect_enabled": should_force_https(),
+        "trusted_hosts_count": len(get_allowed_hosts()),
         "database_configured": bool(database_url),
         "openai_configured": bool(os.getenv("OPENAI_API_KEY", "").strip()),
         "firebase_project_configured": bool(os.getenv("FIREBASE_PROJECT_ID", "").strip()),
