@@ -10,6 +10,7 @@ import certifi
 from dotenv import load_dotenv
 from fastapi import Depends, FastAPI, File, Form, HTTPException, Request, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
+from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.middleware.httpsredirect import HTTPSRedirectMiddleware
 from starlette.middleware.trustedhost import TrustedHostMiddleware
 from fastapi.responses import FileResponse, StreamingResponse
@@ -105,8 +106,6 @@ def run_lightweight_migrations() -> None:
 
 run_lightweight_migrations()
 
-app = FastAPI(title="TalentMatch Pro API", version="0.1.0")
-
 
 def get_environment() -> str:
     return os.getenv("ENVIRONMENT", os.getenv("APP_ENV", "development")).strip().lower()
@@ -119,6 +118,104 @@ def env_flag(name: str, default: bool = False) -> bool:
         return default
 
     return raw_value.strip().lower() in {"1", "true", "yes", "on"}
+
+
+def should_force_https() -> bool:
+    default = get_environment() in {"production", "prod"}
+    return env_flag("FORCE_HTTPS", default=default)
+
+
+def should_enable_hsts() -> bool:
+    default = get_environment() in {"production", "prod"}
+    return env_flag("ENABLE_HSTS", default=default)
+
+
+def get_hsts_max_age() -> int:
+    raw_value = os.getenv("HSTS_MAX_AGE", "31536000").strip()
+
+    try:
+        max_age = int(raw_value)
+    except ValueError as exc:
+        raise RuntimeError("HSTS_MAX_AGE must be a valid integer.") from exc
+
+    if max_age < 0:
+        raise RuntimeError("HSTS_MAX_AGE cannot be negative.")
+
+    return max_age
+
+
+def get_api_content_security_policy() -> str:
+    return os.getenv(
+        "API_CONTENT_SECURITY_POLICY",
+        "; ".join(
+            [
+                "default-src 'none'",
+                "base-uri 'none'",
+                "frame-ancestors 'none'",
+                "form-action 'none'",
+            ]
+        ),
+    ).strip()
+
+
+def get_docs_content_security_policy() -> str:
+    return os.getenv(
+        "DOCS_CONTENT_SECURITY_POLICY",
+        "; ".join(
+            [
+                "default-src 'self'",
+                "base-uri 'self'",
+                "frame-ancestors 'none'",
+                "form-action 'self'",
+                "script-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net",
+                "style-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net",
+                "img-src 'self' data: https://fastapi.tiangolo.com",
+                "font-src 'self' data: https://cdn.jsdelivr.net",
+                "connect-src 'self'",
+            ]
+        ),
+    ).strip()
+
+
+class SecurityHeadersMiddleware(BaseHTTPMiddleware):
+    async def dispatch(self, request: Request, call_next):
+        response = await call_next(request)
+
+        request_path = request.url.path
+        is_docs_route = (
+            request_path == "/docs"
+            or request_path.startswith("/docs/")
+            or request_path == "/redoc"
+            or request_path.startswith("/redoc/")
+            or request_path == "/openapi.json"
+        )
+
+        response.headers["X-Content-Type-Options"] = "nosniff"
+        response.headers["X-Frame-Options"] = "DENY"
+        response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
+        response.headers["Permissions-Policy"] = (
+            "accelerometer=(), autoplay=(), camera=(), display-capture=(), "
+            "encrypted-media=(), fullscreen=(), geolocation=(), gyroscope=(), "
+            "magnetometer=(), microphone=(), midi=(), payment=(), "
+            "picture-in-picture=(), publickey-credentials-get=(), usb=()"
+        )
+        response.headers["Cross-Origin-Opener-Policy"] = "same-origin"
+        response.headers["Cross-Origin-Resource-Policy"] = "cross-origin"
+        response.headers["Content-Security-Policy"] = (
+            get_docs_content_security_policy()
+            if is_docs_route
+            else get_api_content_security_policy()
+        )
+
+        if should_enable_hsts():
+            response.headers["Strict-Transport-Security"] = (
+                f"max-age={get_hsts_max_age()}; includeSubDomains"
+            )
+
+        return response
+
+
+app = FastAPI(title="TalentMatch Pro API", version="0.1.0")
 
 
 def get_allowed_hosts() -> list[str]:
@@ -151,11 +248,6 @@ def get_allowed_hosts() -> list[str]:
     return hosts
 
 
-def should_force_https() -> bool:
-    default = get_environment() in {"production", "prod"}
-    return env_flag("FORCE_HTTPS", default=default)
-
-
 def get_cors_origins() -> list[str]:
     raw = os.getenv(
         "CORS_ORIGINS",
@@ -171,6 +263,8 @@ def get_cors_origins() -> list[str]:
     )
     return [origin.strip().rstrip("/") for origin in raw.split(",") if origin.strip()]
 
+
+app.add_middleware(SecurityHeadersMiddleware)
 
 app.add_middleware(
     TrustedHostMiddleware,
@@ -206,6 +300,8 @@ def config_status() -> dict:
     return {
         "environment": get_environment(),
         "https_redirect_enabled": should_force_https(),
+        "hsts_enabled": should_enable_hsts(),
+        "security_headers_enabled": True,
         "trusted_hosts_count": len(get_allowed_hosts()),
         "database_configured": bool(database_url),
         "openai_configured": bool(os.getenv("OPENAI_API_KEY", "").strip()),
