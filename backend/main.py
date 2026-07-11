@@ -1,4 +1,5 @@
 import asyncio
+import hashlib
 import json
 import logging
 import os
@@ -18,6 +19,7 @@ from dotenv import load_dotenv
 from fastapi import Depends, FastAPI, File, Form, HTTPException, Request, UploadFile
 from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
+from starlette.middleware.gzip import GZipMiddleware
 from starlette.exceptions import HTTPException as StarletteHTTPException
 from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.middleware.httpsredirect import HTTPSRedirectMiddleware
@@ -256,6 +258,294 @@ def get_docs_content_security_policy() -> str:
             ]
         ),
     ).strip()
+
+
+
+class ResponseOptimizationMiddleware:
+    """
+    Adds safe cache policy, weak ETags and conditional GET support.
+
+    ETags are limited to small public or documentation responses. Private and
+    user-specific API responses always receive Cache-Control: no-store.
+    Streaming and download responses are never buffered or modified.
+    """
+
+    PUBLIC_CACHE_POLICIES = {
+        "/robots.txt": "public, max-age=3600, stale-while-revalidate=86400",
+        "/sitemap.xml": "public, max-age=3600, stale-while-revalidate=86400",
+        "/openapi.json": "public, max-age=300, stale-while-revalidate=3600",
+    }
+
+    ETAG_PATHS = {
+        "/robots.txt",
+        "/sitemap.xml",
+        "/openapi.json",
+    }
+
+    NO_STORE_PATHS = {
+        "/",
+        "/healthz",
+        "/readyz",
+        "/metrics",
+        "/error-test",
+    }
+
+    MAX_ETAG_BODY_BYTES = 1_048_576
+
+    def __init__(self, app):
+        self.app = app
+
+    @staticmethod
+    def _headers_to_dict(headers: list[tuple[bytes, bytes]]) -> dict[bytes, bytes]:
+        return {name.lower(): value for name, value in headers}
+
+    @staticmethod
+    def _replace_header(
+        headers: list[tuple[bytes, bytes]],
+        name: bytes,
+        value: bytes,
+    ) -> list[tuple[bytes, bytes]]:
+        lowered_name = name.lower()
+        updated = [
+            (header_name, header_value)
+            for header_name, header_value in headers
+            if header_name.lower() != lowered_name
+        ]
+        updated.append((name, value))
+        return updated
+
+    @staticmethod
+    def _remove_headers(
+        headers: list[tuple[bytes, bytes]],
+        names: set[bytes],
+    ) -> list[tuple[bytes, bytes]]:
+        lowered_names = {name.lower() for name in names}
+        return [
+            (header_name, header_value)
+            for header_name, header_value in headers
+            if header_name.lower() not in lowered_names
+        ]
+
+    @staticmethod
+    def _weak_etag(body: bytes) -> str:
+        digest = hashlib.sha256(body).hexdigest()
+        return f'W/"{digest}"'
+
+    @staticmethod
+    def _etag_matches(if_none_match: str, etag: str) -> bool:
+        candidates = {
+            candidate.strip()
+            for candidate in if_none_match.split(",")
+            if candidate.strip()
+        }
+        return "*" in candidates or etag in candidates
+
+    def _cache_control_for(self, path: str, method: str) -> str:
+        if path in self.PUBLIC_CACHE_POLICIES:
+            return self.PUBLIC_CACHE_POLICIES[path]
+
+        if path in self.NO_STORE_PATHS:
+            return "no-store"
+
+        if method in {"GET", "HEAD"}:
+            return "private, no-store"
+
+        return "no-store"
+
+    async def __call__(self, scope, receive, send):
+        if scope["type"] != "http":
+            await self.app(scope, receive, send)
+            return
+
+        method = scope.get("method", "GET").upper()
+        path = scope.get("path", "")
+        request_headers = {
+            name.lower(): value
+            for name, value in scope.get("headers", [])
+        }
+
+        should_build_etag = method in {"GET", "HEAD"} and path in self.ETAG_PATHS
+
+        if not should_build_etag:
+            async def send_with_cache(message):
+                if message["type"] == "http.response.start":
+                    headers = list(message.get("headers", []))
+                    header_map = self._headers_to_dict(headers)
+
+                    if b"cache-control" not in header_map:
+                        headers.append(
+                            (
+                                b"cache-control",
+                                self._cache_control_for(path, method).encode("latin-1"),
+                            )
+                        )
+
+                    message["headers"] = headers
+
+                await send(message)
+
+            await self.app(scope, receive, send_with_cache)
+            return
+
+        start_message = None
+        body_chunks: list[bytes] = []
+        body_size = 0
+        passthrough = False
+
+        async def capture_send(message):
+            nonlocal start_message, body_size, passthrough
+
+            if passthrough:
+                await send(message)
+                return
+
+            if message["type"] == "http.response.start":
+                start_message = {
+                    "type": "http.response.start",
+                    "status": message["status"],
+                    "headers": list(message.get("headers", [])),
+                }
+                return
+
+            if message["type"] == "http.response.body":
+                chunk = message.get("body", b"")
+                body_size += len(chunk)
+
+                if body_size > self.MAX_ETAG_BODY_BYTES:
+                    passthrough = True
+
+                    if start_message is not None:
+                        headers = list(start_message.get("headers", []))
+                        header_map = self._headers_to_dict(headers)
+                        if b"cache-control" not in header_map:
+                            headers.append(
+                                (
+                                    b"cache-control",
+                                    self._cache_control_for(path, method).encode("latin-1"),
+                                )
+                            )
+                        start_message["headers"] = headers
+                        await send(start_message)
+
+                    for buffered_chunk in body_chunks:
+                        await send(
+                            {
+                                "type": "http.response.body",
+                                "body": buffered_chunk,
+                                "more_body": True,
+                            }
+                        )
+
+                    await send(message)
+                    return
+
+                body_chunks.append(chunk)
+
+                if message.get("more_body", False):
+                    return
+
+                if start_message is None:
+                    await send(message)
+                    return
+
+                status_code = int(start_message["status"])
+                body = b"".join(body_chunks)
+                headers = list(start_message.get("headers", []))
+                header_map = self._headers_to_dict(headers)
+
+                if b"cache-control" not in header_map:
+                    headers.append(
+                        (
+                            b"cache-control",
+                            self._cache_control_for(path, method).encode("latin-1"),
+                        )
+                    )
+
+                content_type = header_map.get(b"content-type", b"").decode(
+                    "latin-1",
+                    errors="ignore",
+                )
+
+                can_etag = (
+                    status_code == 200
+                    and body
+                    and (
+                        content_type.startswith("application/json")
+                        or content_type.startswith("text/")
+                        or content_type.startswith("application/xml")
+                    )
+                )
+
+                if can_etag:
+                    etag = self._weak_etag(body)
+                    headers = self._replace_header(
+                        headers,
+                        b"etag",
+                        etag.encode("latin-1"),
+                    )
+
+                    vary_value = header_map.get(b"vary", b"").decode(
+                        "latin-1",
+                        errors="ignore",
+                    )
+                    vary_tokens = {
+                        token.strip()
+                        for token in vary_value.split(",")
+                        if token.strip()
+                    }
+                    vary_tokens.add("Accept-Encoding")
+                    headers = self._replace_header(
+                        headers,
+                        b"vary",
+                        ", ".join(sorted(vary_tokens)).encode("latin-1"),
+                    )
+
+                    incoming_etag = request_headers.get(b"if-none-match", b"").decode(
+                        "latin-1",
+                        errors="ignore",
+                    )
+
+                    if incoming_etag and self._etag_matches(incoming_etag, etag):
+                        headers = self._remove_headers(
+                            headers,
+                            {
+                                b"content-length",
+                                b"content-type",
+                                b"content-encoding",
+                            },
+                        )
+                        await send(
+                            {
+                                "type": "http.response.start",
+                                "status": 304,
+                                "headers": headers,
+                            }
+                        )
+                        await send(
+                            {
+                                "type": "http.response.body",
+                                "body": b"",
+                                "more_body": False,
+                            }
+                        )
+                        return
+
+                headers = self._replace_header(
+                    headers,
+                    b"content-length",
+                    str(len(body)).encode("latin-1"),
+                )
+                start_message["headers"] = headers
+                await send(start_message)
+                await send(
+                    {
+                        "type": "http.response.body",
+                        "body": b"" if method == "HEAD" else body,
+                        "more_body": False,
+                    }
+                )
+
+        await self.app(scope, receive, capture_send)
 
 
 class RequestLoggingMiddleware(BaseHTTPMiddleware):
@@ -787,6 +1077,12 @@ def get_cors_origins() -> list[str]:
 
 
 app.add_middleware(RateLimitMiddleware)
+app.add_middleware(
+    GZipMiddleware,
+    minimum_size=get_positive_int_env("GZIP_MINIMUM_SIZE", 500),
+    compresslevel=get_positive_int_env("GZIP_COMPRESS_LEVEL", 6),
+)
+app.add_middleware(ResponseOptimizationMiddleware)
 app.add_middleware(SecurityHeadersMiddleware)
 app.add_middleware(RequestLoggingMiddleware)
 
@@ -832,6 +1128,11 @@ def config_status() -> dict:
         "standard_error_responses_enabled": True,
         "observability_enabled": True,
         "metrics_endpoint_enabled": True,
+        "gzip_compression_enabled": True,
+        "gzip_minimum_size": get_positive_int_env("GZIP_MINIMUM_SIZE", 500),
+        "etag_enabled": True,
+        "conditional_get_enabled": True,
+        "cache_control_enabled": True,
         "uptime_seconds": METRICS.snapshot(
             environment=get_environment()
         )["uptime_seconds"],
