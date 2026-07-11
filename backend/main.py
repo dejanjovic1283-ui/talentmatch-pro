@@ -332,13 +332,34 @@ class ResponseOptimizationMiddleware:
         return f'W/"{digest}"'
 
     @staticmethod
-    def _etag_matches(if_none_match: str, etag: str) -> bool:
-        candidates = {
-            candidate.strip()
-            for candidate in if_none_match.split(",")
-            if candidate.strip()
-        }
-        return "*" in candidates or etag in candidates
+    def _normalize_etag(value: str) -> str:
+        normalized = value.strip()
+
+        if normalized.lower().startswith("w/"):
+            normalized = normalized[2:].strip()
+
+        if len(normalized) >= 2 and normalized[0] == '"' and normalized[-1] == '"':
+            normalized = normalized[1:-1]
+
+        return normalized.strip()
+
+    @classmethod
+    def _etag_matches(cls, if_none_match: str, etag: str) -> bool:
+        expected = cls._normalize_etag(etag)
+
+        for candidate in if_none_match.split(","):
+            candidate = candidate.strip()
+
+            if not candidate:
+                continue
+
+            if candidate == "*":
+                return True
+
+            if cls._normalize_etag(candidate) == expected:
+                return True
+
+        return False
 
     def _cache_control_for(self, path: str, method: str) -> str:
         if path in self.PUBLIC_CACHE_POLICIES:
