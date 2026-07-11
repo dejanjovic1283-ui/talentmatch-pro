@@ -1,9 +1,12 @@
 import asyncio
 import json
+import logging
 import os
 import re
 import ssl
+import sys
 import time
+import uuid
 from collections import defaultdict, deque
 from dataclasses import dataclass
 from io import BytesIO
@@ -27,6 +30,77 @@ os.environ["REQUESTS_CA_BUNDLE"] = certifi.where()
 ssl._create_default_https_context = ssl.create_default_context(cafile=certifi.where())
 
 load_dotenv()
+
+
+def get_log_level() -> int:
+    raw_level = os.getenv("LOG_LEVEL", "INFO").strip().upper()
+    level = getattr(logging, raw_level, None)
+
+    if not isinstance(level, int):
+        raise RuntimeError(
+            "LOG_LEVEL must be one of: CRITICAL, ERROR, WARNING, INFO, DEBUG."
+        )
+
+    return level
+
+
+class JsonFormatter(logging.Formatter):
+    def format(self, record: logging.LogRecord) -> str:
+        payload = {
+            "timestamp": self.formatTime(record, "%Y-%m-%dT%H:%M:%S%z"),
+            "level": record.levelname,
+            "logger": record.name,
+            "message": record.getMessage(),
+        }
+
+        extra_fields = (
+            "request_id",
+            "client_ip",
+            "method",
+            "path",
+            "status_code",
+            "duration_ms",
+            "event",
+        )
+
+        for field_name in extra_fields:
+            field_value = getattr(record, field_name, None)
+            if field_value is not None:
+                payload[field_name] = field_value
+
+        if record.exc_info:
+            payload["exception"] = self.formatException(record.exc_info)
+
+        return json.dumps(payload, ensure_ascii=False)
+
+
+def configure_logging() -> None:
+    handler = logging.StreamHandler(sys.stdout)
+    handler.setFormatter(JsonFormatter())
+
+    root_logger = logging.getLogger()
+    root_logger.handlers.clear()
+    root_logger.setLevel(get_log_level())
+    root_logger.addHandler(handler)
+
+    logging.getLogger("uvicorn.access").disabled = True
+
+
+configure_logging()
+
+logger = logging.getLogger("talentmatch.api")
+
+REQUEST_ID_PATTERN = re.compile(r"^[A-Za-z0-9._-]{8,128}$")
+
+
+def get_request_id(request: Request) -> str:
+    incoming_request_id = request.headers.get("x-request-id", "").strip()
+
+    if incoming_request_id and REQUEST_ID_PATTERN.fullmatch(incoming_request_id):
+        return incoming_request_id
+
+    return str(uuid.uuid4())
+
 
 from auth import get_current_user, get_test_user
 from billing.factory import get_billing_provider
@@ -179,6 +253,52 @@ def get_docs_content_security_policy() -> str:
             ]
         ),
     ).strip()
+
+
+class RequestLoggingMiddleware(BaseHTTPMiddleware):
+    async def dispatch(self, request: Request, call_next):
+        request_id = get_request_id(request)
+        client_ip = get_client_ip(request)
+        started_at = time.perf_counter()
+
+        request.state.request_id = request_id
+
+        try:
+            response = await call_next(request)
+        except Exception:
+            duration_ms = round((time.perf_counter() - started_at) * 1000, 2)
+            logger.exception(
+                "Unhandled request exception.",
+                extra={
+                    "request_id": request_id,
+                    "client_ip": client_ip,
+                    "method": request.method,
+                    "path": request.url.path,
+                    "status_code": 500,
+                    "duration_ms": duration_ms,
+                    "event": "request_failed",
+                },
+            )
+            raise
+
+        duration_ms = round((time.perf_counter() - started_at) * 1000, 2)
+        response.headers["X-Request-ID"] = request_id
+
+        log_method = logger.warning if response.status_code >= 400 else logger.info
+        log_method(
+            "HTTP request completed.",
+            extra={
+                "request_id": request_id,
+                "client_ip": client_ip,
+                "method": request.method,
+                "path": request.url.path,
+                "status_code": response.status_code,
+                "duration_ms": duration_ms,
+                "event": "request_completed",
+            },
+        )
+
+        return response
 
 
 class SecurityHeadersMiddleware(BaseHTTPMiddleware):
@@ -532,6 +652,7 @@ def get_cors_origins() -> list[str]:
 
 app.add_middleware(RateLimitMiddleware)
 app.add_middleware(SecurityHeadersMiddleware)
+app.add_middleware(RequestLoggingMiddleware)
 
 app.add_middleware(
     TrustedHostMiddleware,
@@ -569,6 +690,9 @@ def config_status() -> dict:
         "https_redirect_enabled": should_force_https(),
         "hsts_enabled": should_enable_hsts(),
         "security_headers_enabled": True,
+        "production_logging_enabled": True,
+        "request_id_enabled": True,
+        "log_level": logging.getLevelName(get_log_level()),
         "rate_limiting_enabled": rate_limiting_enabled(),
         "rate_limit_store": "in_memory_single_instance",
         "rate_limit_ai_requests": get_positive_int_env("RATE_LIMIT_AI_REQUESTS", 20),
@@ -745,7 +869,7 @@ def create_analysis_history_record(
                 cv_filename or "resume.pdf",
             )
         except Exception as exc:
-            print("FIREBASE STORAGE ERROR:", repr(exc))
+            logger.exception("Firebase Storage upload failed.")
             storage_path = None
 
     record_kwargs = {
@@ -878,7 +1002,7 @@ async def analyze_resume(
     try:
         result = analyze_cv_with_ai(cv_text, job_description)
     except AIServiceError as exc:
-        print("OPENAI ANALYSIS ERROR:", repr(exc))
+        logger.warning("OpenAI CV analysis failed: %s", exc)
         raise_ai_http_exception(exc)
 
     if result is None:
@@ -925,7 +1049,7 @@ async def analyze_test(
     try:
         return analyze_cv_with_ai(cv_text, job_description)
     except AIServiceError as exc:
-        print("OPENAI ANALYSIS TEST ERROR:", repr(exc))
+        logger.warning("OpenAI analysis test failed: %s", exc)
         raise_ai_http_exception(exc)
 
 
@@ -1150,10 +1274,10 @@ async def semantic_match(
     try:
         result = analyze_semantic_match(cv_text, job_description)
     except AIServiceError as exc:
-        print("SEMANTIC MATCH AI ERROR:", repr(exc))
+        logger.warning("Semantic Match AI request failed: %s", exc)
         raise_ai_http_exception(exc)
     except Exception as exc:
-        print("SEMANTIC MATCH ERROR:", repr(exc))
+        logger.exception("Semantic Match processing failed.")
         raise HTTPException(status_code=500, detail=f"Semantic match failed: {exc}")
 
     create_analysis_history_record(
@@ -1431,7 +1555,7 @@ async def recruiter_rank_candidates(
         try:
             cv_text = extract_text_from_pdf(pdf_bytes) if pdf_bytes else ""
         except Exception as exc:
-            print(f"CV EXTRACT ERROR for {uploaded_file.filename}:", repr(exc))
+            logger.warning("CV text extraction failed for %s: %s", uploaded_file.filename, exc)
             cv_text = ""
 
         candidates.append(
@@ -1444,10 +1568,10 @@ async def recruiter_rank_candidates(
     try:
         result = rank_candidates(candidates=candidates, job_description=job_description)
     except AIServiceError as exc:
-        print("RECRUITER AI ERROR:", repr(exc))
+        logger.warning("Recruiter AI ranking failed: %s", exc)
         raise_ai_http_exception(exc)
     except Exception as exc:
-        print("RECRUITER RANKING ERROR:", repr(exc))
+        logger.exception("Recruiter ranking failed.")
         raise HTTPException(status_code=500, detail=f"Recruiter ranking failed: {exc}")
 
     ranked_candidates = result.get("candidates", result.get("ranked_candidates", []))
@@ -1501,7 +1625,7 @@ async def rewrite_cv(
     try:
         result = rewrite_cv_with_ai(cv_text, job_description)
     except AIServiceError as exc:
-        print("OPENAI CV REWRITE ERROR:", repr(exc))
+        logger.warning("OpenAI CV rewrite failed: %s", exc)
         raise_ai_http_exception(exc)
 
     create_analysis_history_record(
@@ -1550,7 +1674,7 @@ async def create_analysis_pdf_report(
             job_description=job_description,
         )
     except Exception as exc:
-        print("PDF REPORT ERROR:", repr(exc))
+        logger.exception("PDF report generation failed.")
         raise HTTPException(status_code=500, detail=f"PDF report failed: {exc}")
 
     safe_filename = re.sub(r"[^a-zA-Z0-9_-]+", "_", cv_filename.replace(".pdf", ""))
@@ -1672,9 +1796,9 @@ def create_checkout(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    print("=== PAYPAL CHECKOUT REQUEST ===")
-    print("USER ID:", current_user.id)
-    print("USER EMAIL:", current_user.email)
+    logger.info("PayPal checkout requested.", extra={"event": "paypal_checkout_requested"})
+    logger.info("PayPal checkout user resolved.", extra={"event": "paypal_checkout_user_resolved"})
+    # Email intentionally not logged to reduce exposure of personal data.
 
     db.expire_all()
     user = db.query(User).filter(User.id == current_user.id).first()
@@ -1685,7 +1809,7 @@ def create_checkout(
     provider = get_billing_provider()
     checkout_url = provider.create_checkout_url(user)
 
-    print("PAYPAL CHECKOUT URL CREATED")
+    logger.info("PayPal checkout URL created.", extra={"event": "paypal_checkout_created"})
 
     return {"checkout_url": checkout_url}
 
