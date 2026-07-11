@@ -16,7 +16,9 @@ from typing import NoReturn
 import certifi
 from dotenv import load_dotenv
 from fastapi import Depends, FastAPI, File, Form, HTTPException, Request, UploadFile
+from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
+from starlette.exceptions import HTTPException as StarletteHTTPException
 from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.middleware.httpsredirect import HTTPSRedirectMiddleware
 from starlette.middleware.trustedhost import TrustedHostMiddleware
@@ -601,7 +603,128 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
         return response
 
 
+
+def request_id_from_state(request: Request) -> str:
+    request_id = getattr(request.state, "request_id", None)
+
+    if isinstance(request_id, str) and REQUEST_ID_PATTERN.fullmatch(request_id):
+        return request_id
+
+    request_id = get_request_id(request)
+    request.state.request_id = request_id
+    return request_id
+
+
+def error_message_from_detail(detail: object, fallback: str) -> str:
+    if isinstance(detail, str) and detail.strip():
+        return detail.strip()
+
+    if isinstance(detail, dict):
+        message = detail.get("message")
+        if isinstance(message, str) and message.strip():
+            return message.strip()
+
+    return fallback
+
+
+def build_error_response(
+    *,
+    request: Request,
+    status_code: int,
+    error_type: str,
+    message: str,
+    detail: object,
+    details: object | None = None,
+    headers: dict[str, str] | None = None,
+) -> JSONResponse:
+    request_id = request_id_from_state(request)
+
+    content = {
+        "detail": detail,
+        "error": {
+            "type": error_type,
+            "message": message,
+            "status_code": status_code,
+            "request_id": request_id,
+        },
+    }
+
+    if details is not None:
+        content["error"]["details"] = details
+
+    response = JSONResponse(
+        status_code=status_code,
+        content=content,
+        headers=headers,
+    )
+    response.headers["X-Request-ID"] = request_id
+    return response
+
+
 app = FastAPI(title="TalentMatch Pro API", version="0.1.0")
+
+
+@app.exception_handler(StarletteHTTPException)
+async def http_exception_handler(
+    request: Request,
+    exc: StarletteHTTPException,
+) -> JSONResponse:
+    detail = exc.detail
+    message = error_message_from_detail(detail, "The request could not be completed.")
+
+    return build_error_response(
+        request=request,
+        status_code=exc.status_code,
+        error_type="http_error",
+        message=message,
+        detail=detail,
+        headers=dict(exc.headers or {}),
+    )
+
+
+@app.exception_handler(RequestValidationError)
+async def validation_exception_handler(
+    request: Request,
+    exc: RequestValidationError,
+) -> JSONResponse:
+    validation_errors = exc.errors()
+
+    return build_error_response(
+        request=request,
+        status_code=422,
+        error_type="validation_error",
+        message="Request validation failed.",
+        detail=validation_errors,
+        details=validation_errors,
+    )
+
+
+@app.exception_handler(Exception)
+async def unhandled_exception_handler(
+    request: Request,
+    exc: Exception,
+) -> JSONResponse:
+    request_id = request_id_from_state(request)
+
+    logger.exception(
+        "Unhandled application exception.",
+        extra={
+            "request_id": request_id,
+            "client_ip": get_client_ip(request),
+            "method": request.method,
+            "path": request.url.path,
+            "status_code": 500,
+            "event": "unhandled_exception",
+        },
+    )
+
+    return build_error_response(
+        request=request,
+        status_code=500,
+        error_type="internal_server_error",
+        message="An unexpected server error occurred.",
+        detail="An unexpected server error occurred.",
+    )
 
 
 def get_allowed_hosts() -> list[str]:
@@ -692,6 +815,8 @@ def config_status() -> dict:
         "security_headers_enabled": True,
         "production_logging_enabled": True,
         "request_id_enabled": True,
+        "exception_handling_enabled": True,
+        "standard_error_responses_enabled": True,
         "log_level": logging.getLevelName(get_log_level()),
         "rate_limiting_enabled": rate_limiting_enabled(),
         "rate_limit_store": "in_memory_single_instance",
@@ -934,6 +1059,14 @@ def sitemap_xml():
 @app.get("/healthz")
 def healthz():
     return {"status": "ok"}
+
+
+@app.get("/error-test", include_in_schema=False)
+def error_test():
+    if get_environment() in {"production", "prod"}:
+        raise HTTPException(status_code=404, detail="Not found.")
+
+    raise RuntimeError("Controlled development exception test.")
 
 
 @app.get("/readyz")
