@@ -108,6 +108,7 @@ from auth import get_current_user, get_test_user
 from billing.factory import get_billing_provider
 from db import Base, engine, get_db
 from models import AnalysisRecord, RecruiterCandidate, User
+from observability import METRICS
 from openai_service import AIServiceError, analyze_cv_with_ai, rewrite_cv_with_ai
 from pdf_report import build_analysis_pdf_report
 from pdf_utils import extract_text_from_pdf
@@ -269,6 +270,11 @@ class RequestLoggingMiddleware(BaseHTTPMiddleware):
             response = await call_next(request)
         except Exception:
             duration_ms = round((time.perf_counter() - started_at) * 1000, 2)
+            METRICS.record_request(
+                path=request.url.path,
+                status_code=500,
+                duration_ms=duration_ms,
+            )
             logger.exception(
                 "Unhandled request exception.",
                 extra={
@@ -285,6 +291,12 @@ class RequestLoggingMiddleware(BaseHTTPMiddleware):
 
         duration_ms = round((time.perf_counter() - started_at) * 1000, 2)
         response.headers["X-Request-ID"] = request_id
+
+        METRICS.record_request(
+            path=request.url.path,
+            status_code=response.status_code,
+            duration_ms=duration_ms,
+        )
 
         log_method = logger.warning if response.status_code >= 400 else logger.info
         log_method(
@@ -485,6 +497,7 @@ def get_rate_limit_rule(path: str, method: str) -> RateLimitRule | None:
     public_unlimited_paths = {
         "/healthz",
         "/readyz",
+        "/metrics",
         "/robots.txt",
         "/sitemap.xml",
         "/docs",
@@ -817,6 +830,11 @@ def config_status() -> dict:
         "request_id_enabled": True,
         "exception_handling_enabled": True,
         "standard_error_responses_enabled": True,
+        "observability_enabled": True,
+        "metrics_endpoint_enabled": True,
+        "uptime_seconds": METRICS.snapshot(
+            environment=get_environment()
+        )["uptime_seconds"],
         "log_level": logging.getLevelName(get_log_level()),
         "rate_limiting_enabled": rate_limiting_enabled(),
         "rate_limit_store": "in_memory_single_instance",
@@ -1058,7 +1076,27 @@ def sitemap_xml():
 
 @app.get("/healthz")
 def healthz():
-    return {"status": "ok"}
+    metrics = METRICS.snapshot(environment=get_environment())
+    return {
+        "status": "ok",
+        "uptime_seconds": metrics["uptime_seconds"],
+        "requests_total": metrics["requests_total"],
+    }
+
+
+@app.get("/metrics", include_in_schema=False)
+def metrics(db: Session = Depends(get_db)):
+    database_ok = True
+
+    try:
+        db.execute(text("SELECT 1"))
+    except Exception:
+        database_ok = False
+
+    return METRICS.snapshot(
+        environment=get_environment(),
+        database_ok=database_ok,
+    )
 
 
 @app.get("/error-test", include_in_schema=False)
