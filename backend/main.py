@@ -1,7 +1,11 @@
+import asyncio
 import json
 import os
 import re
 import ssl
+import time
+from collections import defaultdict, deque
+from dataclasses import dataclass
 from io import BytesIO
 from pathlib import Path
 from typing import NoReturn
@@ -13,7 +17,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.middleware.httpsredirect import HTTPSRedirectMiddleware
 from starlette.middleware.trustedhost import TrustedHostMiddleware
-from fastapi.responses import FileResponse, StreamingResponse
+from fastapi.responses import FileResponse, JSONResponse, StreamingResponse
 from pydantic import BaseModel, Field
 from sqlalchemy import text
 from sqlalchemy.orm import Session
@@ -215,6 +219,268 @@ class SecurityHeadersMiddleware(BaseHTTPMiddleware):
         return response
 
 
+
+def get_positive_int_env(name: str, default: int, *, minimum: int = 1) -> int:
+    raw_value = os.getenv(name, str(default)).strip()
+
+    try:
+        value = int(raw_value)
+    except ValueError as exc:
+        raise RuntimeError(f"{name} must be a valid integer.") from exc
+
+    if value < minimum:
+        raise RuntimeError(f"{name} must be at least {minimum}.")
+
+    return value
+
+
+@dataclass(frozen=True)
+class RateLimitRule:
+    name: str
+    requests: int
+    window_seconds: int
+
+
+class InMemoryRateLimitStore:
+    """
+    Process-local sliding-window limiter.
+
+    TalentMatch Pro currently runs one backend process per Render service
+    instance, so this store provides deterministic protection without adding
+    another infrastructure dependency. The interface is intentionally isolated
+    so it can be replaced by Redis in a later horizontal-scaling phase without
+    changing route code.
+    """
+
+    def __init__(self) -> None:
+        self._events: dict[str, deque[float]] = defaultdict(deque)
+        self._violations: dict[str, deque[float]] = defaultdict(deque)
+        self._blocked_until: dict[str, float] = {}
+        self._lock = asyncio.Lock()
+        self._last_cleanup = 0.0
+
+    async def check(
+        self,
+        *,
+        key: str,
+        limit: int,
+        window_seconds: int,
+        strike_threshold: int,
+        strike_window_seconds: int,
+        block_seconds: int,
+    ) -> tuple[bool, int, int, bool]:
+        now = time.monotonic()
+
+        async with self._lock:
+            self._cleanup_if_needed(now)
+
+            blocked_until = self._blocked_until.get(key, 0.0)
+            if blocked_until > now:
+                retry_after = max(1, int(blocked_until - now))
+                return False, 0, retry_after, True
+
+            if blocked_until:
+                self._blocked_until.pop(key, None)
+
+            events = self._events[key]
+            cutoff = now - window_seconds
+
+            while events and events[0] <= cutoff:
+                events.popleft()
+
+            if len(events) >= limit:
+                retry_after = max(1, int(window_seconds - (now - events[0])))
+
+                violations = self._violations[key]
+                violation_cutoff = now - strike_window_seconds
+                while violations and violations[0] <= violation_cutoff:
+                    violations.popleft()
+
+                violations.append(now)
+
+                if len(violations) >= strike_threshold:
+                    self._blocked_until[key] = now + block_seconds
+                    violations.clear()
+                    return False, 0, block_seconds, True
+
+                return False, 0, retry_after, False
+
+            events.append(now)
+            remaining = max(0, limit - len(events))
+            return True, remaining, window_seconds, False
+
+    def _cleanup_if_needed(self, now: float) -> None:
+        if now - self._last_cleanup < 300:
+            return
+
+        self._last_cleanup = now
+
+        expired_blocks = [
+            key for key, blocked_until in self._blocked_until.items()
+            if blocked_until <= now
+        ]
+        for key in expired_blocks:
+            self._blocked_until.pop(key, None)
+
+        stale_event_keys = [
+            key for key, events in self._events.items()
+            if not events or now - events[-1] > 3600
+        ]
+        for key in stale_event_keys:
+            self._events.pop(key, None)
+
+        stale_violation_keys = [
+            key for key, violations in self._violations.items()
+            if not violations or now - violations[-1] > 3600
+        ]
+        for key in stale_violation_keys:
+            self._violations.pop(key, None)
+
+
+RATE_LIMIT_STORE = InMemoryRateLimitStore()
+
+
+def rate_limiting_enabled() -> bool:
+    return env_flag("RATE_LIMIT_ENABLED", default=True)
+
+
+def get_client_ip(request: Request) -> str:
+    cf_connecting_ip = request.headers.get("cf-connecting-ip", "").strip()
+    if cf_connecting_ip:
+        return cf_connecting_ip
+
+    forwarded_for = request.headers.get("x-forwarded-for", "").strip()
+    if forwarded_for:
+        return forwarded_for.split(",", 1)[0].strip()
+
+    if request.client and request.client.host:
+        return request.client.host
+
+    return "unknown"
+
+
+def get_rate_limit_rule(path: str, method: str) -> RateLimitRule | None:
+    public_unlimited_paths = {
+        "/healthz",
+        "/readyz",
+        "/robots.txt",
+        "/sitemap.xml",
+        "/docs",
+        "/redoc",
+        "/openapi.json",
+    }
+
+    if path in public_unlimited_paths or path.startswith("/docs/") or path.startswith("/redoc/"):
+        return None
+
+    if path in {"/billing/webhook", "/paypal/webhook"}:
+        return RateLimitRule(
+            name="webhook",
+            requests=get_positive_int_env("RATE_LIMIT_WEBHOOK_REQUESTS", 120),
+            window_seconds=get_positive_int_env("RATE_LIMIT_WEBHOOK_WINDOW_SECONDS", 60),
+        )
+
+    if path in {"/analyze-test", "/ats-test", "/history-test"}:
+        return RateLimitRule(
+            name="test",
+            requests=get_positive_int_env("RATE_LIMIT_TEST_REQUESTS", 10),
+            window_seconds=get_positive_int_env("RATE_LIMIT_TEST_WINDOW_SECONDS", 60),
+        )
+
+    ai_paths = {
+        "/analyze-resume",
+        "/ats-check",
+        "/semantic-match",
+        "/recruiter/rank-candidates",
+        "/rewrite-cv",
+        "/reports/analysis-pdf",
+    }
+    if path in ai_paths:
+        return RateLimitRule(
+            name="ai",
+            requests=get_positive_int_env("RATE_LIMIT_AI_REQUESTS", 20),
+            window_seconds=get_positive_int_env("RATE_LIMIT_AI_WINDOW_SECONDS", 60),
+        )
+
+    billing_paths = {
+        "/billing/create-checkout",
+        "/billing/create-portal",
+        "/billing/demo-upgrade",
+    }
+    if path in billing_paths:
+        return RateLimitRule(
+            name="billing",
+            requests=get_positive_int_env("RATE_LIMIT_BILLING_REQUESTS", 20),
+            window_seconds=get_positive_int_env("RATE_LIMIT_BILLING_WINDOW_SECONDS", 60),
+        )
+
+    if method.upper() in {"POST", "PUT", "PATCH", "DELETE"}:
+        return RateLimitRule(
+            name="write",
+            requests=get_positive_int_env("RATE_LIMIT_WRITE_REQUESTS", 60),
+            window_seconds=get_positive_int_env("RATE_LIMIT_WRITE_WINDOW_SECONDS", 60),
+        )
+
+    return RateLimitRule(
+        name="default",
+        requests=get_positive_int_env("RATE_LIMIT_DEFAULT_REQUESTS", 180),
+        window_seconds=get_positive_int_env("RATE_LIMIT_DEFAULT_WINDOW_SECONDS", 60),
+    )
+
+
+class RateLimitMiddleware(BaseHTTPMiddleware):
+    async def dispatch(self, request: Request, call_next):
+        if not rate_limiting_enabled() or request.method.upper() == "OPTIONS":
+            return await call_next(request)
+
+        rule = get_rate_limit_rule(request.url.path, request.method)
+        if rule is None:
+            return await call_next(request)
+
+        client_ip = get_client_ip(request)
+        rate_limit_key = f"{client_ip}:{rule.name}"
+
+        allowed, remaining, retry_after, blocked = await RATE_LIMIT_STORE.check(
+            key=rate_limit_key,
+            limit=rule.requests,
+            window_seconds=rule.window_seconds,
+            strike_threshold=get_positive_int_env("RATE_LIMIT_STRIKE_THRESHOLD", 3),
+            strike_window_seconds=get_positive_int_env(
+                "RATE_LIMIT_STRIKE_WINDOW_SECONDS",
+                300,
+            ),
+            block_seconds=get_positive_int_env("RATE_LIMIT_BLOCK_SECONDS", 300),
+        )
+
+        if not allowed:
+            response = JSONResponse(
+                status_code=429,
+                content={
+                    "detail": {
+                        "message": (
+                            "Too many requests. Access is temporarily blocked."
+                            if blocked
+                            else "Too many requests. Please try again later."
+                        ),
+                        "type": "rate_limit_exceeded",
+                        "scope": rule.name,
+                        "retry_after_seconds": retry_after,
+                    }
+                },
+            )
+            response.headers["Retry-After"] = str(retry_after)
+            response.headers["X-RateLimit-Limit"] = str(rule.requests)
+            response.headers["X-RateLimit-Remaining"] = "0"
+            response.headers["X-RateLimit-Reset"] = str(retry_after)
+            return response
+
+        response = await call_next(request)
+        response.headers["X-RateLimit-Limit"] = str(rule.requests)
+        response.headers["X-RateLimit-Remaining"] = str(remaining)
+        response.headers["X-RateLimit-Reset"] = str(rule.window_seconds)
+        return response
+
+
 app = FastAPI(title="TalentMatch Pro API", version="0.1.0")
 
 
@@ -264,6 +530,7 @@ def get_cors_origins() -> list[str]:
     return [origin.strip().rstrip("/") for origin in raw.split(",") if origin.strip()]
 
 
+app.add_middleware(RateLimitMiddleware)
 app.add_middleware(SecurityHeadersMiddleware)
 
 app.add_middleware(
@@ -302,6 +569,17 @@ def config_status() -> dict:
         "https_redirect_enabled": should_force_https(),
         "hsts_enabled": should_enable_hsts(),
         "security_headers_enabled": True,
+        "rate_limiting_enabled": rate_limiting_enabled(),
+        "rate_limit_store": "in_memory_single_instance",
+        "rate_limit_ai_requests": get_positive_int_env("RATE_LIMIT_AI_REQUESTS", 20),
+        "rate_limit_ai_window_seconds": get_positive_int_env(
+            "RATE_LIMIT_AI_WINDOW_SECONDS",
+            60,
+        ),
+        "rate_limit_block_seconds": get_positive_int_env(
+            "RATE_LIMIT_BLOCK_SECONDS",
+            300,
+        ),
         "trusted_hosts_count": len(get_allowed_hosts()),
         "database_configured": bool(database_url),
         "openai_configured": bool(os.getenv("OPENAI_API_KEY", "").strip()),
