@@ -108,6 +108,10 @@ def get_request_id(request: Request) -> str:
 
 from auth import get_current_user, get_test_user
 from billing.factory import get_billing_provider
+from config_validation import (
+    get_configuration_validation_status,
+    validate_startup_configuration,
+)
 from db import Base, engine, get_db
 from models import AnalysisRecord, RecruiterCandidate, User
 from observability import METRICS
@@ -119,6 +123,9 @@ from schemas import AnalysisResponse, HistoryItemResponse
 from semantic_service import analyze_semantic_match
 from storage import upload_pdf_to_firebase
 from usage_service import ensure_analysis_allowed, get_user_usage
+
+
+STARTUP_CONFIGURATION = validate_startup_configuration(logger)
 
 
 Base.metadata.create_all(bind=engine)
@@ -1137,6 +1144,7 @@ def config_status() -> dict:
     database_url = os.getenv("DATABASE_URL", "").strip()
     firebase_credentials = os.getenv("FIREBASE_CREDENTIALS", "").strip()
     google_credentials = os.getenv("GOOGLE_APPLICATION_CREDENTIALS", "").strip()
+    configuration_validation = get_configuration_validation_status()
 
     return {
         "environment": get_environment(),
@@ -1154,6 +1162,11 @@ def config_status() -> dict:
         "etag_enabled": True,
         "conditional_get_enabled": True,
         "cache_control_enabled": True,
+        "startup_configuration_validation_enabled": True,
+        "startup_configuration_valid": configuration_validation["valid"],
+        "startup_configuration_error_count": configuration_validation["error_count"],
+        "startup_configuration_warning_count": configuration_validation["warning_count"],
+        "secrets_logged": False,
         "uptime_seconds": METRICS.snapshot(
             environment=get_environment()
         )["uptime_seconds"],
