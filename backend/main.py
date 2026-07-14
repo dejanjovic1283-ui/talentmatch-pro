@@ -10,6 +10,7 @@ import time
 import uuid
 from collections import defaultdict, deque
 from dataclasses import dataclass
+from datetime import datetime, timezone
 from io import BytesIO
 from pathlib import Path
 from typing import NoReturn
@@ -65,6 +66,14 @@ class JsonFormatter(logging.Formatter):
             "status_code",
             "duration_ms",
             "event",
+            "service",
+            "operation",
+            "attempt",
+            "retry_delay_seconds",
+            "retryable",
+            "retry_after_seconds",
+            "user_id",
+            "paypal_event_type",
         )
 
         for field_name in extra_fields:
@@ -106,8 +115,13 @@ def get_request_id(request: Request) -> str:
     return str(uuid.uuid4())
 
 
-from auth import get_current_user, get_test_user
+from auth import (
+    get_current_user,
+    get_firebase_resilience_status,
+    get_test_user,
+)
 from billing.factory import get_billing_provider
+from billing.paypal_provider import get_paypal_resilience_status
 from config_validation import (
     get_configuration_validation_status,
     validate_startup_configuration,
@@ -115,12 +129,21 @@ from config_validation import (
 from db import Base, engine, get_db
 from models import AnalysisRecord, RecruiterCandidate, User
 from observability import METRICS
-from openai_service import AIServiceError, analyze_cv_with_ai, rewrite_cv_with_ai
+from openai_service import (
+    AIServiceError,
+    analyze_cv_with_ai,
+    get_openai_resilience_status,
+    rewrite_cv_with_ai,
+)
 from pdf_report import build_analysis_pdf_report
 from pdf_utils import extract_text_from_pdf
 from recruiter_service import rank_candidates
 from schemas import AnalysisResponse, HistoryItemResponse
-from semantic_service import analyze_semantic_match
+from resilience import ExternalServiceError
+from semantic_service import (
+    analyze_semantic_match,
+    get_semantic_resilience_status,
+)
 from storage import upload_pdf_to_firebase
 from usage_service import ensure_analysis_allowed, get_user_usage
 
@@ -967,26 +990,46 @@ def build_error_response(
     detail: object,
     details: object | None = None,
     headers: dict[str, str] | None = None,
+    service: str | None = None,
+    retryable: bool | None = None,
+    retry_after_seconds: int | None = None,
 ) -> JSONResponse:
     request_id = request_id_from_state(request)
+    timestamp = datetime.now(timezone.utc).isoformat()
 
-    content = {
-        "detail": detail,
-        "error": {
-            "type": error_type,
-            "message": message,
-            "status_code": status_code,
-            "request_id": request_id,
-        },
+    error_payload: dict[str, object] = {
+        "type": error_type,
+        "error_code": error_type,
+        "message": message,
+        "status_code": status_code,
+        "request_id": request_id,
+        "timestamp": timestamp,
     }
 
+    if service:
+        error_payload["service"] = service
+
+    if retryable is not None:
+        error_payload["retryable"] = retryable
+
+    if retry_after_seconds is not None:
+        error_payload["retry_after_seconds"] = retry_after_seconds
+
     if details is not None:
-        content["error"]["details"] = details
+        error_payload["details"] = details
+
+    response_headers = dict(headers or {})
+
+    if retry_after_seconds is not None:
+        response_headers["Retry-After"] = str(retry_after_seconds)
 
     response = JSONResponse(
         status_code=status_code,
-        content=content,
-        headers=headers,
+        content={
+            "detail": detail,
+            "error": error_payload,
+        },
+        headers=response_headers,
     )
     response.headers["X-Request-ID"] = request_id
     return response
@@ -1001,15 +1044,83 @@ async def http_exception_handler(
     exc: StarletteHTTPException,
 ) -> JSONResponse:
     detail = exc.detail
-    message = error_message_from_detail(detail, "The request could not be completed.")
+    message = error_message_from_detail(
+        detail,
+        "The request could not be completed.",
+    )
+
+    error_type = "http_error"
+    service = None
+    retryable = None
+    retry_after_seconds = None
+
+    if isinstance(detail, dict):
+        detail_type = detail.get("type")
+        if isinstance(detail_type, str) and detail_type.strip():
+            error_type = detail_type.strip()
+
+        detail_service = detail.get("service")
+        if isinstance(detail_service, str) and detail_service.strip():
+            service = detail_service.strip()
+
+        detail_retryable = detail.get("retryable")
+        if isinstance(detail_retryable, bool):
+            retryable = detail_retryable
+
+        detail_retry_after = detail.get("retry_after_seconds")
+        if isinstance(detail_retry_after, int) and detail_retry_after > 0:
+            retry_after_seconds = detail_retry_after
 
     return build_error_response(
         request=request,
         status_code=exc.status_code,
-        error_type="http_error",
+        error_type=error_type,
         message=message,
         detail=detail,
         headers=dict(exc.headers or {}),
+        service=service,
+        retryable=retryable,
+        retry_after_seconds=retry_after_seconds,
+    )
+
+
+@app.exception_handler(ExternalServiceError)
+async def external_service_exception_handler(
+    request: Request,
+    exc: ExternalServiceError,
+) -> JSONResponse:
+    request_id = request_id_from_state(request)
+
+    logger.warning(
+        "External service request failed.",
+        extra={
+            "request_id": request_id,
+            "client_ip": get_client_ip(request),
+            "method": request.method,
+            "path": request.url.path,
+            "status_code": exc.status_code,
+            "event": "external_service_error",
+            "service": exc.service,
+            "retryable": exc.retryable,
+            "retry_after_seconds": exc.retry_after_seconds,
+        },
+    )
+
+    return build_error_response(
+        request=request,
+        status_code=exc.status_code,
+        error_type=exc.error_code,
+        message=exc.message,
+        detail={
+            "message": exc.message,
+            "type": exc.error_code,
+            "service": exc.service,
+            "retryable": exc.retryable,
+            "retry_after_seconds": exc.retry_after_seconds,
+        },
+        service=exc.service,
+        retryable=exc.retryable,
+        retry_after_seconds=exc.retry_after_seconds,
     )
 
 
@@ -1140,11 +1251,30 @@ app.add_middleware(
 )
 
 
+def get_resilience_status() -> dict[str, dict[str, object]]:
+    return {
+        "openai": get_openai_resilience_status(),
+        "openai_semantic": get_semantic_resilience_status(),
+        "paypal": get_paypal_resilience_status(),
+        "firebase_authentication": get_firebase_resilience_status(),
+    }
+
+
+def resilience_is_available(
+    statuses: dict[str, dict[str, object]],
+) -> bool:
+    return all(
+        status.get("state") != "open"
+        for status in statuses.values()
+    )
+
+
 def config_status() -> dict:
     database_url = os.getenv("DATABASE_URL", "").strip()
     firebase_credentials = os.getenv("FIREBASE_CREDENTIALS", "").strip()
     google_credentials = os.getenv("GOOGLE_APPLICATION_CREDENTIALS", "").strip()
     configuration_validation = get_configuration_validation_status()
+    resilience_status = get_resilience_status()
 
     return {
         "environment": get_environment(),
@@ -1162,6 +1292,14 @@ def config_status() -> dict:
         "etag_enabled": True,
         "conditional_get_enabled": True,
         "cache_control_enabled": True,
+        "api_reliability_enabled": True,
+        "graceful_degradation_enabled": True,
+        "retry_policy_enabled": True,
+        "circuit_breaker_enabled": True,
+        "external_services_available": resilience_is_available(
+            resilience_status
+        ),
+        "external_service_circuits": resilience_status,
         "startup_configuration_validation_enabled": True,
         "startup_configuration_valid": configuration_validation["valid"],
         "startup_configuration_error_count": configuration_validation["error_count"],
@@ -1212,12 +1350,24 @@ def parse_json_list(value: str) -> list[str]:
 
 
 def raise_ai_http_exception(exc: AIServiceError) -> NoReturn:
+    detail = {
+        "message": exc.message,
+        "type": exc.error_code,
+        "service": exc.service,
+        "retryable": exc.retryable,
+        "retry_after_seconds": exc.retry_after_seconds,
+    }
+
+    headers = None
+    if exc.retry_after_seconds is not None:
+        headers = {
+            "Retry-After": str(exc.retry_after_seconds),
+        }
+
     raise HTTPException(
         status_code=exc.status_code,
-        detail={
-            "message": exc.message,
-            "type": "ai_service_error",
-        },
+        detail=detail,
+        headers=headers,
     )
 
 
@@ -1428,10 +1578,20 @@ def metrics(db: Session = Depends(get_db)):
     except Exception:
         database_ok = False
 
-    return METRICS.snapshot(
+    metrics_snapshot = METRICS.snapshot(
         environment=get_environment(),
         database_ok=database_ok,
     )
+    resilience_status = get_resilience_status()
+
+    return {
+        **metrics_snapshot,
+        "api_reliability_enabled": True,
+        "external_services_available": resilience_is_available(
+            resilience_status
+        ),
+        "external_service_circuits": resilience_status,
+    }
 
 
 @app.get("/error-test", include_in_schema=False)
