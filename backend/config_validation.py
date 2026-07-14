@@ -144,6 +144,193 @@ def _require_non_placeholder(
     return value
 
 
+def _validate_int_setting(
+    report: ConfigurationValidationReport,
+    variable: str,
+    *,
+    default: int,
+    minimum: int,
+    maximum: int,
+) -> int | None:
+    raw_value = _value(variable) or str(default)
+
+    try:
+        value = int(raw_value)
+    except ValueError:
+        _add_error(
+            report,
+            variable,
+            f"{variable} must be a valid integer.",
+        )
+        return None
+
+    if value < minimum or value > maximum:
+        _add_error(
+            report,
+            variable,
+            f"{variable} must be between {minimum} and {maximum}.",
+        )
+        return None
+
+    return value
+
+
+def _validate_float_setting(
+    report: ConfigurationValidationReport,
+    variable: str,
+    *,
+    default: float,
+    minimum: float,
+    maximum: float,
+) -> float | None:
+    raw_value = _value(variable) or str(default)
+
+    try:
+        value = float(raw_value)
+    except ValueError:
+        _add_error(
+            report,
+            variable,
+            f"{variable} must be a valid number.",
+        )
+        return None
+
+    if value < minimum or value > maximum:
+        _add_error(
+            report,
+            variable,
+            f"{variable} must be between {minimum} and {maximum}.",
+        )
+        return None
+
+    return value
+
+
+def _validate_resilience_settings(
+    report: ConfigurationValidationReport,
+    prefix: str,
+    *,
+    timeout_default: float,
+) -> None:
+    timeout = _validate_float_setting(
+        report,
+        f"{prefix}_TIMEOUT_SECONDS",
+        default=timeout_default,
+        minimum=1.0,
+        maximum=300.0,
+    )
+
+    max_retries = _validate_int_setting(
+        report,
+        f"{prefix}_MAX_RETRIES",
+        default=2,
+        minimum=0,
+        maximum=5,
+    )
+
+    base_delay = _validate_float_setting(
+        report,
+        f"{prefix}_RETRY_BASE_DELAY_SECONDS",
+        default=1.0,
+        minimum=0.0,
+        maximum=30.0,
+    )
+
+    max_delay = _validate_float_setting(
+        report,
+        f"{prefix}_RETRY_MAX_DELAY_SECONDS",
+        default=8.0,
+        minimum=0.1,
+        maximum=60.0,
+    )
+
+    jitter = _validate_float_setting(
+        report,
+        f"{prefix}_RETRY_JITTER_SECONDS",
+        default=0.5,
+        minimum=0.0,
+        maximum=10.0,
+    )
+
+    failure_threshold = _validate_int_setting(
+        report,
+        f"{prefix}_CIRCUIT_BREAKER_FAILURE_THRESHOLD",
+        default=5,
+        minimum=1,
+        maximum=50,
+    )
+
+    recovery_seconds = _validate_float_setting(
+        report,
+        f"{prefix}_CIRCUIT_BREAKER_RECOVERY_SECONDS",
+        default=60.0,
+        minimum=1.0,
+        maximum=3600.0,
+    )
+
+    success_threshold = _validate_int_setting(
+        report,
+        f"{prefix}_CIRCUIT_BREAKER_SUCCESS_THRESHOLD",
+        default=1,
+        minimum=1,
+        maximum=10,
+    )
+
+    if base_delay is not None and max_delay is not None and base_delay > max_delay:
+        _add_error(
+            report,
+            f"{prefix}_RETRY_MAX_DELAY_SECONDS",
+            (
+                f"{prefix}_RETRY_MAX_DELAY_SECONDS must be greater than or equal "
+                f"to {prefix}_RETRY_BASE_DELAY_SECONDS."
+            ),
+        )
+
+    if timeout is not None and max_delay is not None and max_delay > timeout:
+        _add_warning(
+            report,
+            f"{prefix}_RETRY_MAX_DELAY_SECONDS",
+            (
+                f"{prefix}_RETRY_MAX_DELAY_SECONDS is greater than "
+                f"{prefix}_TIMEOUT_SECONDS."
+            ),
+        )
+
+    if max_retries is not None and max_retries == 0 and jitter not in {None, 0.0}:
+        _add_warning(
+            report,
+            f"{prefix}_RETRY_JITTER_SECONDS",
+            (
+                f"{prefix}_RETRY_JITTER_SECONDS has no effect when "
+                f"{prefix}_MAX_RETRIES is 0."
+            ),
+        )
+
+    if (
+        failure_threshold is not None
+        and success_threshold is not None
+        and success_threshold > failure_threshold
+    ):
+        _add_warning(
+            report,
+            f"{prefix}_CIRCUIT_BREAKER_SUCCESS_THRESHOLD",
+            (
+                f"{prefix}_CIRCUIT_BREAKER_SUCCESS_THRESHOLD is greater than "
+                f"{prefix}_CIRCUIT_BREAKER_FAILURE_THRESHOLD."
+            ),
+        )
+
+    if recovery_seconds is not None and recovery_seconds < 5.0:
+        _add_warning(
+            report,
+            f"{prefix}_CIRCUIT_BREAKER_RECOVERY_SECONDS",
+            (
+                f"{prefix}_CIRCUIT_BREAKER_RECOVERY_SECONDS is very low and may "
+                "cause repeated calls to an unavailable service."
+            ),
+        )
+
+
 def validate_configuration() -> ConfigurationValidationReport:
     environment = _environment()
     production = environment in {"production", "prod"}
@@ -167,6 +354,22 @@ def validate_configuration() -> ConfigurationValidationReport:
             "LOG_LEVEL",
             "LOG_LEVEL must be CRITICAL, ERROR, WARNING, INFO or DEBUG.",
         )
+
+    _validate_resilience_settings(
+        report,
+        "OPENAI",
+        timeout_default=90.0,
+    )
+    _validate_resilience_settings(
+        report,
+        "PAYPAL",
+        timeout_default=30.0,
+    )
+    _validate_resilience_settings(
+        report,
+        "FIREBASE",
+        timeout_default=30.0,
+    )
 
     database_url = _value("DATABASE_URL")
     if production:
