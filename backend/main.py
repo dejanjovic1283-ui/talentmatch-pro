@@ -28,6 +28,7 @@ from starlette.middleware.trustedhost import TrustedHostMiddleware
 from fastapi.responses import FileResponse, JSONResponse, StreamingResponse
 from pydantic import BaseModel, Field
 from sqlalchemy import text
+from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import Session
 
 os.environ["SSL_CERT_FILE"] = certifi.where()
@@ -126,7 +127,16 @@ from config_validation import (
     get_configuration_validation_status,
     validate_startup_configuration,
 )
-from db import Base, engine, get_db
+from db import (
+    Base,
+    check_database_connection,
+    classify_database_exception,
+    dispose_engine,
+    engine,
+    get_database_pool_status,
+    get_database_reliability_status,
+    get_db,
+)
 from models import AnalysisRecord, RecruiterCandidate, User
 from observability import METRICS
 from openai_service import (
@@ -151,7 +161,16 @@ from usage_service import ensure_analysis_allowed, get_user_usage
 STARTUP_CONFIGURATION = validate_startup_configuration(logger)
 
 
-Base.metadata.create_all(bind=engine)
+try:
+    Base.metadata.create_all(bind=engine)
+except SQLAlchemyError:
+    logger.exception(
+        "Database schema initialization failed.",
+        extra={
+            "event": "database_schema_initialization_failed",
+            "retryable": True,
+        },
+    )
 
 
 BASE_DIR = Path(__file__).resolve().parent
@@ -1038,6 +1057,15 @@ def build_error_response(
 app = FastAPI(title="TalentMatch Pro API", version="0.1.0")
 
 
+@app.on_event("shutdown")
+def shutdown_database_engine() -> None:
+    dispose_engine()
+    logger.info(
+        "Database engine disposed.",
+        extra={"event": "database_engine_disposed"},
+    )
+
+
 @app.exception_handler(StarletteHTTPException)
 async def http_exception_handler(
     request: Request,
@@ -1138,6 +1166,49 @@ async def validation_exception_handler(
         message="Request validation failed.",
         detail=validation_errors,
         details=validation_errors,
+    )
+
+
+@app.exception_handler(SQLAlchemyError)
+async def database_exception_handler(
+    request: Request,
+    exc: SQLAlchemyError,
+) -> JSONResponse:
+    request_id = request_id_from_state(request)
+    error_info = classify_database_exception(exc)
+
+    log_method = (
+        logger.warning
+        if error_info.status_code in {409, 503, 504}
+        else logger.error
+    )
+    log_method(
+        "Database operation failed.",
+        extra={
+            "request_id": request_id,
+            "client_ip": get_client_ip(request),
+            "method": request.method,
+            "path": request.url.path,
+            "status_code": error_info.status_code,
+            "event": "database_operation_failed",
+            "service": "PostgreSQL",
+            "retryable": error_info.retryable,
+        },
+    )
+
+    return build_error_response(
+        request=request,
+        status_code=error_info.status_code,
+        error_type=error_info.error_type,
+        message=error_info.message,
+        detail={
+            "message": error_info.message,
+            "type": error_info.error_type,
+            "service": "PostgreSQL",
+            "retryable": error_info.retryable,
+        },
+        service="PostgreSQL",
+        retryable=error_info.retryable,
     )
 
 
@@ -1292,6 +1363,9 @@ def config_status() -> dict:
         "etag_enabled": True,
         "conditional_get_enabled": True,
         "cache_control_enabled": True,
+        "database_configuration_validation_enabled": True,
+        "database_transaction_safety_enabled": True,
+        "database_timeout_protection_enabled": True,
         "api_reliability_enabled": True,
         "graceful_degradation_enabled": True,
         "retry_policy_enabled": True,
@@ -1570,17 +1644,13 @@ def healthz():
 
 
 @app.get("/metrics", include_in_schema=False)
-def metrics(db: Session = Depends(get_db)):
-    database_ok = True
-
-    try:
-        db.execute(text("SELECT 1"))
-    except Exception:
-        database_ok = False
+def metrics():
+    database_status = get_database_reliability_status()
+    pool_status = get_database_pool_status()
 
     metrics_snapshot = METRICS.snapshot(
         environment=get_environment(),
-        database_ok=database_ok,
+        database_ok=bool(database_status["connection_ok"]),
     )
     resilience_status = get_resilience_status()
 
@@ -1591,6 +1661,31 @@ def metrics(db: Session = Depends(get_db)):
             resilience_status
         ),
         "external_service_circuits": resilience_status,
+        "database_connection_ok": database_status["connection_ok"],
+        "database_dialect": database_status["dialect"],
+        "database_driver": database_status["driver"],
+        "database_error_type": database_status["error_type"],
+        "database_retryable": database_status["retryable"],
+        "database_pool_enabled": database_status["pool_enabled"],
+        "database_transaction_safety_enabled": database_status[
+            "transaction_safety_enabled"
+        ],
+        "database_timeout_protection_enabled": database_status[
+            "timeout_protection_enabled"
+        ],
+        "database_connect_timeout_seconds": database_status[
+            "connect_timeout_seconds"
+        ],
+        "database_statement_timeout_ms": database_status[
+            "statement_timeout_ms"
+        ],
+        "database_pool_type": pool_status["pool_type"],
+        "database_pool_size": pool_status["pool_size"],
+        "database_pool_checked_in": pool_status["checked_in"],
+        "database_pool_checked_out": pool_status["checked_out"],
+        "database_pool_overflow": pool_status["overflow"],
+        "database_pool_timeout_seconds": pool_status["timeout_seconds"],
+        "database_pool_recycle_seconds": pool_status["recycle_seconds"],
     }
 
 
@@ -1603,17 +1698,40 @@ def error_test():
 
 
 @app.get("/readyz")
-def readyz(db: Session = Depends(get_db)):
+def readyz():
     checks = config_status()
+    database_status = get_database_reliability_status()
 
-    try:
-        db.execute(text("SELECT 1"))
-        checks["database_connection_ok"] = True
-    except Exception:
-        checks["database_connection_ok"] = False
+    checks.update(
+        {
+            "database_connection_ok": database_status["connection_ok"],
+            "database_dialect": database_status["dialect"],
+            "database_driver": database_status["driver"],
+            "database_error_type": database_status["error_type"],
+            "database_retryable": database_status["retryable"],
+            "database_pool_enabled": database_status["pool_enabled"],
+            "database_transaction_safety_enabled": database_status[
+                "transaction_safety_enabled"
+            ],
+            "database_timeout_protection_enabled": database_status[
+                "timeout_protection_enabled"
+            ],
+            "database_connect_timeout_seconds": database_status[
+                "connect_timeout_seconds"
+            ],
+            "database_statement_timeout_ms": database_status[
+                "statement_timeout_ms"
+            ],
+        }
+    )
 
-    status = "ready" if checks["database_connection_ok"] else "not_ready"
-    return {"status": status, **checks}
+    if database_status["connection_ok"]:
+        return {"status": "ready", **checks}
+
+    return JSONResponse(
+        status_code=503,
+        content={"status": "not_ready", **checks},
+    )
 
 
 @app.get("/me")
