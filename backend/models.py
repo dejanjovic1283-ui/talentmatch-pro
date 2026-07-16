@@ -1,114 +1,316 @@
-from datetime import datetime
+from __future__ import annotations
 
-from sqlalchemy import Boolean, DateTime, ForeignKey, Integer, String, Text
+from datetime import datetime, timezone
+from typing import Final
+
+from sqlalchemy import Boolean, DateTime, ForeignKey, Integer, String, Text, false, text
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from db import Base
 
 
+DEFAULT_PLAN: Final[str] = "free"
+DEFAULT_ANALYSIS_TYPE: Final[str] = "cv_analysis"
+DEFAULT_CANDIDATE_STATUS: Final[str] = "new"
+DEFAULT_CANDIDATE_SOURCE: Final[str] = "recruiter_mode"
+EMPTY_JSON_LIST: Final[str] = "[]"
+
+
+def utc_now() -> datetime:
+    """Return a timezone-aware UTC timestamp for ORM-side defaults."""
+    return datetime.now(timezone.utc)
+
+
 class User(Base):
-    """Application user synced from Firebase authentication."""
+    """Application user synchronized with Firebase Authentication."""
 
     __tablename__ = "users"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
-    firebase_uid: Mapped[str] = mapped_column(String(255), unique=True, index=True)
-    email: Mapped[str] = mapped_column(String(255), index=True)
+    firebase_uid: Mapped[str] = mapped_column(
+        String(255), unique=True, index=True, nullable=False
+    )
+    email: Mapped[str] = mapped_column(String(255), index=True, nullable=False)
     full_name: Mapped[str | None] = mapped_column(String(255), nullable=True)
 
-    plan: Mapped[str] = mapped_column(String(50), default="free")
-    is_pro: Mapped[bool] = mapped_column(Boolean, default=False)
-    analyses_used: Mapped[int] = mapped_column(Integer, default=0)
+    plan: Mapped[str] = mapped_column(
+        String(50),
+        default=DEFAULT_PLAN,
+        server_default=text("'free'"),
+        nullable=False,
+    )
+    is_pro: Mapped[bool] = mapped_column(
+        Boolean,
+        default=False,
+        server_default=false(),
+        nullable=False,
+    )
+    analyses_used: Mapped[int] = mapped_column(
+        Integer,
+        default=0,
+        server_default=text("0"),
+        nullable=False,
+    )
 
-    # PayPal billing fields
-    paypal_customer_id: Mapped[str | None] = mapped_column(String(255), nullable=True, index=True)
-    paypal_subscription_id: Mapped[str | None] = mapped_column(String(255), nullable=True, index=True)
-    paypal_subscription_status: Mapped[str | None] = mapped_column(String(100), nullable=True)
+    paypal_customer_id: Mapped[str | None] = mapped_column(
+        String(255), nullable=True, index=True
+    )
+    paypal_subscription_id: Mapped[str | None] = mapped_column(
+        String(255), nullable=True, index=True
+    )
+    paypal_subscription_status: Mapped[str | None] = mapped_column(
+        String(100), nullable=True
+    )
 
-    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        default=utc_now,
+        nullable=False,
+    )
 
-    analyses = relationship("AnalysisRecord", back_populates="user")
-    recruiter_candidates = relationship(
+    analyses: Mapped[list["AnalysisRecord"]] = relationship(
+        "AnalysisRecord",
+        back_populates="user",
+    )
+    recruiter_candidates: Mapped[list["RecruiterCandidate"]] = relationship(
         "RecruiterCandidate",
         back_populates="user",
         cascade="all, delete-orphan",
     )
 
+    def __repr__(self) -> str:
+        return (
+            f"User(id={self.id!r}, plan={self.plan!r}, "
+            f"is_pro={self.is_pro!r})"
+        )
+
 
 class AnalysisRecord(Base):
-    """Stores each CV analysis result for history and plan limits."""
+    """Persist a CV analysis result for history and usage accounting."""
 
     __tablename__ = "analysis_records"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
-    user_id: Mapped[int] = mapped_column(ForeignKey("users.id"), index=True)
+    user_id: Mapped[int] = mapped_column(
+        ForeignKey("users.id"),
+        index=True,
+        nullable=False,
+    )
 
     cv_filename: Mapped[str | None] = mapped_column(String(255), nullable=True)
-    cv_storage_path: Mapped[str | None] = mapped_column(String(500), nullable=True)
+    cv_storage_path: Mapped[str | None] = mapped_column(
+        String(500), nullable=True
+    )
 
-    job_description: Mapped[str] = mapped_column(Text)
-    score: Mapped[int] = mapped_column(Integer, default=0)
-    summary: Mapped[str] = mapped_column(Text, default="")
-    matched_skills: Mapped[str] = mapped_column(Text, default="[]")
-    missing_skills: Mapped[str] = mapped_column(Text, default="[]")
-    recommendations: Mapped[str] = mapped_column(Text, default="[]")
-    analysis_type: Mapped[str] = mapped_column(String(50), default="cv_analysis", index=True)
+    job_description: Mapped[str] = mapped_column(Text, nullable=False)
+    score: Mapped[int] = mapped_column(
+        Integer,
+        default=0,
+        server_default=text("0"),
+        nullable=False,
+    )
+    summary: Mapped[str] = mapped_column(
+        Text,
+        default="",
+        server_default=text("''"),
+        nullable=False,
+    )
+    matched_skills: Mapped[str] = mapped_column(
+        Text,
+        default=EMPTY_JSON_LIST,
+        server_default=text("'[]'"),
+        nullable=False,
+    )
+    missing_skills: Mapped[str] = mapped_column(
+        Text,
+        default=EMPTY_JSON_LIST,
+        server_default=text("'[]'"),
+        nullable=False,
+    )
+    recommendations: Mapped[str] = mapped_column(
+        Text,
+        default=EMPTY_JSON_LIST,
+        server_default=text("'[]'"),
+        nullable=False,
+    )
+    analysis_type: Mapped[str] = mapped_column(
+        String(50),
+        default=DEFAULT_ANALYSIS_TYPE,
+        server_default=text("'cv_analysis'"),
+        index=True,
+        nullable=False,
+    )
 
-    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        default=utc_now,
+        nullable=False,
+    )
 
-    user = relationship("User", back_populates="analyses")
+    user: Mapped["User"] = relationship(
+        "User",
+        back_populates="analyses",
+    )
+
+    def __repr__(self) -> str:
+        return (
+            f"AnalysisRecord(id={self.id!r}, user_id={self.user_id!r}, "
+            f"analysis_type={self.analysis_type!r}, score={self.score!r})"
+        )
 
 
 class RecruiterCandidate(Base):
     """
-    Stores individual candidates produced by Recruiter Mode.
+    Persist candidates produced by Recruiter Mode.
 
-    This is the foundation for TalentMatch Pro v2.0 Recruiter Workspace:
-    - Candidate Database
-    - Favorites
-    - Tags
-    - Recruiter Notes
-    - Job Projects
-    - Candidate filtering and dashboards
+    This model supports the TalentMatch Pro Recruiter Workspace, including
+    the candidate database, favorites, tags, recruiter notes, job projects,
+    filtering and dashboard views.
     """
 
     __tablename__ = "recruiter_candidates"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
-    user_id: Mapped[int] = mapped_column(ForeignKey("users.id"), index=True)
-
-    filename: Mapped[str] = mapped_column(String(255), index=True)
-    cv_storage_path: Mapped[str | None] = mapped_column(String(500), nullable=True)
-
-    job_description: Mapped[str] = mapped_column(Text)
-    rank: Mapped[int] = mapped_column(Integer, default=0, index=True)
-
-    score: Mapped[int] = mapped_column(Integer, default=0, index=True)
-    match_score: Mapped[int] = mapped_column(Integer, default=0)
-    combined_score: Mapped[int] = mapped_column(Integer, default=0)
-    semantic_score: Mapped[int] = mapped_column(Integer, default=0)
-    keyword_score: Mapped[int] = mapped_column(Integer, default=0)
-
-    verdict: Mapped[str] = mapped_column(String(100), default="")
-    summary: Mapped[str] = mapped_column(Text, default="")
-
-    matched_skills: Mapped[str] = mapped_column(Text, default="[]")
-    missing_skills: Mapped[str] = mapped_column(Text, default="[]")
-    recommendations: Mapped[str] = mapped_column(Text, default="[]")
-    matched_keywords: Mapped[str] = mapped_column(Text, default="[]")
-    missing_keywords: Mapped[str] = mapped_column(Text, default="[]")
-
-    favorite: Mapped[bool] = mapped_column(Boolean, default=False, index=True)
-    status: Mapped[str] = mapped_column(String(50), default="new", index=True)
-    notes: Mapped[str] = mapped_column(Text, default="")
-    tags: Mapped[str] = mapped_column(Text, default="[]")
-
-    source: Mapped[str] = mapped_column(String(100), default="recruiter_mode")
-    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, index=True)
-    updated_at: Mapped[datetime] = mapped_column(
-        DateTime,
-        default=datetime.utcnow,
-        onupdate=datetime.utcnow,
+    user_id: Mapped[int] = mapped_column(
+        ForeignKey("users.id"),
+        index=True,
+        nullable=False,
     )
 
-    user = relationship("User", back_populates="recruiter_candidates")
+    filename: Mapped[str] = mapped_column(
+        String(255), index=True, nullable=False
+    )
+    cv_storage_path: Mapped[str | None] = mapped_column(
+        String(500), nullable=True
+    )
+
+    job_description: Mapped[str] = mapped_column(Text, nullable=False)
+    rank: Mapped[int] = mapped_column(
+        Integer,
+        default=0,
+        server_default=text("0"),
+        index=True,
+        nullable=False,
+    )
+
+    score: Mapped[int] = mapped_column(
+        Integer,
+        default=0,
+        server_default=text("0"),
+        index=True,
+        nullable=False,
+    )
+    match_score: Mapped[int] = mapped_column(
+        Integer, default=0, server_default=text("0"), nullable=False
+    )
+    combined_score: Mapped[int] = mapped_column(
+        Integer, default=0, server_default=text("0"), nullable=False
+    )
+    semantic_score: Mapped[int] = mapped_column(
+        Integer, default=0, server_default=text("0"), nullable=False
+    )
+    keyword_score: Mapped[int] = mapped_column(
+        Integer, default=0, server_default=text("0"), nullable=False
+    )
+
+    verdict: Mapped[str] = mapped_column(
+        String(100),
+        default="",
+        server_default=text("''"),
+        nullable=False,
+    )
+    summary: Mapped[str] = mapped_column(
+        Text,
+        default="",
+        server_default=text("''"),
+        nullable=False,
+    )
+
+    matched_skills: Mapped[str] = mapped_column(
+        Text,
+        default=EMPTY_JSON_LIST,
+        server_default=text("'[]'"),
+        nullable=False,
+    )
+    missing_skills: Mapped[str] = mapped_column(
+        Text,
+        default=EMPTY_JSON_LIST,
+        server_default=text("'[]'"),
+        nullable=False,
+    )
+    recommendations: Mapped[str] = mapped_column(
+        Text,
+        default=EMPTY_JSON_LIST,
+        server_default=text("'[]'"),
+        nullable=False,
+    )
+    matched_keywords: Mapped[str] = mapped_column(
+        Text,
+        default=EMPTY_JSON_LIST,
+        server_default=text("'[]'"),
+        nullable=False,
+    )
+    missing_keywords: Mapped[str] = mapped_column(
+        Text,
+        default=EMPTY_JSON_LIST,
+        server_default=text("'[]'"),
+        nullable=False,
+    )
+
+    favorite: Mapped[bool] = mapped_column(
+        Boolean,
+        default=False,
+        server_default=false(),
+        index=True,
+        nullable=False,
+    )
+    status: Mapped[str] = mapped_column(
+        String(50),
+        default=DEFAULT_CANDIDATE_STATUS,
+        server_default=text("'new'"),
+        index=True,
+        nullable=False,
+    )
+    notes: Mapped[str] = mapped_column(
+        Text,
+        default="",
+        server_default=text("''"),
+        nullable=False,
+    )
+    tags: Mapped[str] = mapped_column(
+        Text,
+        default=EMPTY_JSON_LIST,
+        server_default=text("'[]'"),
+        nullable=False,
+    )
+
+    source: Mapped[str] = mapped_column(
+        String(100),
+        default=DEFAULT_CANDIDATE_SOURCE,
+        server_default=text("'recruiter_mode'"),
+        nullable=False,
+    )
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        default=utc_now,
+        index=True,
+        nullable=False,
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        default=utc_now,
+        onupdate=utc_now,
+        nullable=False,
+    )
+
+    user: Mapped["User"] = relationship(
+        "User",
+        back_populates="recruiter_candidates",
+    )
+
+    def __repr__(self) -> str:
+        return (
+            f"RecruiterCandidate(id={self.id!r}, user_id={self.user_id!r}, "
+            f"status={self.status!r}, score={self.score!r}, "
+            f"favorite={self.favorite!r})"
+        )
