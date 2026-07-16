@@ -4,14 +4,17 @@ import json
 import logging
 import os
 import re
-from typing import Any, Callable, TypeVar
+import unicodedata
+from dataclasses import dataclass
+from typing import Any, Callable, Final, TypeAlias, TypeVar
 
 import requests
 from fastapi import Depends, HTTPException
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
+from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import Session
 
-from db import get_db
+from db import get_db, rollback_session_safely
 from models import User
 from resilience import (
     CircuitBreakerOpenError,
@@ -25,10 +28,30 @@ from resilience import (
 
 T = TypeVar("T")
 
+FirebaseUser: TypeAlias = dict[str, Any]
+ErrorDetail: TypeAlias = dict[str, Any]
+
 LOGGER = logging.getLogger("talentmatch.firebase")
 
-FIREBASE_SERVICE_NAME = "Firebase Authentication"
-FIREBASE_CONFIGURATION_PREFIX = "FIREBASE"
+FIREBASE_SERVICE_NAME: Final[str] = "Firebase Authentication"
+FIREBASE_CONFIGURATION_PREFIX: Final[str] = "FIREBASE"
+FIREBASE_LOOKUP_ENDPOINT: Final[str] = (
+    "https://identitytoolkit.googleapis.com/v1/accounts:lookup"
+)
+
+LOCAL_TEST_EMAIL: Final[str] = "local-test@talentmatch.dev"
+LOCAL_TEST_UID: Final[str] = "local-test-user"
+LOCAL_TEST_NAME: Final[str] = "Local Test User"
+
+MAX_EMAIL_LENGTH: Final[int] = 255
+MAX_DISPLAY_NAME_LENGTH: Final[int] = 255
+
+_EMAIL_PATTERN: Final[re.Pattern[str]] = re.compile(
+    r"^[^@\s]+@[^@\s]+\.[^@\s]+$"
+)
+_CONTROL_CHARACTERS: Final[re.Pattern[str]] = re.compile(
+    r"[\x00-\x1f\x7f]"
+)
 
 bearer_scheme = HTTPBearer(auto_error=False)
 
@@ -37,6 +60,71 @@ FIREBASE_RESILIENCE = build_resilience_executor(
     prefix=FIREBASE_CONFIGURATION_PREFIX,
     logger=LOGGER,
 )
+
+
+@dataclass(frozen=True)
+class AuthenticationErrorDefinition:
+    status_code: int
+    message: str
+    error_type: str
+
+
+AUTH_ERRORS: Final[dict[str, AuthenticationErrorDefinition]] = {
+    "missing_bearer_token": AuthenticationErrorDefinition(
+        status_code=401,
+        message="Missing Authorization Bearer token.",
+        error_type="missing_bearer_token",
+    ),
+    "empty_firebase_token": AuthenticationErrorDefinition(
+        status_code=401,
+        message="Empty Firebase token.",
+        error_type="empty_firebase_token",
+    ),
+    "firebase_uid_missing": AuthenticationErrorDefinition(
+        status_code=401,
+        message="Firebase UID missing.",
+        error_type="firebase_uid_missing",
+    ),
+    "firebase_user_not_found": AuthenticationErrorDefinition(
+        status_code=401,
+        message="Firebase user not found.",
+        error_type="firebase_user_not_found",
+    ),
+    "firebase_invalid_user_payload": AuthenticationErrorDefinition(
+        status_code=401,
+        message="Invalid Firebase user payload.",
+        error_type="firebase_invalid_user_payload",
+    ),
+    "firebase_configuration_error": AuthenticationErrorDefinition(
+        status_code=500,
+        message="FIREBASE_API_KEY is missing on backend.",
+        error_type="firebase_configuration_error",
+    ),
+    "firebase_email_invalid": AuthenticationErrorDefinition(
+        status_code=401,
+        message="Firebase email address is invalid.",
+        error_type="firebase_email_invalid",
+    ),
+    "user_sync_failed": AuthenticationErrorDefinition(
+        status_code=500,
+        message="User account synchronization failed.",
+        error_type="user_sync_failed",
+    ),
+    "local_test_user_create_failed": AuthenticationErrorDefinition(
+        status_code=500,
+        message="Local test user could not be created.",
+        error_type="local_test_user_create_failed",
+    ),
+}
+
+
+_AUTH_METRICS: dict[str, int] = {
+    "firebase_auth_requests": 0,
+    "firebase_auth_success": 0,
+    "firebase_auth_failure": 0,
+    "firebase_user_creations": 0,
+    "firebase_user_updates": 0,
+}
 
 
 class FirebaseServiceError(ExternalServiceError):
@@ -59,6 +147,15 @@ class FirebaseServiceError(ExternalServiceError):
         )
 
 
+def _increment_auth_metric(name: str) -> None:
+    if name in _AUTH_METRICS:
+        _AUTH_METRICS[name] += 1
+
+
+def get_firebase_auth_metrics() -> dict[str, int]:
+    return dict(_AUTH_METRICS)
+
+
 def get_firebase_timeout_seconds() -> float:
     return get_float_setting(
         "FIREBASE_TIMEOUT_SECONDS",
@@ -68,15 +165,44 @@ def get_firebase_timeout_seconds() -> float:
     )
 
 
+def _http_error(error_key: str) -> HTTPException:
+    definition = AUTH_ERRORS[error_key]
+    return HTTPException(
+        status_code=definition.status_code,
+        detail={
+            "message": definition.message,
+            "type": definition.error_type,
+        },
+    )
+
+
 def _clean_text(value: Any) -> str:
     if value is None:
         return ""
 
-    return str(value).strip()
+    normalized = unicodedata.normalize("NFKC", str(value))
+    normalized = _CONTROL_CHARACTERS.sub("", normalized)
+    return normalized.strip()
+
+
+def _clean_email(value: Any) -> str:
+    email = _clean_text(value).lower()
+
+    if not email:
+        return ""
+
+    if len(email) > MAX_EMAIL_LENGTH:
+        return ""
+
+    if not _EMAIL_PATTERN.fullmatch(email):
+        return ""
+
+    return email
 
 
 def _clean_display_name(value: Any) -> str:
     raw = _clean_text(value)
+
     if not raw:
         return ""
 
@@ -95,9 +221,10 @@ def _clean_display_name(value: Any) -> str:
     display_name = " ".join(
         part[:1].upper() + part[1:].lower()
         for part in parts[:3]
-    )
+    )[:MAX_DISPLAY_NAME_LENGTH]
 
     compact = re.sub(r"[^a-zA-Z]", "", display_name).lower()
+
     if "dejan" in compact and "jovic" in compact:
         return "Dejan Jovic"
 
@@ -109,12 +236,13 @@ def _name_from_email(email: str) -> str:
 
 
 def _firebase_display_name(
-    firebase_user: dict[str, Any],
+    firebase_user: FirebaseUser,
     email: str,
 ) -> str:
     direct_name = _clean_display_name(
         firebase_user.get("displayName")
     )
+
     if direct_name:
         return direct_name
 
@@ -128,6 +256,7 @@ def _firebase_display_name(
             provider_name = _clean_display_name(
                 provider.get("displayName")
             )
+
             if provider_name:
                 return provider_name
 
@@ -147,6 +276,7 @@ def _is_retryable_firebase_error(exc: Exception) -> bool:
 
     if isinstance(exc, requests.HTTPError):
         response = exc.response
+
         if response is None:
             return False
 
@@ -323,7 +453,7 @@ def _execute_firebase_operation(
 def _firebase_error_to_http_exception(
     exc: ExternalServiceError,
 ) -> HTTPException:
-    detail: dict[str, Any] = {
+    detail: ErrorDetail = {
         "message": exc.message,
         "type": exc.error_code,
         "service": exc.service,
@@ -349,24 +479,18 @@ def _firebase_error_to_http_exception(
 
 def verify_firebase_token_with_rest(
     token: str,
-) -> dict[str, Any]:
+) -> FirebaseUser:
+    _increment_auth_metric("firebase_auth_requests")
+
     api_key = os.getenv("FIREBASE_API_KEY", "").strip()
 
     if not api_key:
-        raise HTTPException(
-            status_code=500,
-            detail={
-                "message": "FIREBASE_API_KEY is missing on backend.",
-                "type": "firebase_configuration_error",
-            },
-        )
+        _increment_auth_metric("firebase_auth_failure")
+        raise _http_error("firebase_configuration_error")
 
-    url = (
-        "https://identitytoolkit.googleapis.com/v1/"
-        f"accounts:lookup?key={api_key}"
-    )
+    url = f"{FIREBASE_LOOKUP_ENDPOINT}?key={api_key}"
 
-    def operation() -> dict[str, Any]:
+    def operation() -> FirebaseUser:
         response = requests.post(
             url,
             json={"idToken": token},
@@ -400,121 +524,105 @@ def verify_firebase_token_with_rest(
             operation_name="verify_id_token",
         )
     except ExternalServiceError as exc:
+        _increment_auth_metric("firebase_auth_failure")
+        LOGGER.warning(
+            "Firebase token verification failed.",
+            extra={
+                "event": "firebase_login_failed",
+                "error_type": exc.error_code,
+                "retryable": exc.retryable,
+            },
+        )
         raise _firebase_error_to_http_exception(exc) from exc
 
     users = data.get("users", [])
 
     if not users:
-        raise HTTPException(
-            status_code=401,
-            detail={
-                "message": "Firebase user not found.",
-                "type": "firebase_user_not_found",
-            },
-        )
+        _increment_auth_metric("firebase_auth_failure")
+        raise _http_error("firebase_user_not_found")
 
     first_user = users[0]
 
     if not isinstance(first_user, dict):
-        raise HTTPException(
-            status_code=401,
-            detail={
-                "message": "Invalid Firebase user payload.",
-                "type": "firebase_invalid_user_payload",
-            },
-        )
+        _increment_auth_metric("firebase_auth_failure")
+        raise _http_error("firebase_invalid_user_payload")
+
+    _increment_auth_metric("firebase_auth_success")
+
+    LOGGER.info(
+        "Firebase token verified successfully.",
+        extra={"event": "firebase_login_success"},
+    )
 
     return first_user
 
 
-def get_current_user(
-    credentials: HTTPAuthorizationCredentials | None = Depends(
-        bearer_scheme
-    ),
-    db: Session = Depends(get_db),
+def _save_user(
+    db: Session,
+    user: User,
+    *,
+    event_name: str,
+    failure_message: str,
 ) -> User:
-    if (
-        credentials is None
-        or credentials.scheme.lower() != "bearer"
-    ):
-        raise HTTPException(
-            status_code=401,
-            detail={
-                "message": "Missing Authorization Bearer token.",
-                "type": "missing_bearer_token",
-            },
-        )
-
-    token = credentials.credentials.strip()
-
-    if not token:
-        raise HTTPException(
-            status_code=401,
-            detail={
-                "message": "Empty Firebase token.",
-                "type": "empty_firebase_token",
-            },
-        )
-
-    firebase_user = verify_firebase_token_with_rest(token)
-
-    firebase_uid = _clean_text(
-        firebase_user.get("localId")
-    )
-    email = _clean_text(
-        firebase_user.get("email")
-    ).lower()
-    full_name = _firebase_display_name(
-        firebase_user,
-        email,
-    )
-
-    if not firebase_uid:
-        raise HTTPException(
-            status_code=401,
-            detail={
-                "message": "Firebase UID missing.",
-                "type": "firebase_uid_missing",
-            },
-        )
-
-    user = (
-        db.query(User)
-        .filter(User.firebase_uid == firebase_uid)
-        .first()
-    )
-
-    if not user:
-        user = User(
-            firebase_uid=firebase_uid,
-            email=email,
-            full_name=full_name,
-            plan="free",
-            is_pro=False,
-        )
-
-        try:
-            db.add(user)
-            db.commit()
-            db.refresh(user)
-        except Exception:
-            db.rollback()
-            LOGGER.exception(
-                "Failed to create authenticated user.",
-                extra={
-                    "event": "firebase_user_create_failed",
-                },
-            )
-            raise HTTPException(
-                status_code=500,
-                detail={
-                    "message": "User account synchronization failed.",
-                    "type": "user_sync_failed",
-                },
-            )
-
+    try:
+        db.add(user)
+        db.commit()
+        db.refresh(user)
         return user
+    except SQLAlchemyError as exc:
+        rollback_session_safely(db)
+        LOGGER.exception(
+            failure_message,
+            extra={
+                "event": event_name,
+                "error_type": type(exc).__name__,
+            },
+        )
+        raise _http_error("user_sync_failed") from exc
 
+
+def _create_authenticated_user(
+    db: Session,
+    *,
+    firebase_uid: str,
+    email: str,
+    full_name: str,
+) -> User:
+    user = User(
+        firebase_uid=firebase_uid,
+        email=email,
+        full_name=full_name,
+        plan="free",
+        is_pro=False,
+    )
+
+    saved_user = _save_user(
+        db,
+        user,
+        event_name="firebase_user_create_failed",
+        failure_message="Failed to create authenticated user.",
+    )
+
+    _increment_auth_metric("firebase_user_creations")
+
+    LOGGER.info(
+        "Authenticated user created.",
+        extra={
+            "event": "firebase_user_created",
+            "user_id": saved_user.id,
+        },
+    )
+
+    return saved_user
+
+
+def _update_authenticated_user(
+    db: Session,
+    user: User,
+    *,
+    email: str,
+    full_name: str,
+) -> User:
     changed = False
 
     if email and getattr(user, "email", None) != email:
@@ -538,29 +646,85 @@ def get_current_user(
         user.full_name = normalized_current_name
         changed = True
 
-    if changed:
-        try:
-            db.add(user)
-            db.commit()
-            db.refresh(user)
-        except Exception:
-            db.rollback()
-            LOGGER.exception(
-                "Failed to update authenticated user profile.",
-                extra={
-                    "event": "firebase_user_update_failed",
-                    "user_id": user.id,
-                },
-            )
-            raise HTTPException(
-                status_code=500,
-                detail={
-                    "message": "User profile synchronization failed.",
-                    "type": "user_sync_failed",
-                },
-            )
+    if not changed:
+        return user
 
-    return user
+    saved_user = _save_user(
+        db,
+        user,
+        event_name="firebase_user_update_failed",
+        failure_message="Failed to update authenticated user profile.",
+    )
+
+    _increment_auth_metric("firebase_user_updates")
+
+    LOGGER.info(
+        "Authenticated user profile updated.",
+        extra={
+            "event": "firebase_user_updated",
+            "user_id": saved_user.id,
+        },
+    )
+
+    return saved_user
+
+
+def get_current_user(
+    credentials: HTTPAuthorizationCredentials | None = Depends(
+        bearer_scheme
+    ),
+    db: Session = Depends(get_db),
+) -> User:
+    if (
+        credentials is None
+        or credentials.scheme.lower() != "bearer"
+    ):
+        raise _http_error("missing_bearer_token")
+
+    token = credentials.credentials.strip()
+
+    if not token:
+        raise _http_error("empty_firebase_token")
+
+    firebase_user = verify_firebase_token_with_rest(token)
+
+    firebase_uid = _clean_text(
+        firebase_user.get("localId")
+    )
+    email = _clean_email(
+        firebase_user.get("email")
+    )
+    full_name = _firebase_display_name(
+        firebase_user,
+        email,
+    )
+
+    if not firebase_uid:
+        raise _http_error("firebase_uid_missing")
+
+    if firebase_user.get("email") and not email:
+        raise _http_error("firebase_email_invalid")
+
+    user = (
+        db.query(User)
+        .filter(User.firebase_uid == firebase_uid)
+        .first()
+    )
+
+    if not user:
+        return _create_authenticated_user(
+            db,
+            firebase_uid=firebase_uid,
+            email=email,
+            full_name=full_name,
+        )
+
+    return _update_authenticated_user(
+        db,
+        user,
+        email=email,
+        full_name=full_name,
+    )
 
 
 def get_test_user(
@@ -568,10 +732,7 @@ def get_test_user(
 ) -> User:
     user = (
         db.query(User)
-        .filter(
-            User.email
-            == "local-test@talentmatch.dev"
-        )
+        .filter(User.email == LOCAL_TEST_EMAIL)
         .first()
     )
 
@@ -579,9 +740,9 @@ def get_test_user(
         return user
 
     user = User(
-        firebase_uid="local-test-user",
-        email="local-test@talentmatch.dev",
-        full_name="Local Test User",
+        firebase_uid=LOCAL_TEST_UID,
+        email=LOCAL_TEST_EMAIL,
+        full_name=LOCAL_TEST_NAME,
         plan="free",
         is_pro=False,
     )
@@ -590,21 +751,18 @@ def get_test_user(
         db.add(user)
         db.commit()
         db.refresh(user)
-    except Exception:
-        db.rollback()
+    except SQLAlchemyError as exc:
+        rollback_session_safely(db)
         LOGGER.exception(
             "Failed to create local test user.",
             extra={
                 "event": "local_test_user_create_failed",
+                "error_type": type(exc).__name__,
             },
         )
-        raise HTTPException(
-            status_code=500,
-            detail={
-                "message": "Local test user could not be created.",
-                "type": "local_test_user_create_failed",
-            },
-        )
+        raise _http_error(
+            "local_test_user_create_failed"
+        ) from exc
 
     return user
 
