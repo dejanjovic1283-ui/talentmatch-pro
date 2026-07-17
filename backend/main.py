@@ -1539,6 +1539,75 @@ def recruiter_candidate_to_dict(candidate: RecruiterCandidate) -> dict:
     }
 
 
+def normalize_history_score(value: object) -> int:
+    """Return a bounded integer score suitable for persistent history records."""
+    try:
+        if value is None:
+            return 0
+
+        if isinstance(value, bool):
+            numeric = float(int(value))
+        elif isinstance(value, (int, float)):
+            numeric = float(value)
+        elif isinstance(value, str):
+            match = re.search(r"-?\d+(?:[.,]\d+)?", value)
+            if match is None:
+                return 0
+            numeric = float(match.group(0).replace(",", "."))
+        else:
+            return 0
+
+        if 0 < numeric <= 1:
+            numeric *= 100
+
+        return max(0, min(100, int(round(numeric))))
+    except (TypeError, ValueError, OverflowError):
+        return 0
+
+
+def normalize_history_list(value: object, *, maximum_items: int = 50) -> list[str]:
+    """Normalize bounded string lists before serializing them to the database."""
+    if value is None:
+        return []
+
+    if isinstance(value, str):
+        raw_value = value.strip()
+        if not raw_value:
+            return []
+        try:
+            parsed = json.loads(raw_value)
+            value = parsed if isinstance(parsed, list) else [raw_value]
+        except json.JSONDecodeError:
+            value = [item.strip() for item in raw_value.replace("\n", ",").split(",")]
+
+    if not isinstance(value, (list, tuple, set)):
+        value = [value]
+
+    normalized: list[str] = []
+    seen: set[str] = set()
+
+    for item in value:
+        if isinstance(item, (dict, list, tuple, set)):
+            continue
+
+        cleaned = re.sub(r"\s+", " ", str(item or "")).strip()
+        if not cleaned:
+            continue
+
+        cleaned = cleaned[:1000]
+        dedupe_key = cleaned.casefold()
+        if dedupe_key in seen:
+            continue
+
+        seen.add(dedupe_key)
+        normalized.append(cleaned)
+
+        if len(normalized) >= maximum_items:
+            break
+
+    return normalized
+
+
 def create_analysis_history_record(
     db: Session,
     current_user: User,
@@ -1553,47 +1622,76 @@ def create_analysis_history_record(
     missing_skills: list[str] | None = None,
     recommendations: list[str] | None = None,
 ) -> AnalysisRecord:
-    """
-    Centralized history writer for:
-    - cv_analysis
-    - ats_checker
-    - semantic_match
-    - recruiter_mode
-    """
-
+    """Persist a normalized, backward-compatible TalentMatch history record."""
     storage_path = None
+    safe_filename = re.sub(
+        r"[^A-Za-z0-9._ -]+",
+        "_",
+        str(cv_filename or "resume.pdf"),
+    ).strip()[:255] or "resume.pdf"
 
     if pdf_bytes:
         try:
             storage_path = upload_pdf_to_firebase(
                 pdf_bytes,
                 current_user.id,
-                cv_filename or "resume.pdf",
+                safe_filename,
             )
-        except Exception as exc:
-            logger.exception("Firebase Storage upload failed.")
-            storage_path = None
+        except Exception:
+            logger.exception(
+                "Firebase Storage upload failed while saving history.",
+                extra={
+                    "event": "history_storage_upload_failed",
+                    "user_id": current_user.id,
+                    "operation": analysis_type,
+                },
+            )
+
+    normalized_type = str(analysis_type or "cv_analysis").strip().lower()[:50]
+    normalized_summary = re.sub(r"\s+", " ", str(summary or "")).strip()[:12000]
+    normalized_job_description = str(job_description or "").strip()[:30000]
 
     record_kwargs = {
         "user_id": current_user.id,
-        "cv_filename": cv_filename or "resume.pdf",
+        "cv_filename": safe_filename,
         "cv_storage_path": storage_path,
-        "job_description": job_description,
-        "score": int(score or 0),
-        "summary": summary or "",
-        "matched_skills": json.dumps(matched_skills or []),
-        "missing_skills": json.dumps(missing_skills or []),
-        "recommendations": json.dumps(recommendations or []),
+        "job_description": normalized_job_description,
+        "score": normalize_history_score(score),
+        "summary": normalized_summary,
+        "matched_skills": json.dumps(
+            normalize_history_list(matched_skills),
+            ensure_ascii=False,
+        ),
+        "missing_skills": json.dumps(
+            normalize_history_list(missing_skills),
+            ensure_ascii=False,
+        ),
+        "recommendations": json.dumps(
+            normalize_history_list(recommendations),
+            ensure_ascii=False,
+        ),
     }
 
     if hasattr(AnalysisRecord, "analysis_type"):
-        record_kwargs["analysis_type"] = analysis_type
+        record_kwargs["analysis_type"] = normalized_type
 
     record = AnalysisRecord(**record_kwargs)
 
-    db.add(record)
-    db.commit()
-    db.refresh(record)
+    try:
+        db.add(record)
+        db.commit()
+        db.refresh(record)
+    except Exception:
+        db.rollback()
+        logger.exception(
+            "History record persistence failed.",
+            extra={
+                "event": "history_record_persistence_failed",
+                "user_id": current_user.id,
+                "operation": normalized_type,
+            },
+        )
+        raise
 
     return record
 
@@ -2060,9 +2158,40 @@ async def semantic_match(
     except AIServiceError as exc:
         logger.warning("Semantic Match AI request failed: %s", exc)
         raise_ai_http_exception(exc)
-    except Exception as exc:
-        logger.exception("Semantic Match processing failed.")
-        raise HTTPException(status_code=500, detail=f"Semantic match failed: {exc}")
+    except Exception:
+        logger.exception(
+            "Semantic Match processing failed.",
+            extra={
+                "event": "semantic_match_processing_failed",
+                "user_id": current_user.id,
+                "operation": "semantic_match",
+            },
+        )
+        raise HTTPException(
+            status_code=500,
+            detail={
+                "message": "Semantic Match could not be completed.",
+                "type": "semantic_match_processing_error",
+            },
+        )
+
+    combined_score = normalize_history_score(
+        result.get(
+            "combined_score",
+            result.get(
+                "score",
+                result.get("match_score", result.get("semantic_score", 0)),
+            ),
+        )
+    )
+    matched_themes = result.get(
+        "matched_themes",
+        result.get("matched_skills", result.get("strengths", [])),
+    )
+    missing_themes = result.get(
+        "missing_themes",
+        result.get("missing_skills", result.get("weaknesses", [])),
+    )
 
     create_analysis_history_record(
         db,
@@ -2071,10 +2200,10 @@ async def semantic_match(
         cv_filename=file.filename,
         pdf_bytes=pdf_bytes,
         job_description=job_description,
-        score=result.get("score", result.get("match_score", 0)),
+        score=combined_score,
         summary=result.get("summary", "Semantic match analysis completed."),
-        matched_skills=result.get("matched_skills", result.get("strengths", [])),
-        missing_skills=result.get("missing_skills", result.get("weaknesses", [])),
+        matched_skills=matched_themes,
+        missing_skills=missing_themes,
         recommendations=result.get("recommendations", []),
     )
 
@@ -2354,9 +2483,22 @@ async def recruiter_rank_candidates(
     except AIServiceError as exc:
         logger.warning("Recruiter AI ranking failed: %s", exc)
         raise_ai_http_exception(exc)
-    except Exception as exc:
-        logger.exception("Recruiter ranking failed.")
-        raise HTTPException(status_code=500, detail=f"Recruiter ranking failed: {exc}")
+    except Exception:
+        logger.exception(
+            "Recruiter ranking failed.",
+            extra={
+                "event": "recruiter_ranking_failed",
+                "user_id": current_user.id,
+                "operation": "recruiter_rank_candidates",
+            },
+        )
+        raise HTTPException(
+            status_code=500,
+            detail={
+                "message": "Recruiter ranking could not be completed.",
+                "type": "recruiter_ranking_error",
+            },
+        )
 
     ranked_candidates = result.get("candidates", result.get("ranked_candidates", []))
     top_candidate = ranked_candidates[0] if ranked_candidates else {}
