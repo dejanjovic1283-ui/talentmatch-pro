@@ -59,7 +59,88 @@ PDF_JOB_DESCRIPTION_CHARS = 5_000
 
 LOGGER = logging.getLogger(__name__)
 
+FORBIDDEN_BILLING_PROVIDERS = (
+    "Stripe",
+    "Paddle",
+    "Lemon Squeezy",
+    "LemonSqueezy",
+)
+PAYPAL_ONLY_POLICY_LABEL = "PayPal"
 
+
+
+def sanitize_billing_text(value: Any) -> str:
+    """Enforce TalentMatch Pro's PayPal-only policy on AI-generated text."""
+    text = str(value or "")
+    if not text:
+        return ""
+
+    replacements = (
+        (r"\bLemon\s*Squeezy\b", PAYPAL_ONLY_POLICY_LABEL),
+        (r"\bLemonSqueezy\b", PAYPAL_ONLY_POLICY_LABEL),
+        (r"\bStripe\b", PAYPAL_ONLY_POLICY_LABEL),
+        (r"\bPaddle\b", PAYPAL_ONLY_POLICY_LABEL),
+        (
+            r"\b(?:a|any|another|alternative|specific|third[-\s]?party)\s+"
+            r"payment\s+(?:provider|gateway|processor|platform)\b",
+            PAYPAL_ONLY_POLICY_LABEL,
+        ),
+        (
+            r"\bpayment\s+(?:provider|gateway|processor|platform)\b",
+            PAYPAL_ONLY_POLICY_LABEL,
+        ),
+        (
+            r"\bbilling\s+(?:provider|gateway|processor|platform)\b",
+            PAYPAL_ONLY_POLICY_LABEL,
+        ),
+    )
+
+    sanitized = text
+    for pattern, replacement in replacements:
+        sanitized = re.sub(pattern, replacement, sanitized, flags=re.IGNORECASE)
+
+    sanitized = re.sub(
+        r"\bPayPal\s*(?:/|,|\bor\b|\band\b)\s*PayPal\b",
+        PAYPAL_ONLY_POLICY_LABEL,
+        sanitized,
+        flags=re.IGNORECASE,
+    )
+    sanitized = re.sub(
+        r"\bPayPal\s*\(\s*PayPal\s*\)",
+        PAYPAL_ONLY_POLICY_LABEL,
+        sanitized,
+        flags=re.IGNORECASE,
+    )
+    sanitized = re.sub(r"[ \t]{2,}", " ", sanitized)
+    return sanitized.strip()
+
+
+def sanitize_ai_result(value: Any) -> Any:
+    """Recursively sanitize AI output while preserving scores and structure."""
+    if isinstance(value, dict):
+        return {key: sanitize_ai_result(inner) for key, inner in value.items()}
+    if isinstance(value, list):
+        return [sanitize_ai_result(item) for item in value]
+    if isinstance(value, tuple):
+        return tuple(sanitize_ai_result(item) for item in value)
+    if isinstance(value, str):
+        return sanitize_billing_text(value)
+    return value
+
+
+def validate_paypal_only_result(value: Any) -> bool:
+    """Return True when no forbidden provider name remains."""
+    if isinstance(value, dict):
+        return all(validate_paypal_only_result(item) for item in value.values())
+    if isinstance(value, (list, tuple)):
+        return all(validate_paypal_only_result(item) for item in value)
+    if isinstance(value, str):
+        lowered = value.casefold()
+        return not any(
+            term in lowered
+            for term in ("stripe", "paddle", "lemon squeeze", "lemonsqueezy")
+        )
+    return True
 def utc_timestamp() -> str:
     return datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M UTC")
 
@@ -91,7 +172,10 @@ def response_to_json(
         return None, "No response from backend."
 
     if isinstance(response, dict):
-        return response, None
+        sanitized = sanitize_ai_result(response)
+        if not isinstance(sanitized, dict):
+            return None, "Backend response is not a JSON object."
+        return sanitized, None
 
     status_code = getattr(response, "status_code", None)
     text = clean_text(getattr(response, "text", "") or "", max_chars=800)
@@ -121,6 +205,11 @@ def response_to_json(
 
     if not isinstance(payload, dict):
         return None, "Backend response is not a JSON object."
+
+    sanitized_payload = sanitize_ai_result(payload)
+    if not isinstance(sanitized_payload, dict):
+        return None, "Backend response is not a JSON object."
+    payload = sanitized_payload
 
     error_value = payload.get("error") or payload.get("detail")
     if error_value:
@@ -238,8 +327,12 @@ def score_tone(score: int) -> Tuple[str, str]:
 
 
 def extract_report_data(data: Dict[str, Any]) -> Dict[str, Any]:
+    sanitized_data = sanitize_ai_result(data)
+    if not isinstance(sanitized_data, dict):
+        sanitized_data = {}
+
     combined_score = get_score(
-        data,
+        sanitized_data,
         "combined_score",
         "overall_score",
         "overall_match",
@@ -267,28 +360,28 @@ def extract_report_data(data: Dict[str, Any]) -> Dict[str, Any]:
         "keyword_score": keyword_score,
         "verdict": get_verdict(
             combined_score,
-            str(data.get("verdict") or data.get("recommendation") or ""),
+            str(sanitized_data.get("verdict") or sanitized_data.get("recommendation") or ""),
         ),
         "summary": clean_text(
-            data.get("summary")
-            or data.get("recruiter_summary")
-            or data.get("executive_summary")
+            sanitized_data.get("summary")
+            or sanitized_data.get("recruiter_summary")
+            or sanitized_data.get("executive_summary")
             or "Semantic match completed.",
             max_chars=MAX_SUMMARY_CHARS,
         ),
         "matched_themes": normalize_list(
-            data.get("matched_themes")
-            or data.get("matched_skills")
-            or data.get("strengths")
+            sanitized_data.get("matched_themes")
+            or sanitized_data.get("matched_skills")
+            or sanitized_data.get("strengths")
         ),
         "missing_themes": normalize_list(
-            data.get("missing_themes")
-            or data.get("missing_skills")
-            or data.get("weaknesses")
+            sanitized_data.get("missing_themes")
+            or sanitized_data.get("missing_skills")
+            or sanitized_data.get("weaknesses")
         ),
-        "matched_keywords": normalize_list(data.get("matched_keywords")),
-        "missing_keywords": normalize_list(data.get("missing_keywords")),
-        "recommendations": normalize_list(data.get("recommendations")),
+        "matched_keywords": normalize_list(sanitized_data.get("matched_keywords")),
+        "missing_keywords": normalize_list(sanitized_data.get("missing_keywords")),
+        "recommendations": normalize_list(sanitized_data.get("recommendations")),
     }
 
 
@@ -1233,6 +1326,13 @@ if run_clicked:
     if not payload:
         st.error("Semantic Match failed: empty backend response.")
         st.stop()
+
+    if not validate_paypal_only_result(payload):
+        LOGGER.warning(
+            "Forbidden billing provider survived result sanitization.",
+            extra={"event": "semantic_billing_policy_validation_failed"},
+        )
+        payload = sanitize_ai_result(payload)
 
     st.session_state["semantic_result"] = payload
     st.session_state["semantic_filename"] = safe_filename
