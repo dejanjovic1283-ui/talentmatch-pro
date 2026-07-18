@@ -1,10 +1,9 @@
-# pyright: reportArgumentType=false
 from __future__ import annotations
 
 import json
 import os
 import re
-from datetime import datetime
+from datetime import datetime, timezone
 from io import BytesIO
 from typing import Any, Dict
 from urllib.parse import urlencode
@@ -148,44 +147,86 @@ def history_label(item: dict[str, Any]) -> str:
     return TYPE_LABELS.get(analysis_type, analysis_type.replace("_", " ").title())
 
 
-def score_number(score: Any) -> int:
-    try:
-        if isinstance(score, str):
-            match = re.search(r"-?\d+(?:\.\d+)?", score.replace(",", "."))
-            if not match:
-                return 0
-            score = match.group(0)
 
-        numeric = float(score or 0)
-        if numeric <= 1 and numeric > 0:
+def score_number(score: Any) -> int:
+    """Normalize common score representations to a bounded 0-100 integer."""
+    if score is None or isinstance(score, bool):
+        return 0
+
+    try:
+        if isinstance(score, (int, float)):
+            numeric = float(score)
+        elif isinstance(score, str):
+            match = re.search(r"-?\d+(?:[.,]\d+)?", score)
+            if match is None:
+                return 0
+            numeric = float(match.group(0).replace(",", "."))
+        else:
+            return 0
+
+        if 0 < numeric <= 1:
             numeric *= 100
 
         return max(0, min(100, int(round(numeric))))
-    except Exception:
+    except (TypeError, ValueError, OverflowError):
         return 0
 
 
 def _score_from_value(value: Any) -> int | None:
-    """Return a valid 0-100 score from common numeric/string score values."""
     if value is None or value == "":
         return None
 
-    candidate = score_number(value)
-    if candidate > 0:
-        return candidate
+    score = score_number(value)
+    if score > 0:
+        return score
 
-    if str(value).strip() in {"0", "0.0", "0%"}:
+    if isinstance(value, (int, float)) and not isinstance(value, bool) and float(value) == 0:
+        return 0
+
+    if isinstance(value, str) and value.strip() in {"0", "0.0", "0%", "0/100"}:
         return 0
 
     return None
 
 
-def get_report_score(item: dict[str, Any]) -> int:
-    """Extract score consistently across ATS, Semantic Match and Recruiter records."""
-    direct_keys = (
+def _score_priority(analysis_type: str) -> tuple[str, ...]:
+    if analysis_type == "semantic_match":
+        return (
+            "combined_score",
+            "score",
+            "match_score",
+            "semantic_score",
+            "keyword_score",
+            "overall_score",
+        )
+
+    if analysis_type == "recruiter_mode":
+        return (
+            "score",
+            "combined_score",
+            "match_score",
+            "semantic_score",
+            "keyword_score",
+            "overall_score",
+            "ranking_score",
+            "candidate_score",
+        )
+
+    if analysis_type in {"ats_checker", "ats"}:
+        return (
+            "score",
+            "ats_score",
+            "coverage",
+            "match_score",
+            "overall_score",
+            "score_percentage",
+        )
+
+    return (
         "score",
         "match_score",
         "overall_score",
+        "combined_score",
         "semantic_score",
         "ats_score",
         "recruiter_score",
@@ -205,11 +246,19 @@ def get_report_score(item: dict[str, Any]) -> int:
         "total_score",
     )
 
-    for key in direct_keys:
-        value = item.get(key)
-        score = _score_from_value(value)
-        if score is not None:
+
+def get_report_score(item: dict[str, Any]) -> int:
+    """Extract the most relevant score for each report type without hiding richer values."""
+    analysis_type = normalize_type(item)
+    zero_candidate: int | None = None
+
+    for key in _score_priority(analysis_type):
+        score = _score_from_value(item.get(key))
+        if score is None:
+            continue
+        if score > 0:
             return score
+        zero_candidate = 0
 
     nested_sources = (
         item.get("result"),
@@ -219,7 +268,6 @@ def get_report_score(item: dict[str, Any]) -> int:
         item.get("data"),
         item.get("payload"),
         item.get("details"),
-        item.get("summary"),
     )
 
     def walk(value: Any) -> list[int]:
@@ -228,7 +276,7 @@ def get_report_score(item: dict[str, Any]) -> int:
         if isinstance(value, dict):
             for key, inner_value in value.items():
                 key_lower = str(key).lower()
-                if any(token in key_lower for token in ("score", "percentage", "match")):
+                if any(token in key_lower for token in ("score", "percentage", "coverage", "match")):
                     score = _score_from_value(inner_value)
                     if score is not None:
                         found.append(score)
@@ -244,33 +292,30 @@ def get_report_score(item: dict[str, Any]) -> int:
             stripped = value.strip()
             if stripped.startswith("{") or stripped.startswith("["):
                 try:
-                    parsed = json.loads(stripped)
-                    found.extend(walk(parsed))
-                except Exception:
+                    found.extend(walk(json.loads(stripped)))
+                except (json.JSONDecodeError, TypeError):
                     pass
 
         return [score for score in found if 0 <= score <= 100]
 
     nested_scores: list[int] = []
-    for source in nested_sources:
-        nested_scores.extend(walk(source))
+    for source_value in nested_sources:
+        nested_scores.extend(walk(source_value))
 
-    candidate_like_lists = (
-        item.get("candidates"),
-        item.get("rankings"),
-        item.get("ranking"),
-        item.get("candidate_rankings"),
-        item.get("top_candidates"),
-    )
-    for source in candidate_like_lists:
-        nested_scores.extend(walk(source))
+    for candidate_key in (
+        "candidates",
+        "rankings",
+        "ranking",
+        "candidate_rankings",
+        "top_candidates",
+    ):
+        nested_scores.extend(walk(item.get(candidate_key)))
 
     positive_scores = [score for score in nested_scores if score > 0]
     if positive_scores:
         return max(positive_scores)
 
-    return 0
-
+    return zero_candidate or 0
 
 def score_color(score: Any) -> str:
     numeric_score = score_number(score)
@@ -293,6 +338,70 @@ def get_cv_filename(item: dict[str, Any]) -> str:
 
 def get_created_at(item: dict[str, Any]) -> str:
     return str(item.get("created_at") or item.get("date") or "")
+
+
+
+def report_section_data(item: dict[str, Any]) -> tuple[str, list[str], str, list[str]]:
+    """Return report-type-aware labels and normalized positive/negative sections."""
+    analysis_type = normalize_type(item)
+
+    if analysis_type == "semantic_match":
+        positive_label = "Matched Themes"
+        negative_label = "Missing Themes"
+        positive = safe_list(
+            item.get("matched_themes")
+            or item.get("matched_skills")
+            or item.get("strengths")
+        )
+        negative = safe_list(
+            item.get("missing_themes")
+            or item.get("missing_skills")
+            or item.get("weaknesses")
+        )
+    elif analysis_type in {"ats_checker", "ats"}:
+        positive_label = "Matched Keywords"
+        negative_label = "Missing Keywords"
+        positive = safe_list(
+            item.get("matched_keywords")
+            or item.get("matched_skills")
+            or item.get("strengths")
+        )
+        negative = safe_list(
+            item.get("missing_keywords")
+            or item.get("missing_skills")
+            or item.get("weaknesses")
+        )
+    elif analysis_type == "recruiter_mode":
+        positive_label = "Top Candidate Strengths"
+        negative_label = "Top Candidate Gaps"
+        positive = safe_list(item.get("matched_skills") or item.get("strengths"))
+        negative = safe_list(item.get("missing_skills") or item.get("weaknesses"))
+    else:
+        positive_label = "Strengths"
+        negative_label = "Weaknesses / Gaps"
+        positive = safe_list(item.get("strengths") or item.get("matched_skills"))
+        negative = safe_list(item.get("weaknesses") or item.get("missing_skills"))
+
+    return positive_label, positive, negative_label, negative
+
+
+def format_generated_timestamp() -> str:
+    return datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M UTC")
+
+
+def format_created_at(value: Any) -> str:
+    raw = str(value or "").strip()
+    if not raw:
+        return "-"
+
+    try:
+        normalized = raw.replace("Z", "+00:00")
+        parsed = datetime.fromisoformat(normalized)
+        if parsed.tzinfo is None:
+            parsed = parsed.replace(tzinfo=timezone.utc)
+        return parsed.astimezone(timezone.utc).strftime("%Y-%m-%d %H:%M UTC")
+    except ValueError:
+        return clean_export_text(raw)
 
 
 def render_badge(item: dict[str, Any]) -> None:
@@ -400,14 +509,19 @@ def parse_history_response(response: Any) -> tuple[list[dict[str, Any]] | None, 
     return normalized_items, None
 
 
+
 def build_text_report(item: dict[str, Any], index: int | None = None) -> str:
     cv_filename = clean_export_text(get_cv_filename(item))
     score = get_report_score(item)
     summary = clean_export_text(item.get("summary") or item.get("analysis") or "")
-    strengths = safe_list(item.get("strengths") or item.get("matched_skills") or item.get("matched_keywords"))
-    weaknesses = safe_list(item.get("weaknesses") or item.get("missing_skills") or item.get("missing_keywords"))
+    positive_label, positive_values, negative_label, negative_values = report_section_data(item)
     recommendations = safe_list(item.get("recommendations"))
-    job_description = clean_export_text(item.get("job_description") or item.get("job") or item.get("description") or "")
+    job_description = clean_export_text(
+        item.get("job_description")
+        or item.get("job")
+        or item.get("description")
+        or ""
+    )
 
     report_title = f"TalentMatch Pro - {history_label(item)} Report"
     if index is not None:
@@ -416,30 +530,37 @@ def build_text_report(item: dict[str, Any], index: int | None = None) -> str:
     lines = [
         report_title,
         "=" * len(report_title),
-        f"Generated: {datetime.utcnow().isoformat()} UTC",
+        f"Generated: {format_generated_timestamp()}",
         f"CV file: {cv_filename}",
         f"Type: {history_label(item)}",
         f"Score: {score}/100",
+        f"Saved: {format_created_at(get_created_at(item))}",
         "",
         "Summary",
-        "-" * 20,
-        clean_export_text(summary or "No summary returned."),
+        "-" * 24,
+        summary or "No summary returned.",
         "",
-        "Strengths / Matched Skills",
-        "-" * 20,
+        positive_label,
+        "-" * 24,
     ]
 
-    lines.extend([f"- {value}" for value in strengths] or ["- No strengths returned."])
-    lines.extend(["", "Weaknesses / Gaps", "-" * 20])
-    lines.extend([f"- {value}" for value in weaknesses] or ["- No weaknesses returned."])
-    lines.extend(["", "Recommendations", "-" * 20])
-    lines.extend([f"- {value}" for value in recommendations] or ["- No recommendations returned."])
+    lines.extend([f"- {value}" for value in positive_values] or [f"- No {positive_label.lower()} saved."])
+    lines.extend(["", negative_label, "-" * 24])
+    lines.extend([f"- {value}" for value in negative_values] or [f"- No {negative_label.lower()} saved."])
+    lines.extend(["", "Recommendations", "-" * 24])
+    lines.extend([f"- {value}" for value in recommendations] or ["- No recommendations saved."])
 
     if job_description:
-        lines.extend(["", "Job Description", "-" * 20, clean_export_text(job_description)])
+        lines.extend(
+            [
+                "",
+                "Job Description Appendix",
+                "-" * 24,
+                job_description,
+            ]
+        )
 
     return "\n".join(lines)
-
 
 def build_history_text_report(
     items: list[dict[str, Any]],
@@ -448,7 +569,7 @@ def build_history_text_report(
     lines = [
         title,
         "=" * len(title),
-        f"Generated: {datetime.utcnow().isoformat()} UTC",
+        f"Generated: {format_generated_timestamp()}",
         f"Total items: {len(items)}",
         "",
     ]
@@ -604,7 +725,7 @@ def build_pdf_report(items: list[dict[str, Any]], title: str = "TalentMatch Pro 
 
     story: list[Any] = [
         Paragraph(safe_html(title), title_style),
-        Paragraph(f"Generated: {datetime.utcnow().strftime('%Y-%m-%d %H:%M UTC')}", subtitle_style),
+        Paragraph(f"Generated: {format_generated_timestamp()}", subtitle_style),
     ]
 
     if not items:
@@ -648,8 +769,7 @@ def build_pdf_report(items: list[dict[str, Any]], title: str = "TalentMatch Pro 
         sc_color = score_color(score)
 
         summary = clean_export_text(item.get("summary") or item.get("analysis") or "")
-        strengths = safe_list(item.get("matched_skills") or item.get("strengths") or item.get("matched_keywords"))
-        weaknesses = safe_list(item.get("missing_skills") or item.get("missing_keywords") or item.get("weaknesses"))
+        positive_label, strengths, negative_label, weaknesses = report_section_data(item)
         recommendations = safe_list(item.get("recommendations"))
         job_description = clean_export_text(item.get("job_description") or item.get("job") or item.get("description") or "")
 
@@ -660,7 +780,7 @@ def build_pdf_report(items: list[dict[str, Any]], title: str = "TalentMatch Pro 
                 [
                     Paragraph(safe_html(label), label_style),
                     Paragraph(f"<b>Score:</b> <font color='{sc_color}'>{score}/100</font>", normal_style),
-                    Paragraph(f"<b>Date:</b> {safe_html(created_at or '-')}", small_style),
+                    Paragraph(f"<b>Saved:</b> {safe_html(format_created_at(created_at))}", small_style),
                 ]
             ],
             colWidths=[1.35 * inch, 1.25 * inch, 3.6 * inch],
@@ -683,13 +803,13 @@ def build_pdf_report(items: list[dict[str, Any]], title: str = "TalentMatch Pro 
         story.append(Paragraph(safe_html(summary or "No summary returned."), normal_style))
         story.append(Spacer(1, 6))
 
-        story.append(Paragraph("<b>Strengths / Matched Skills</b>", normal_style))
-        for value in strengths or ["No strengths saved."]:
+        story.append(Paragraph(f"<b>{safe_html(positive_label)}</b>", normal_style))
+        for value in strengths or [f"No {positive_label.lower()} saved."]:
             story.append(Paragraph(f"• {safe_html(value)}", bullet_style))
 
         story.append(Spacer(1, 4))
-        story.append(Paragraph("<b>Weaknesses / Gaps</b>", normal_style))
-        for value in weaknesses or ["No weaknesses saved."]:
+        story.append(Paragraph(f"<b>{safe_html(negative_label)}</b>", normal_style))
+        for value in weaknesses or [f"No {negative_label.lower()} saved."]:
             story.append(Paragraph(f"• {safe_html(value)}", bullet_style))
 
         story.append(Spacer(1, 4))
@@ -702,7 +822,7 @@ def build_pdf_report(items: list[dict[str, Any]], title: str = "TalentMatch Pro 
             if len(clean_job) > 2500:
                 clean_job = clean_job[:2500] + "..."
             story.append(Spacer(1, 4))
-            story.append(Paragraph("<b>Job Description</b>", normal_style))
+            story.append(Paragraph("<b>Job Description Appendix</b>", normal_style))
             story.append(Paragraph(clean_job, small_style))
 
         story.append(Spacer(1, 14))
@@ -720,7 +840,13 @@ def history_endpoint(selected_type: str | None) -> str:
 
 
 def get_auth_headers() -> Dict[str, str]:
-    token = st.session_state.get("access_token") or st.session_state.get("token")
+    token = (
+        st.session_state.get("access_token")
+        or st.session_state.get("id_token")
+        or st.session_state.get("firebase_id_token")
+        or st.session_state.get("auth_token")
+        or st.session_state.get("token")
+    )
     if not token:
         return {}
     return {"Authorization": f"Bearer {token}"}
@@ -973,8 +1099,7 @@ for idx, item in enumerate(items, start=1):
     cv_file = clean_export_text(get_cv_filename(item))
     created_at = clean_export_text(get_created_at(item))
 
-    strengths = safe_list(item.get("matched_skills") or item.get("strengths") or item.get("matched_keywords"))
-    missing = safe_list(item.get("missing_skills") or item.get("missing_keywords") or item.get("weaknesses"))
+    positive_label, strengths, negative_label, missing = report_section_data(item)
     recommendations = safe_list(item.get("recommendations"))
     summary = clean_export_text(item.get("summary") or item.get("analysis") or "")
 
@@ -1014,20 +1139,20 @@ for idx, item in enumerate(items, start=1):
         skills_col, gaps_col = st.columns(2)
 
         with skills_col:
-            st.markdown("✅ **Strengths / Matched Skills**")
+            st.markdown(f"✅ **{positive_label}**")
             if strengths:
                 for skill in strengths:
                     st.markdown(f"- {skill}")
             else:
-                st.caption("No matched skills saved.")
+                st.caption(f"No {positive_label.lower()} saved.")
 
         with gaps_col:
-            st.markdown("❌ **Missing Skills / Gaps**")
+            st.markdown(f"❌ **{negative_label}**")
             if missing:
                 for skill in missing:
                     st.markdown(f"- {skill}")
             else:
-                st.caption("No missing skills saved.")
+                st.caption(f"No {negative_label.lower()} saved.")
 
         if recommendations:
             st.markdown("💡 **Recommendations**")
