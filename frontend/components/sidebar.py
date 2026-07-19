@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import datetime, timezone
 
 import streamlit as st
 
@@ -303,7 +303,7 @@ def _render_user_panel() -> None:
         plan = "PRO" if is_pro_user() else "FREE"
         membership = "Premium Member" if is_pro_user() else "Starter Workspace"
         badge = "PRO" if is_pro_user() else "FREE"
-        sync_label = datetime.utcnow().strftime("%H:%M UTC")
+        sync_label = datetime.now(timezone.utc).strftime("%H:%M UTC")
     else:
         name = "Guest"
         initials = "TM"
@@ -353,10 +353,14 @@ def _render_navigation() -> None:
     _section("Pro tools")
     if is_pro_user():
         st.page_link("pages/semantic_match.py", label="🧠 Semantic Match")
+    else:
+        st.page_link("pages/pricing.py", label="🧠 Semantic Match 🔒")
+
+    _section("Recruiter Workspace")
+    if is_pro_user():
         st.page_link("pages/recruiter_mode.py", label="👥 Recruiter Mode")
         st.page_link("pages/candidate_database.py", label="🗂 Candidate Database")
     else:
-        st.page_link("pages/pricing.py", label="🧠 Semantic Match 🔒")
         st.page_link("pages/pricing.py", label="👥 Recruiter Mode 🔒")
         st.page_link("pages/pricing.py", label="🗂 Candidate Database 🔒")
 
@@ -406,7 +410,7 @@ def _render_system_health() -> None:
 
 
 def _render_footer() -> None:
-    year = datetime.utcnow().year
+    year = datetime.now(timezone.utc).year
     st.markdown(
         f"""
         <div class="tm-side-footer">

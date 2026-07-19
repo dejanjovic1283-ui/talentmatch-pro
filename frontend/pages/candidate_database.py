@@ -1,11 +1,13 @@
 import json
 import os
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional
 
 import pandas as pd
 import requests
 import streamlit as st
+
+from auth_utils import is_logged_in, is_pro_user
 
 try:
     from components.sidebar import render_sidebar
@@ -356,6 +358,18 @@ else:
     st.sidebar.page_link("pages/cv_rewrite.py", label="✍️ CV Rewrite")
     st.sidebar.page_link("pages/semantic_match.py", label="🧠 Semantic Match")
     st.sidebar.page_link("pages/recruiter_mode.py", label="👥 Recruiter Mode")
+    st.sidebar.page_link("pages/candidate_database.py", label="🗂 Candidate Database")
+
+
+if not is_logged_in():
+    st.warning("Please login before using Candidate Database.")
+    st.page_link("pages/login.py", label="🔐 Go to Login")
+    st.stop()
+
+if not is_pro_user():
+    st.warning("Candidate Database is part of the Pro Recruiter Workspace.")
+    st.page_link("pages/pricing.py", label="💳 Upgrade to Pro")
+    st.stop()
 
 
 # ------------------------------------------------------------
@@ -374,6 +388,18 @@ st.markdown(
     """,
     unsafe_allow_html=True,
 )
+
+workspace_left, workspace_right = st.columns([1, 1])
+with workspace_left:
+    st.page_link(
+        "pages/recruiter_mode.py",
+        label="👥 Return to Recruiter Mode",
+        use_container_width=True,
+    )
+with workspace_right:
+    if st.button("🔄 Refresh Candidate Database", use_container_width=True):
+        refresh_candidates()
+        st.rerun()
 
 try:
     candidates = load_candidates()

@@ -1,10 +1,12 @@
 from __future__ import annotations
 
 import csv
-from datetime import datetime
+import os
+from datetime import datetime, timezone
 from io import BytesIO, StringIO
 from typing import Any, Dict, List, Optional, Tuple
 
+import requests
 import streamlit as st
 
 from auth_utils import api_post, is_logged_in, is_pro_user
@@ -40,6 +42,66 @@ Requirements:
 - Render deployment
 - Strong product mindset
 """.strip()
+
+BACKEND_URL = os.getenv("BACKEND_URL", "https://api.talentmatchcv.com").rstrip("/")
+
+
+def get_auth_headers() -> Dict[str, str]:
+    token = (
+        st.session_state.get("id_token")
+        or st.session_state.get("firebase_id_token")
+        or st.session_state.get("token")
+        or st.session_state.get("auth_token")
+    )
+    headers = {"Accept": "application/json", "Content-Type": "application/json"}
+    if token:
+        headers["Authorization"] = f"Bearer {token}"
+    return headers
+
+
+def save_candidate_to_database(candidate: Dict[str, Any], job_description: str) -> Tuple[bool, str]:
+    payload = {
+        "filename": candidate["filename"],
+        "score": candidate["score"],
+        "rank": candidate["rank"],
+        "semantic_score": candidate["semantic_score"],
+        "keyword_score": candidate["keyword_score"],
+        "verdict": candidate["verdict"],
+        "summary": candidate["summary"],
+        "matched_skills": candidate["strengths"],
+        "missing_skills": candidate["weaknesses"],
+        "matched_keywords": [],
+        "missing_keywords": [],
+        "recommendations": candidate["recommendations"],
+        "job_description": job_description,
+        "status": "new",
+        "favorite": False,
+        "notes": "",
+        "tags": [],
+    }
+
+    try:
+        response = requests.post(
+            f"{BACKEND_URL}/recruiter/candidates",
+            headers=get_auth_headers(),
+            json=payload,
+            timeout=60,
+        )
+    except requests.RequestException as exc:
+        return False, f"Network error while saving {candidate['filename']}: {exc}"
+
+    if response.status_code in (200, 201):
+        return True, f"{candidate['filename']} saved to Candidate Database."
+
+    if response.status_code == 409:
+        return False, f"{candidate['filename']} is already saved in Candidate Database."
+
+    try:
+        detail = response.json()
+    except ValueError:
+        detail = response.text[:500]
+
+    return False, f"Could not save {candidate['filename']}: {response.status_code} - {detail}"
 
 
 def normalize_response(raw: Any) -> Tuple[Optional[Any], Optional[str]]:
@@ -211,7 +273,7 @@ def build_text_report(result: Dict[str, Any], job_description: str) -> str:
     lines = [
         "TalentMatch Pro - Recruiter Mode Report",
         "=" * 44,
-        f"Generated: {datetime.utcnow().isoformat()} UTC",
+        f"Generated: {datetime.now(timezone.utc).isoformat()} UTC",
         f"Candidates ranked: {len(candidates)}",
         "",
         "Recruiter Summary",
@@ -330,7 +392,7 @@ def create_pdf_report(result: Dict[str, Any], job_description: str) -> Optional[
 
     pdf.setFillColor(colors.HexColor("#64748B"))
     pdf.setFont("Helvetica", 11)
-    pdf.drawString(x, y, f"Generated: {datetime.utcnow().strftime('%Y-%m-%d %H:%M UTC')}")
+    pdf.drawString(x, y, f"Generated: {datetime.now(timezone.utc).strftime('%Y-%m-%d %H:%M UTC')}")
     pdf.drawRightString(width - margin, y, f"Candidates: {len(candidates)}")
     y -= 12 * mm
 
@@ -445,6 +507,15 @@ def render_results(result: Dict[str, Any]) -> None:
     candidates = candidate_list(result)
     summary = str(result.get("summary") or result.get("recruiter_summary") or f"Recruiter ranking completed for {len(candidates)} candidate(s).")
     recommendations = normalize_list(result.get("recommendations"))
+    if not recommendations:
+        seen = set()
+        for candidate in candidates:
+            for recommendation in candidate.get("recommendations", []):
+                normalized = recommendation.strip()
+                key = normalized.casefold()
+                if normalized and key not in seen:
+                    seen.add(key)
+                    recommendations.append(normalized)
 
     st.success("Recruiter ranking completed.")
 
@@ -504,6 +575,41 @@ def render_results(result: Dict[str, Any]) -> None:
     else:
         st.info("No overall recommendations returned.")
 
+    st.markdown("---")
+    st.markdown('<div class="tm-section-title">Recruiter Workspace</div>', unsafe_allow_html=True)
+    st.caption("Save ranked candidates to Candidate Database for shortlisting, notes, status tracking and export.")
+
+    save_all_col, database_col = st.columns([1.2, 1])
+    with save_all_col:
+        save_all_clicked = st.button(
+            "💾 Save all candidates to Candidate Database",
+            use_container_width=True,
+            disabled=not bool(candidates),
+        )
+    with database_col:
+        st.page_link(
+            "pages/candidate_database.py",
+            label="🗂 Open Candidate Database",
+            use_container_width=True,
+        )
+
+    if save_all_clicked:
+        saved_count = 0
+        messages: List[str] = []
+        with st.spinner("Saving candidates to Recruiter Workspace..."):
+            for candidate in candidates:
+                saved, message = save_candidate_to_database(candidate, job_description)
+                messages.append(message)
+                if saved:
+                    saved_count += 1
+
+        if saved_count:
+            st.success(f"Saved {saved_count} of {len(candidates)} candidate(s) to Candidate Database.")
+        if saved_count < len(candidates):
+            with st.expander("Save details"):
+                for message in messages:
+                    st.write(f"• {message}")
+
     if "recruiter_csv_report" not in st.session_state:
         st.session_state["recruiter_csv_report"] = build_csv_report(result)
 
@@ -550,9 +656,9 @@ def render_results(result: Dict[str, Any]) -> None:
 
 
 render_hero(
+    "Recruiter Workspace",
     "Recruiter Mode",
-    "Recruiter Mode",
-    "Rank candidates with AI-powered recruiter analysis.",
+    "Rank candidates, review recruiter intelligence and save selected profiles to Candidate Database.",
     "🏆",
 )
 
