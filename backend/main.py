@@ -2,6 +2,7 @@ import asyncio
 import hashlib
 import json
 import logging
+import math
 import os
 import re
 import ssl
@@ -1540,13 +1541,13 @@ def recruiter_candidate_to_dict(candidate: RecruiterCandidate) -> dict:
 
 
 def normalize_history_score(value: object) -> int:
-    """Return a bounded integer score suitable for persistent history records."""
+    """Return a finite, bounded integer score suitable for history records."""
     try:
         if value is None:
             return 0
 
         if isinstance(value, bool):
-            numeric = float(int(value))
+            numeric = float(value)
         elif isinstance(value, (int, float)):
             numeric = float(value)
         elif isinstance(value, str):
@@ -1555,6 +1556,9 @@ def normalize_history_score(value: object) -> int:
                 return 0
             numeric = float(match.group(0).replace(",", "."))
         else:
+            return 0
+
+        if not math.isfinite(numeric):
             return 0
 
         if 0 < numeric <= 1:
