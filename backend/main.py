@@ -2215,45 +2215,124 @@ async def semantic_match(
 
 
 
-@app.post("/recruiter/candidates/save")
-def save_recruiter_candidate(
+def normalize_candidate_score(value: object) -> int:
+    """Return a finite Candidate Database score bounded to the 0-100 range."""
+    return normalize_history_score(value)
+
+
+def normalize_candidate_text(
+    value: object,
+    *,
+    fallback: str = "",
+    maximum_length: int,
+) -> str:
+    """Normalize user-controlled Candidate Database text fields."""
+    normalized = re.sub(r"\\s+", " ", str(value or fallback)).strip()
+    return normalized[:maximum_length]
+
+
+def persist_recruiter_candidate(
     payload: CandidateCreateRequest,
-    db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user),
-):
+    db: Session,
+    current_user: User,
+) -> dict:
+    """Create one candidate idempotently for the authenticated Recruiter Workspace."""
     if not current_user.is_pro:
         raise HTTPException(status_code=403, detail="Candidate Database is a Pro feature.")
 
+    filename = normalize_candidate_text(
+        payload.filename,
+        fallback="candidate.pdf",
+        maximum_length=255,
+    ) or "candidate.pdf"
+    job_description = normalize_candidate_text(
+        payload.job_description,
+        maximum_length=30000,
+    )
+
+    existing_candidate = (
+        db.query(RecruiterCandidate)
+        .filter(
+            RecruiterCandidate.user_id == current_user.id,
+            RecruiterCandidate.filename == filename,
+            RecruiterCandidate.job_description == job_description,
+        )
+        .order_by(RecruiterCandidate.created_at.desc())
+        .first()
+    )
+
+    if existing_candidate is not None:
+        result = recruiter_candidate_to_dict(existing_candidate)
+        result["created"] = False
+        result["duplicate"] = True
+        return result
+
     candidate = RecruiterCandidate(
         user_id=current_user.id,
-        filename=payload.filename or "candidate.pdf",
-        cv_storage_path=payload.cv_storage_path,
-        job_description=payload.job_description or "",
-        rank=int(payload.rank or 0),
-        score=int(payload.score or payload.combined_score or payload.match_score or 0),
-        match_score=int(payload.match_score or 0),
-        combined_score=int(payload.combined_score or payload.score or 0),
-        semantic_score=int(payload.semantic_score or 0),
-        keyword_score=int(payload.keyword_score or 0),
-        verdict=payload.verdict or "",
-        summary=payload.summary or "",
+        filename=filename,
+        cv_storage_path=normalize_candidate_text(
+            payload.cv_storage_path,
+            maximum_length=500,
+        ) or None,
+        job_description=job_description,
+        rank=max(0, int(payload.rank or 0)),
+        score=normalize_candidate_score(
+            payload.score or payload.combined_score or payload.match_score
+        ),
+        match_score=normalize_candidate_score(payload.match_score),
+        combined_score=normalize_candidate_score(
+            payload.combined_score or payload.score
+        ),
+        semantic_score=normalize_candidate_score(payload.semantic_score),
+        keyword_score=normalize_candidate_score(payload.keyword_score),
+        verdict=normalize_candidate_text(payload.verdict, maximum_length=100),
+        summary=normalize_candidate_text(payload.summary, maximum_length=12000),
         matched_skills=normalize_json_list(payload.matched_skills),
         missing_skills=normalize_json_list(payload.missing_skills),
         recommendations=normalize_json_list(payload.recommendations),
         matched_keywords=normalize_json_list(payload.matched_keywords),
         missing_keywords=normalize_json_list(payload.missing_keywords),
         favorite=bool(payload.favorite),
-        status=payload.status or "new",
-        notes=payload.notes or "",
+        status=normalize_candidate_text(
+            payload.status,
+            fallback="new",
+            maximum_length=50,
+        ) or "new",
+        notes=normalize_candidate_text(payload.notes, maximum_length=12000),
         tags=normalize_json_list(payload.tags),
         source="recruiter_mode",
     )
 
-    db.add(candidate)
-    db.commit()
-    db.refresh(candidate)
+    try:
+        db.add(candidate)
+        db.commit()
+        db.refresh(candidate)
+    except Exception:
+        db.rollback()
+        logger.exception(
+            "Recruiter candidate persistence failed.",
+            extra={
+                "event": "recruiter_candidate_persistence_failed",
+                "user_id": current_user.id,
+                "operation": "create_candidate",
+            },
+        )
+        raise
 
-    return recruiter_candidate_to_dict(candidate)
+    result = recruiter_candidate_to_dict(candidate)
+    result["created"] = True
+    result["duplicate"] = False
+    return result
+
+
+@app.post("/recruiter/candidates")
+@app.post("/recruiter/candidates/save", include_in_schema=False)
+def save_recruiter_candidate(
+    payload: CandidateCreateRequest,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    return persist_recruiter_candidate(payload, db, current_user)
 
 
 @app.get("/recruiter/candidates")
