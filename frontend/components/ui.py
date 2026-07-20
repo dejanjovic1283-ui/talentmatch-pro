@@ -161,8 +161,18 @@ def apply_global_styles() -> None:
             --tm-border-strong: rgba(37, 99, 235, 0.35);
             --tm-shadow: 0 18px 48px rgba(15, 23, 42, 0.06);
             --tm-shadow-lg: 0 28px 85px rgba(15, 23, 42, 0.11);
+            --tm-radius-sm: 14px;
+            --tm-radius-md: 20px;
             --tm-radius: 24px;
             --tm-radius-lg: 32px;
+            --tm-radius-xl: 38px;
+            --tm-blue-soft: rgba(37, 99, 235, 0.10);
+            --tm-green-soft: rgba(16, 185, 129, 0.10);
+            --tm-purple-soft: rgba(124, 58, 237, 0.10);
+            --tm-amber-soft: rgba(245, 158, 11, 0.12);
+            --tm-red-soft: rgba(220, 38, 38, 0.10);
+            --tm-focus: 0 0 0 4px rgba(37, 99, 235, 0.16);
+            --tm-transition: 160ms ease;
         }
 
         .stApp {
@@ -506,16 +516,107 @@ def apply_global_styles() -> None:
             box-shadow: 0 12px 30px rgba(15,23,42,0.04);
         }
 
-        .stButton > button, .stLinkButton > a, div[data-testid="stDownloadButton"] button {
-            border-radius: 14px !important;
-            font-weight: 850 !important;
-            border: 1px solid rgba(148,163,184,0.28) !important;
+        .stButton > button,
+        .stLinkButton > a,
+        div[data-testid="stDownloadButton"] button,
+        div[data-testid="stFormSubmitButton"] button {
+            min-height: 3rem;
+            border-radius: var(--tm-radius-sm) !important;
+            padding: 0.72rem 1rem !important;
+            font-weight: 900 !important;
+            letter-spacing: -0.012em !important;
+            border: 1px solid rgba(148,163,184,0.30) !important;
+            background: rgba(255,255,255,0.90) !important;
+            color: var(--tm-navy) !important;
             box-shadow: 0 10px 24px rgba(15, 23, 42, 0.055) !important;
+            transition: transform var(--tm-transition), box-shadow var(--tm-transition), border-color var(--tm-transition), background var(--tm-transition) !important;
         }
 
-        .stTextInput input, .stTextArea textarea, .stSelectbox div[data-baseweb="select"] > div {
-            border-radius: 14px !important;
+        .stButton > button:hover,
+        .stLinkButton > a:hover,
+        div[data-testid="stDownloadButton"] button:hover,
+        div[data-testid="stFormSubmitButton"] button:hover {
+            transform: translateY(-1px);
+            border-color: rgba(37,99,235,0.40) !important;
+            box-shadow: 0 16px 34px rgba(37,99,235,0.12) !important;
         }
+
+        .stButton > button[kind="primary"],
+        div[data-testid="stFormSubmitButton"] button[kind="primary"] {
+            border-color: transparent !important;
+            background: linear-gradient(135deg, var(--tm-blue), var(--tm-blue-dark)) !important;
+            color: #ffffff !important;
+            box-shadow: 0 16px 34px rgba(37,99,235,0.24) !important;
+        }
+
+        .stButton > button[kind="primary"]:hover,
+        div[data-testid="stFormSubmitButton"] button[kind="primary"]:hover {
+            background: linear-gradient(135deg, #1d4ed8, #1e40af) !important;
+            box-shadow: 0 20px 42px rgba(37,99,235,0.30) !important;
+        }
+
+        .stButton > button:disabled,
+        div[data-testid="stDownloadButton"] button:disabled,
+        div[data-testid="stFormSubmitButton"] button:disabled {
+            opacity: 0.52 !important;
+            cursor: not-allowed !important;
+            transform: none !important;
+            box-shadow: none !important;
+        }
+
+        .stTextInput input, .stTextArea textarea, .stNumberInput input, .stDateInput input,
+        .stSelectbox div[data-baseweb="select"] > div,
+        .stMultiSelect div[data-baseweb="select"] > div {
+            border-radius: var(--tm-radius-sm) !important;
+            border-color: rgba(148,163,184,0.30) !important;
+            background: rgba(255,255,255,0.78) !important;
+        }
+
+        div[data-testid="stFileUploader"] {
+            border: 1px dashed rgba(37,99,235,0.35);
+            border-radius: var(--tm-radius);
+            padding: 0.75rem;
+            background: radial-gradient(circle at top left, rgba(37,99,235,0.08), transparent 38%), rgba(255,255,255,0.66);
+        }
+
+        div[data-testid="stExpander"], div[data-testid="stDataFrame"], div[data-testid="stTable"] {
+            border: 1px solid var(--tm-border) !important;
+            border-radius: var(--tm-radius-md) !important;
+            background: rgba(255,255,255,0.76) !important;
+            box-shadow: var(--tm-shadow);
+            overflow: hidden;
+        }
+
+        .stTabs [data-baseweb="tab-list"] {
+            gap: 0.45rem;
+            border-radius: 999px;
+            padding: 0.35rem;
+            background: rgba(255,255,255,0.68);
+            border: 1px solid var(--tm-border);
+        }
+
+        .stTabs [data-baseweb="tab"] { border-radius: 999px; padding: 0.6rem 1rem; font-weight: 850; }
+        .stTabs [aria-selected="true"] { background: var(--tm-blue-soft); color: var(--tm-blue-dark); }
+
+        .tm-panel { padding: 1.35rem; border-radius: var(--tm-radius); border: 1px solid var(--tm-border); background: rgba(255,255,255,0.76); box-shadow: var(--tm-shadow); backdrop-filter: blur(14px); }
+        .tm-panel-strong { background: rgba(255,255,255,0.94); box-shadow: var(--tm-shadow-lg); }
+        .tm-action-panel { position: relative; overflow: hidden; padding: 1.45rem; border-radius: var(--tm-radius); border: 1px solid rgba(37,99,235,0.24); background: radial-gradient(circle at top right, rgba(37,99,235,0.12), transparent 34%), radial-gradient(circle at bottom left, rgba(16,185,129,0.10), transparent 36%), rgba(255,255,255,0.90); box-shadow: var(--tm-shadow-lg); }
+        .tm-action-content { position: relative; z-index: 1; }
+        .tm-score-card { padding: 1.35rem; min-height: 178px; border-radius: var(--tm-radius); border: 1px solid var(--tm-border); background: rgba(255,255,255,0.84); box-shadow: var(--tm-shadow); }
+        .tm-score-card-blue { border-top: 4px solid var(--tm-blue); }
+        .tm-score-card-green { border-top: 4px solid var(--tm-green); }
+        .tm-score-card-purple { border-top: 4px solid var(--tm-purple); }
+        .tm-score-card-amber { border-top: 4px solid var(--tm-amber); }
+        .tm-score-card-red { border-top: 4px solid var(--tm-red); }
+        .tm-score-label { color: var(--tm-blue); font-size: 0.76rem; font-weight: 950; text-transform: uppercase; letter-spacing: 0.13em; line-height: 1.45; }
+        .tm-score-value { margin-top: 0.72rem; color: var(--tm-navy); font-size: clamp(2rem, 3.6vw, 2.7rem); font-weight: 950; line-height: 1; letter-spacing: -0.06em; }
+        .tm-score-caption { margin-top: 0.65rem; color: var(--tm-slate); font-size: 0.96rem; line-height: 1.45; }
+        .tm-report-panel { padding: 1.35rem; border-radius: var(--tm-radius); border: 1px solid var(--tm-border); background: linear-gradient(135deg, rgba(255,255,255,0.92), rgba(248,250,252,0.82)); box-shadow: var(--tm-shadow); }
+        .tm-list-card { padding: 0.95rem 1rem; border-radius: 18px; border: 1px solid var(--tm-border); background: rgba(255,255,255,0.70); margin-bottom: 0.7rem; color: var(--tm-navy); line-height: 1.5; }
+        .tm-list-card-success { background: rgba(16,185,129,0.08); border-color: rgba(16,185,129,0.20); color: var(--tm-green-dark); }
+        .tm-list-card-warning { background: rgba(245,158,11,0.10); border-color: rgba(245,158,11,0.22); color: #a16207; }
+        .tm-list-card-info { background: rgba(37,99,235,0.08); border-color: rgba(37,99,235,0.18); color: #0369a1; }
+        .tm-divider { height: 1px; margin: 1.6rem 0; background: linear-gradient(90deg, transparent, rgba(148,163,184,0.46), transparent); }
 
         @media (max-width: 760px) {
             .block-container { padding-top: 1.25rem; }
@@ -796,3 +897,108 @@ def render_feature_grid(items: Sequence[tuple[str, str, str]]) -> None:
     for index, (icon, title, description) in enumerate(items):
         with columns[index % len(columns)]:
             render_card(title=title, body=safe_html(description), icon=icon)
+
+# -----------------------------------------------------------------------------
+# PROFI-EXTRA shared components
+# -----------------------------------------------------------------------------
+
+
+def _score_tone(value: int | float) -> tuple[str, str]:
+    percent = _safe_percent(value)
+    if percent >= 80:
+        return "green", "Excellent"
+    if percent >= 65:
+        return "blue", "Strong"
+    if percent >= 50:
+        return "purple", "Competitive"
+    if percent >= 35:
+        return "amber", "Needs improvement"
+    return "red", "Low match"
+
+
+def render_action_panel(*, title: str, description: str, icon: str = "🚀", eyebrow: str = "AI WORKFLOW") -> None:
+    st.markdown(
+        f"""
+        <div class="tm-action-panel"><div class="tm-action-content">
+            <div class="tm-kicker">{safe_html(eyebrow)}</div>
+            <div class="tm-card-title" style="font-size:1.42rem">{safe_html(icon)} {safe_html(title)}</div>
+            <div class="tm-muted">{safe_html(description)}</div>
+        </div></div>
+        """,
+        unsafe_allow_html=True,
+    )
+
+
+def render_score_card(*, label: str, value: int | float | str, caption: str | None = None, tone: str | None = None, suffix: str = "/100") -> None:
+    try:
+        numeric_value: int | None = _safe_percent(float(value))
+    except (TypeError, ValueError):
+        numeric_value = None
+    allowed = {"blue", "green", "purple", "amber", "red"}
+    normalized_tone = (tone or "").strip().lower()
+    if normalized_tone not in allowed:
+        normalized_tone = _score_tone(numeric_value or 0)[0] if numeric_value is not None else "blue"
+    displayed = f"{numeric_value}{suffix}" if numeric_value is not None else safe_html(value)
+    final_caption = caption if caption is not None else (_score_tone(numeric_value or 0)[1] if numeric_value is not None else "")
+    st.markdown(
+        f"""
+        <div class="tm-score-card tm-score-card-{normalized_tone}">
+            <div class="tm-score-label">{safe_html(label)}</div>
+            <div class="tm-score-value">{displayed}</div>
+            <div class="tm-score-caption">{safe_html(final_caption)}</div>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
+
+
+def render_report_panel(*, title: str = "Download reports", description: str = "Export professional TalentMatch Pro results for review, sharing, and record keeping.", icon: str = "📥") -> None:
+    st.markdown(
+        f"""
+        <div class="tm-report-panel">
+            <div class="tm-kicker">REPORT CENTER</div>
+            <div class="tm-card-title">{safe_html(icon)} {safe_html(title)}</div>
+            <div class="tm-muted">{safe_html(description)}</div>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
+
+
+def render_list_cards(items: Iterable[str], *, kind: str = "info", empty_message: str = "No items available.") -> None:
+    values = [str(item).strip() for item in items if str(item).strip()]
+    if not values:
+        st.markdown(f'<div class="tm-small">{safe_html(empty_message)}</div>', unsafe_allow_html=True)
+        return
+    class_name = {
+        "success": "tm-list-card tm-list-card-success",
+        "warning": "tm-list-card tm-list-card-warning",
+        "info": "tm-list-card tm-list-card-info",
+    }.get(kind.strip().lower(), "tm-list-card")
+    st.markdown(
+        "".join(f'<div class="{class_name}">{safe_html(item)}</div>' for item in values),
+        unsafe_allow_html=True,
+    )
+
+
+def render_divider() -> None:
+    st.markdown('<div class="tm-divider"></div>', unsafe_allow_html=True)
+
+
+def render_page_intro(*, kicker: str, title: str, subtitle: str, icon: str = "✨", badge: str | None = None) -> None:
+    badge_html = f'<span class="tm-pill tm-pill-dark">{safe_html(badge)}</span>' if badge else ""
+    st.markdown(
+        f"""
+        <div class="tm-hero"><div class="tm-hero-grid">
+            <div>
+                <div class="tm-kicker">{safe_html(kicker)}</div>
+                <div class="tm-title">{safe_html(title)}</div>
+                <div class="tm-subtitle">{safe_html(subtitle)}</div>
+                <div style="margin-top:.9rem">{badge_html}</div>
+            </div>
+            <div class="tm-avatar-xl">{safe_html(icon)}</div>
+        </div></div>
+        """,
+        unsafe_allow_html=True,
+    )
+
