@@ -146,13 +146,13 @@ def _render_command_metrics(plan: str) -> None:
         ("Reports", "PDF", "Professional exports with page numbers and footer"),
     )
     cards = "".join(
-        f"""
-        <div class="tm-command-card">
-            <div class="tm-command-label">{safe_html(label)}</div>
-            <div class="tm-command-value">{safe_html(value)}</div>
-            <div class="tm-command-note">{safe_html(note)}</div>
-        </div>
-        """
+        (
+            '<div class="tm-command-card">'
+            f'<div class="tm-command-label">{safe_html(label)}</div>'
+            f'<div class="tm-command-value">{safe_html(value)}</div>'
+            f'<div class="tm-command-note">{safe_html(note)}</div>'
+            '</div>'
+        )
         for label, value, note in values
     )
     st.markdown(f'<div class="tm-command-strip">{cards}</div>', unsafe_allow_html=True)
@@ -167,13 +167,13 @@ def _render_quick_actions() -> None:
         ("👥", "Recruiter workspace", "Rank candidates and manage the Candidate Database."),
     )
     cards = "".join(
-        f"""
-        <div class="tm-quick-card">
-            <div class="tm-quick-icon">{safe_html(icon)}</div>
-            <div class="tm-quick-title">{safe_html(title)}</div>
-            <div class="tm-quick-copy">{safe_html(copy)}</div>
-        </div>
-        """
+        (
+            '<div class="tm-quick-card">'
+            f'<div class="tm-quick-icon">{safe_html(icon)}</div>'
+            f'<div class="tm-quick-title">{safe_html(title)}</div>'
+            f'<div class="tm-quick-copy">{safe_html(copy)}</div>'
+            '</div>'
+        )
         for icon, title, copy in items
     )
     st.markdown(f'<div class="tm-quick-grid">{cards}</div>', unsafe_allow_html=True)
