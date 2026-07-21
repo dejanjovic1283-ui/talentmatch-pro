@@ -12,7 +12,17 @@ import streamlit as st
 
 from auth_utils import api_post, is_logged_in
 from components.sidebar import render_sidebar
-from components.ui import apply_global_styles, render_hero, safe_html
+from components.ui import (
+    apply_global_styles,
+    render_action_panel,
+    render_list_cards,
+    render_page_intro,
+    render_progress_card,
+    render_report_panel,
+    render_score_card,
+    render_section_title,
+    safe_html,
+)
 
 
 LOGGER = logging.getLogger(__name__)
@@ -887,67 +897,6 @@ def clear_ats_state() -> None:
         st.session_state.pop(key, None)
 
 
-def render_kpi_card(
-    label: str,
-    value: str,
-    caption: str,
-    accent: str,
-) -> None:
-    st.markdown(
-        f"""
-        <div class="tm-card" style="
-            border-top:4px solid {safe_html(accent)};
-            min-height:160px;
-            display:flex;
-            flex-direction:column;
-            justify-content:space-between;
-        ">
-            <div class="tm-kicker">{safe_html(label)}</div>
-            <div style="
-                font-size:2.2rem;
-                font-weight:800;
-                line-height:1;
-                color:#0F172A;
-                margin:.55rem 0;
-            ">{safe_html(value)}</div>
-            <div class="tm-muted">{safe_html(caption)}</div>
-        </div>
-        """,
-        unsafe_allow_html=True,
-    )
-
-
-def render_keyword_group(
-    title: str,
-    items: List[str],
-    empty_text: str,
-    icon: str,
-    *,
-    green: bool = False,
-) -> None:
-    pill_class = "tm-pill tm-pill-green" if green else "tm-pill"
-
-    if items:
-        chips = "".join(
-            f"<span class='{pill_class}'>{safe_html(item)}</span>"
-            for item in items[:MAX_LIST_ITEMS]
-        )
-    else:
-        chips = f"<div class='tm-muted'>{safe_html(empty_text)}</div>"
-
-    st.markdown(
-        f"""
-        <div class="tm-card" style="min-height:220px">
-            <div class="tm-card-title">
-                {safe_html(icon)} {safe_html(title)}
-            </div>
-            <div style="margin-top:.8rem">{chips}</div>
-        </div>
-        """,
-        unsafe_allow_html=True,
-    )
-
-
 def render_recommendations(items: List[str]) -> None:
     if not items:
         st.info("No recommendations returned.")
@@ -955,33 +904,19 @@ def render_recommendations(items: List[str]) -> None:
 
     for index, item in enumerate(items, start=1):
         st.markdown(
-            f"""
-            <div class="tm-card" style="
-                margin-bottom:.75rem;
-                display:grid;
-                grid-template-columns:54px 1fr;
-                gap:1rem;
-                align-items:start;
-            ">
-                <div style="
-                    width:42px;
-                    height:42px;
-                    border-radius:12px;
-                    display:flex;
-                    align-items:center;
-                    justify-content:center;
-                    background:#EFF6FF;
-                    color:#2563EB;
-                    font-weight:800;
-                ">{index}</div>
-                <div>
-                    <div class="tm-kicker">Priority {index}</div>
-                    <div class="tm-muted" style="margin-top:.25rem">
-                        {safe_html(item)}
-                    </div>
-                </div>
-            </div>
-            """,
+            (
+                '<div class="tm-card" style="margin-bottom:.75rem;display:grid;'
+                'grid-template-columns:54px 1fr;gap:1rem;align-items:start;">'
+                '<div style="width:42px;height:42px;border-radius:12px;display:flex;'
+                'align-items:center;justify-content:center;background:#EFF6FF;'
+                'color:#2563EB;font-weight:800;">'
+                f'{index}</div>'
+                '<div>'
+                f'<div class="tm-kicker">Priority {index}</div>'
+                '<div class="tm-muted" style="margin-top:.25rem">'
+                f'{safe_html(item)}</div>'
+                '</div></div>'
+            ),
             unsafe_allow_html=True,
         )
 
@@ -1012,137 +947,104 @@ def render_results(data: Dict[str, Any]) -> None:
         max_chars=MAX_JOB_DESCRIPTION_CHARACTERS,
     )
 
-    accent, confidence = score_tone(score)
+    _, confidence = score_tone(score)
 
     st.success("ATS check completed and saved to History.")
 
-    st.markdown(
-        '<div class="tm-section-title">ATS Intelligence</div>',
-        unsafe_allow_html=True,
+    render_section_title(
+        "ATS intelligence",
+        "A recruiter-ready overview of keyword coverage, alignment, and priority improvements.",
     )
 
     kpi_1, kpi_2, kpi_3, kpi_4 = st.columns(4)
 
     with kpi_1:
-        render_kpi_card("ATS Score", f"{score}/100", label, accent)
+        render_score_card(
+            label="ATS score",
+            value=score,
+            caption=label,
+            tone="blue",
+            suffix="/100",
+        )
 
     with kpi_2:
-        render_kpi_card(
-            "Matched",
-            str(len(matched_keywords)),
-            "Confirmed job keywords",
-            "#059669",
+        render_score_card(
+            label="Matched",
+            value=len(matched_keywords),
+            caption="Confirmed job keywords",
+            tone="green",
+            suffix="",
         )
 
     with kpi_3:
-        render_kpi_card(
-            "Missing",
-            str(len(missing_keywords)),
-            "Priority keyword gaps",
-            "#D97706",
+        render_score_card(
+            label="Missing",
+            value=len(missing_keywords),
+            caption="Priority keyword gaps",
+            tone="amber",
+            suffix="",
         )
 
     with kpi_4:
-        render_kpi_card(
-            "Readiness",
-            confidence,
-            f"{len(recommendations)} priority actions",
-            "#2563EB",
+        render_score_card(
+            label="Readiness",
+            value=confidence,
+            caption=f"{len(recommendations)} priority actions",
+            tone="purple",
+            suffix="",
         )
 
-    st.markdown(
-        f"""
-        <div class="tm-card" style="margin-top:.8rem">
-            <div style="
-                display:flex;
-                justify-content:space-between;
-                align-items:center;
-                gap:1rem;
-                flex-wrap:wrap;
-            ">
-                <div>
-                    <div class="tm-kicker">Overall ATS alignment</div>
-                    <div class="tm-card-title" style="margin-top:.25rem">
-                        {safe_html(label)}
-                    </div>
-                    <div class="tm-muted" style="margin-top:.25rem">
-                        {safe_html(message)}
-                    </div>
-                </div>
-                <div style="font-weight:800;color:{safe_html(accent)}">
-                    {score}/100
-                </div>
-            </div>
-            <div style="
-                width:100%;
-                height:14px;
-                margin-top:1rem;
-                border-radius:999px;
-                background:#E2E8F0;
-                overflow:hidden;
-            ">
-                <div style="
-                    width:{score}%;
-                    height:100%;
-                    background:{safe_html(accent)};
-                    border-radius:999px;
-                "></div>
-            </div>
-        </div>
-        """,
-        unsafe_allow_html=True,
+    render_progress_card(
+        title="Overall ATS alignment",
+        value=score,
+        total=100,
+        subtitle=f"{label} • {message}",
+        icon="📊",
     )
 
     if summary:
-        st.markdown(
-            '<div class="tm-section-title">Executive Summary</div>',
-            unsafe_allow_html=True,
+        render_section_title(
+            "Executive summary",
+            "The core recruiter perspective distilled into one concise assessment.",
         )
         st.markdown(
-            f"""
-            <div class="tm-card" style="
-                border-left:5px solid #2563EB;
-                padding:1.35rem 1.5rem;
-            ">
-                <div class="tm-kicker">Recruiter perspective</div>
-                <div style="
-                    margin-top:.55rem;
-                    line-height:1.7;
-                    color:#475569;
-                    font-size:1rem;
-                ">{safe_html(summary)}</div>
-            </div>
-            """,
+            (
+                '<div class="tm-card" style="border-left:5px solid #2563EB;'
+                'padding:1.35rem 1.5rem;">'
+                '<div class="tm-kicker">Recruiter perspective</div>'
+                '<div style="margin-top:.55rem;line-height:1.7;color:#475569;'
+                'font-size:1rem;">'
+                f'{safe_html(summary)}</div></div>'
+            ),
             unsafe_allow_html=True,
         )
 
-    st.markdown(
-        '<div class="tm-section-title">Keyword Coverage</div>',
-        unsafe_allow_html=True,
+    render_section_title(
+        "Keyword coverage",
+        "Compare confirmed keywords with the highest-priority missing terms.",
     )
 
     left, right = st.columns(2)
 
     with left:
-        render_keyword_group(
-            "Matched Keywords",
+        st.markdown("### ✅ Matched keywords")
+        render_list_cards(
             matched_keywords,
-            "No matched keywords returned.",
-            "✅",
-            green=True,
+            kind="success",
+            empty_message="No matched keywords returned.",
         )
 
     with right:
-        render_keyword_group(
-            "Missing Keywords",
+        st.markdown("### 🎯 Missing keywords")
+        render_list_cards(
             missing_keywords,
-            "No missing keywords found.",
-            "🎯",
+            kind="warning",
+            empty_message="No missing keywords found.",
         )
 
-    st.markdown(
-        '<div class="tm-section-title">Priority Recommendations</div>',
-        unsafe_allow_html=True,
+    render_section_title(
+        "Priority recommendations",
+        "Apply these actions first to improve ATS relevance and recruiter confidence.",
     )
     render_recommendations(recommendations)
 
@@ -1153,14 +1055,14 @@ def render_results(data: Dict[str, Any]) -> None:
             job_description=job_description,
         )
 
-    st.markdown("---")
-    st.markdown(
-        '<div class="tm-section-title">Download Report</div>',
-        unsafe_allow_html=True,
-    )
-    st.caption(
-        "Exports include ATS score, keyword coverage, recommendations "
-        "and a bounded Job Description appendix."
+    st.divider()
+    render_report_panel(
+        title="ATS Checker report center",
+        description=(
+            "Export ATS score, keyword coverage, recommendations, and a bounded "
+            "Job Description appendix."
+        ),
+        icon="📥",
     )
 
     col_txt, col_pdf = st.columns(2)
@@ -1194,11 +1096,15 @@ def render_results(data: Dict[str, Any]) -> None:
             )
 
 
-render_hero(
-    "ATS INTELLIGENCE",
-    "ATS Checker",
-    "Measure keyword coverage, identify critical gaps and optimize your CV before every application.",
-    "📋",
+render_page_intro(
+    kicker="ATS INTELLIGENCE",
+    title="ATS Checker",
+    subtitle=(
+        "Measure keyword coverage, identify critical gaps, and optimize your CV "
+        "before every application."
+    ),
+    icon="📋",
+    badge="ATS WORKFLOW",
 )
 
 if not is_logged_in():
@@ -1206,9 +1112,19 @@ if not is_logged_in():
     st.page_link("pages/login.py", label="🔐 Go to Login")
     st.stop()
 
-st.markdown(
-    '<div class="tm-section-title">Run a new ATS check</div>',
-    unsafe_allow_html=True,
+render_section_title(
+    "Run a new ATS check",
+    "Upload one CV and paste the complete job description for a focused ATS assessment.",
+)
+
+render_action_panel(
+    title="Prepare the ATS check",
+    description=(
+        "Use a complete PDF CV and the exact job description. Better source material "
+        "produces more accurate keyword coverage and stronger recommendations."
+    ),
+    icon="🚀",
+    eyebrow="ATS WORKFLOW",
 )
 
 left, right = st.columns([1, 1.25])
