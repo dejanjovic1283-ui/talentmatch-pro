@@ -12,7 +12,18 @@ import streamlit as st
 
 from auth_utils import is_logged_in, is_pro_user
 from components.sidebar import render_sidebar
-from components.ui import apply_global_styles, render_hero, safe_html
+from components.ui import (
+    apply_global_styles,
+    render_action_panel,
+    render_divider,
+    render_list_cards,
+    render_page_intro,
+    render_progress_card,
+    render_report_panel,
+    render_score_card,
+    render_section_title,
+    safe_html,
+)
 
 
 LOGGER = logging.getLogger(__name__)
@@ -383,44 +394,33 @@ def clear_cv_analysis_state() -> None:
 
 def score_tone(score: int) -> Tuple[str, str]:
     if score >= 80:
-        return "#059669", "Strong match"
+        return "green", "Strong match"
     if score >= 60:
-        return "#2563EB", "Competitive"
+        return "blue", "Competitive"
     if score >= 40:
-        return "#D97706", "Needs improvement"
-    return "#DC2626", "Low match"
+        return "amber", "Needs improvement"
+    return "red", "Low match"
 
 
-def render_kpi_card(label: str, value: str, caption: str, accent: str) -> None:
-    st.markdown(
-        f"""
-        <div class="tm-card" style="border-top:4px solid {safe_html(accent)};min-height:160px;display:flex;flex-direction:column;justify-content:space-between;">
-            <div class="tm-kicker">{safe_html(label)}</div>
-            <div style="font-size:2.2rem;font-weight:800;line-height:1;color:#0F172A;margin:.55rem 0;">{safe_html(value)}</div>
-            <div class="tm-muted">{safe_html(caption)}</div>
-        </div>
-        """,
-        unsafe_allow_html=True,
-    )
+def render_recommendations(items: List[str]) -> None:
+    if not items:
+        st.info("No recommendations returned.")
+        return
 
-
-def render_list_card(title: str, icon: str, items: List[str], *, positive: bool = False) -> None:
-    if items:
-        badge_class = "tm-pill tm-pill-green" if positive else "tm-pill"
-        content = "".join(
-            f"<span class='{badge_class}'>{safe_html(item)}</span>" for item in items
+    for index, recommendation in enumerate(items, start=1):
+        st.markdown(
+            (
+                '<div class="tm-list-card tm-list-card-info" '
+                'style="display:grid;grid-template-columns:48px 1fr;gap:1rem;align-items:start;">'
+                f'<div style="width:40px;height:40px;border-radius:12px;display:flex;'
+                f'align-items:center;justify-content:center;background:#DBEAFE;color:#1D4ED8;'
+                f'font-weight:950;">{index}</div>'
+                f'<div><div class="tm-kicker">Priority {index}</div>'
+                f'<div style="margin-top:.28rem;color:#475569;line-height:1.6;">'
+                f'{safe_html(recommendation)}</div></div></div>'
+            ),
+            unsafe_allow_html=True,
         )
-    else:
-        content = "<div class='tm-muted'>No items returned.</div>"
-    st.markdown(
-        f"""
-        <div class="tm-card" style="min-height:220px">
-            <div class="tm-card-title">{safe_html(icon)} {safe_html(title)}</div>
-            <div style="margin-top:.8rem">{content}</div>
-        </div>
-        """,
-        unsafe_allow_html=True,
-    )
 
 
 def render_analysis_result(
@@ -434,67 +434,95 @@ def render_analysis_result(
     strengths = normalize_list(normalized.get("strengths"))
     weaknesses = normalize_list(normalized.get("weaknesses"))
     recommendations = normalize_list(normalized.get("recommendations"))
-    accent, verdict = score_tone(score)
+    tone, verdict = score_tone(score)
 
     st.success("CV Analysis completed successfully and saved to History.")
-    st.markdown('<div class="tm-section-title">Analysis Intelligence</div>', unsafe_allow_html=True)
+
+    render_section_title(
+        "Analysis intelligence",
+        "A recruiter-ready overview of role alignment, evidence, gaps, and next actions.",
+    )
+
     kpi_1, kpi_2, kpi_3, kpi_4 = st.columns(4)
     with kpi_1:
-        render_kpi_card("Overall Score", f"{score}/100", verdict, accent)
+        render_score_card(
+            label="Overall score",
+            value=score,
+            caption=verdict,
+            tone=tone,
+        )
     with kpi_2:
-        render_kpi_card("Strengths", str(len(strengths)), "Confirmed candidate advantages", "#059669")
+        render_score_card(
+            label="Strengths",
+            value=len(strengths),
+            caption="Confirmed candidate advantages",
+            tone="green",
+            suffix="",
+        )
     with kpi_3:
-        render_kpi_card("Gaps", str(len(weaknesses)), "Areas requiring attention", "#D97706")
+        render_score_card(
+            label="Gaps",
+            value=len(weaknesses),
+            caption="Areas requiring attention",
+            tone="amber",
+            suffix="",
+        )
     with kpi_4:
-        render_kpi_card("Actions", str(len(recommendations)), "Priority recommendations", "#2563EB")
+        render_score_card(
+            label="Actions",
+            value=len(recommendations),
+            caption="Priority recommendations",
+            tone="blue",
+            suffix="",
+        )
 
+    render_progress_card(
+        title="Overall CV alignment",
+        value=score,
+        total=100,
+        subtitle=f"{verdict} • {score}/100 role alignment",
+        icon="📊",
+    )
+
+    render_section_title(
+        "Executive summary",
+        "The core recruiter perspective distilled into one concise assessment.",
+    )
     st.markdown(
-        f"""
-        <div class="tm-card" style="margin-top:.8rem">
-            <div style="display:flex;justify-content:space-between;align-items:center;gap:1rem;flex-wrap:wrap;">
-                <div><div class="tm-kicker">Overall CV alignment</div><div class="tm-card-title" style="margin-top:.25rem">{safe_html(verdict)}</div></div>
-                <div style="font-weight:800;color:{safe_html(accent)}">{score}/100</div>
-            </div>
-            <div style="width:100%;height:14px;margin-top:1rem;border-radius:999px;background:#E2E8F0;overflow:hidden;">
-                <div style="width:{score}%;height:100%;background:{safe_html(accent)};border-radius:999px;"></div>
-            </div>
-        </div>
-        """,
+        (
+            '<div class="tm-panel tm-panel-strong" style="border-left:5px solid #2563EB;">'
+            '<div class="tm-kicker">Recruiter perspective</div>'
+            f'<div style="margin-top:.65rem;line-height:1.75;color:#475569;font-size:1rem;">'
+            f'{safe_html(summary or "No summary returned.")}</div></div>'
+        ),
         unsafe_allow_html=True,
     )
 
-    st.markdown('<div class="tm-section-title">Executive Summary</div>', unsafe_allow_html=True)
-    st.markdown(
-        f"""
-        <div class="tm-card" style="border-left:5px solid #2563EB;padding:1.35rem 1.5rem;">
-            <div class="tm-kicker">Recruiter perspective</div>
-            <div style="margin-top:.55rem;line-height:1.7;color:#475569;font-size:1rem;">{safe_html(summary or 'No summary returned.')}</div>
-        </div>
-        """,
-        unsafe_allow_html=True,
+    render_section_title(
+        "CV coverage",
+        "Compare confirmed strengths with the most important weaknesses and missing evidence.",
     )
-
-    st.markdown('<div class="tm-section-title">CV Coverage</div>', unsafe_allow_html=True)
     left, right = st.columns(2)
     with left:
-        render_list_card("Strengths", "✅", strengths, positive=True)
+        st.markdown('<div class="tm-card-title">✅ Strengths</div>', unsafe_allow_html=True)
+        render_list_cards(
+            strengths,
+            kind="success",
+            empty_message="No strengths returned.",
+        )
     with right:
-        render_list_card("Weaknesses / Gaps", "⚠️", weaknesses)
+        st.markdown('<div class="tm-card-title">⚠️ Weaknesses / gaps</div>', unsafe_allow_html=True)
+        render_list_cards(
+            weaknesses,
+            kind="warning",
+            empty_message="No weaknesses returned.",
+        )
 
-    st.markdown('<div class="tm-section-title">Priority Recommendations</div>', unsafe_allow_html=True)
-    if recommendations:
-        for index, recommendation in enumerate(recommendations, start=1):
-            st.markdown(
-                f"""
-                <div class="tm-card" style="margin-bottom:.75rem;display:grid;grid-template-columns:54px 1fr;gap:1rem;align-items:start;">
-                    <div style="width:42px;height:42px;border-radius:12px;display:flex;align-items:center;justify-content:center;background:#EFF6FF;color:#2563EB;font-weight:800;">{index}</div>
-                    <div><div class="tm-kicker">Priority {index}</div><div class="tm-muted" style="margin-top:.25rem">{safe_html(recommendation)}</div></div>
-                </div>
-                """,
-                unsafe_allow_html=True,
-            )
-    else:
-        st.info("No recommendations returned.")
+    render_section_title(
+        "Priority recommendations",
+        "Apply these actions first to improve relevance and recruiter confidence.",
+    )
+    render_recommendations(recommendations)
 
     if "cv_analysis_txt_report" not in st.session_state:
         st.session_state["cv_analysis_txt_report"] = build_text_report(
@@ -503,11 +531,16 @@ def render_analysis_result(
             job_description=job_description,
         )
 
-    st.markdown("---")
-    st.markdown('<div class="tm-section-title">Download Report</div>', unsafe_allow_html=True)
-    st.caption(
-        "Exports include the score, executive summary, strengths, gaps, recommendations and a bounded Job Description appendix."
+    render_divider()
+    render_report_panel(
+        title="CV Analysis report center",
+        description=(
+            "Export the score, executive summary, strengths, gaps, recommendations, "
+            "and bounded Job Description appendix."
+        ),
+        icon="📥",
     )
+
     col_txt, col_pdf = st.columns(2)
     with col_txt:
         st.download_button(
@@ -517,6 +550,7 @@ def render_analysis_result(
             mime="text/plain",
             use_container_width=True,
         )
+
     with col_pdf:
         if is_pro_user():
             if "cv_analysis_pdf_report" not in st.session_state:
@@ -540,11 +574,15 @@ def render_analysis_result(
             st.page_link("pages/pricing.py", label="💳 Upgrade to Pro")
 
 
-render_hero(
-    "AI CV INTELLIGENCE",
-    "CV Analysis",
-    "Evaluate role alignment, candidate strengths, gaps and practical improvement priorities.",
-    "📄",
+render_page_intro(
+    kicker="AI CV INTELLIGENCE",
+    title="CV Analysis",
+    subtitle=(
+        "Evaluate role alignment, candidate strengths, critical gaps, and the highest-impact "
+        "improvements in one recruiter-ready workflow."
+    ),
+    icon="📄",
+    badge="AI ANALYSIS",
 )
 
 if not is_logged_in():
@@ -552,13 +590,29 @@ if not is_logged_in():
     st.page_link("pages/login.py", label="🔐 Go to Login")
     st.stop()
 
-st.markdown('<div class="tm-section-title">Run a new CV analysis</div>', unsafe_allow_html=True)
+render_section_title(
+    "Run a new CV analysis",
+    "Upload one CV and paste the full role description to generate a focused AI assessment.",
+)
+render_action_panel(
+    title="Prepare the analysis",
+    description=(
+        "Use a complete PDF CV and the exact job description. Better source material "
+        "produces clearer scoring, stronger recommendations, and more useful reports."
+    ),
+    icon="🚀",
+    eyebrow="AI WORKFLOW",
+)
+
 left, right = st.columns([1, 1.25])
 with left:
     st.markdown(
-        """
-        <div class="tm-card"><div class="tm-card-title">📄 CV upload</div><div class="tm-muted">Upload one PDF CV. TalentMatch Pro analyses role fit, strengths, gaps and improvement opportunities.</div></div>
-        """,
+        (
+            '<div class="tm-panel tm-panel-strong">'
+            '<div class="tm-card-title">📄 CV upload</div>'
+            '<div class="tm-muted">Upload one PDF CV for role-fit analysis, evidence mapping, '
+            'gap detection, and recommendation generation.</div></div>'
+        ),
         unsafe_allow_html=True,
     )
     uploaded_file = st.file_uploader(
@@ -573,9 +627,12 @@ with left:
 
 with right:
     st.markdown(
-        """
-        <div class="tm-card"><div class="tm-card-title">🧾 Job description</div><div class="tm-muted">Paste the complete job advertisement for the most accurate role-fit analysis and recommendation quality.</div></div>
-        """,
+        (
+            '<div class="tm-panel tm-panel-strong">'
+            '<div class="tm-card-title">🧾 Job description</div>'
+            '<div class="tm-muted">Paste the complete job advertisement to maximize role-fit '
+            'accuracy, evidence quality, and recommendation relevance.</div></div>'
+        ),
         unsafe_allow_html=True,
     )
     job_description = st.text_area(
