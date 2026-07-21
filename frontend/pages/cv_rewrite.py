@@ -8,7 +8,15 @@ import streamlit as st
 
 from auth_utils import api_post, is_logged_in
 from components.sidebar import render_sidebar
-from components.ui import apply_global_styles, render_hero, safe_html
+from components.ui import (
+    apply_global_styles,
+    render_action_panel,
+    render_list_cards,
+    render_page_intro,
+    render_report_panel,
+    render_score_card,
+    safe_html,
+)
 
 
 st.set_page_config(page_title="CV Rewrite AI • TalentMatch Pro", page_icon="✍️", layout="wide")
@@ -138,40 +146,71 @@ def get_rewrite_fields(result: Dict[str, Any]) -> Dict[str, Any]:
 # ------------------------------------------------------------
 
 
-def result_card(title: str, content: str, icon: str = "✨") -> None:
-    st.markdown(
-        f"""
-        <div class="tm-card" style="margin-bottom:1rem">
-            <div class="tm-card-title">{safe_html(icon)} {safe_html(title)}</div>
-            <div class="tm-muted" style="white-space:pre-wrap">{safe_html(content) if content else 'No content returned.'}</div>
-        </div>
-        """,
-        unsafe_allow_html=True,
-    )
-
-
-def bullet_card(
+def render_content_panel(
+    *,
+    eyebrow: str,
     title: str,
-    items: List[str],
-    empty_text: str,
-    icon: str = "✅",
-    green: bool = False,
+    content: str,
+    icon: str,
+    empty_message: str,
 ) -> None:
-    if items:
-        pill_class = "tm-pill tm-pill-green" if green else "tm-pill"
-        html_items = "".join(f"<span class='{pill_class}'>{safe_html(item)}</span>" for item in items[:80])
-    else:
-        html_items = f"<div class='tm-muted'>{safe_html(empty_text)}</div>"
+    """Render one escaped long-form rewrite output panel."""
+    normalized = str(content or "").strip()
+    display_value = normalized or empty_message
 
     st.markdown(
         f"""
         <div class="tm-card" style="margin-bottom:1rem">
-            <div class="tm-card-title">{safe_html(icon)} {safe_html(title)}</div>
-            <div>{html_items}</div>
+            <div class="tm-eyebrow">{safe_html(eyebrow)}</div>
+            <div class="tm-card-title" style="margin-top:.35rem">
+                {safe_html(icon)} {safe_html(title)}
+            </div>
+            <div class="tm-muted" style="white-space:pre-wrap; margin-top:.75rem">
+                {safe_html(display_value)}
+            </div>
         </div>
         """,
         unsafe_allow_html=True,
     )
+
+
+def render_numbered_rewrite_cards(items: List[str]) -> None:
+    """Render rewritten CV bullets as numbered, recruiter-readable cards."""
+    normalized_items = [str(item).strip() for item in items if str(item).strip()]
+    if not normalized_items:
+        st.info("No rewritten bullet points were returned.")
+        return
+
+    for index, item in enumerate(normalized_items, start=1):
+        st.markdown(
+            f"""
+            <div class="tm-card" style="margin-bottom:.85rem">
+                <div style="display:flex; gap:1rem; align-items:flex-start">
+                    <div style="
+                        min-width:3rem;
+                        width:3rem;
+                        height:3rem;
+                        border-radius:1rem;
+                        display:flex;
+                        align-items:center;
+                        justify-content:center;
+                        background:rgba(37,99,235,.10);
+                        color:#2563eb;
+                        font-weight:800;
+                    ">
+                        {index}
+                    </div>
+                    <div style="flex:1">
+                        <div class="tm-eyebrow">REWRITTEN BULLET {index}</div>
+                        <div class="tm-muted" style="margin-top:.45rem">
+                            {safe_html(item)}
+                        </div>
+                    </div>
+                </div>
+            </div>
+            """,
+            unsafe_allow_html=True,
+        )
 
 
 # ------------------------------------------------------------
@@ -467,51 +506,109 @@ def clear_cv_rewrite_state() -> None:
 
 
 def render_rewrite_result(result: Dict[str, Any]) -> None:
+    """Render a completed CV Rewrite response in the shared PROFI-EXTRA system."""
     fields = get_rewrite_fields(result)
-    headline = fields["headline"]
-    rewritten_summary = fields["rewritten_summary"]
-    rewritten_bullets = fields["rewritten_bullets"]
-    keywords = fields["keywords"]
-    cautions = fields["cautions"]
+    headline = str(fields["headline"] or "").strip()
+    rewritten_summary = str(fields["rewritten_summary"] or "").strip()
+    rewritten_bullets = list(fields["rewritten_bullets"])
+    keywords = list(fields["keywords"])
+    cautions = list(fields["cautions"])
 
-    cv_filename = st.session_state.get("cv_rewrite_filename", "uploaded_cv.pdf")
-    job_description = st.session_state.get("cv_rewrite_job_description", "")
+    cv_filename = str(
+        st.session_state.get("cv_rewrite_filename", "uploaded_cv.pdf")
+    )
+    job_description = str(
+        st.session_state.get("cv_rewrite_job_description", "")
+    )
 
-    st.success("CV rewrite completed.")
+    st.success("CV rewrite completed successfully and saved to History.")
 
-    k1, k2, k3 = st.columns(3)
-    with k1:
-        st.metric("Headline", "Ready" if headline else "Missing")
-    with k2:
-        st.metric("Bullet points", len(rewritten_bullets))
-    with k3:
-        st.metric("ATS keywords", len(keywords))
+    st.markdown("## Rewrite intelligence")
+    st.caption(
+        "A recruiter-ready overview of the rewritten positioning, ATS enrichment, "
+        "and final quality checks."
+    )
 
-    st.markdown('<div class="tm-section-title">Rewrite output</div>', unsafe_allow_html=True)
-    result_card("Suggested headline", headline, "🎯")
-    result_card("Rewritten summary", rewritten_summary, "📝")
-
-    if rewritten_bullets:
-        bullet_html = "".join(
-            f"<li style='margin-bottom:.55rem'>{safe_html(item)}</li>" for item in rewritten_bullets
+    metric_1, metric_2, metric_3, metric_4 = st.columns(4)
+    with metric_1:
+        render_score_card(
+            label="HEADLINE",
+            value="READY" if headline else "MISSING",
+            caption="Role-aligned positioning",
+            tone="primary",
+            suffix="",
         )
-        st.markdown(
-            f"""
-            <div class="tm-card" style="margin-bottom:1rem">
-                <div class="tm-card-title">✅ Rewritten bullet points</div>
-                <ul class="tm-muted" style="padding-left:1.2rem">{bullet_html}</ul>
-            </div>
-            """,
-            unsafe_allow_html=True,
+    with metric_2:
+        render_score_card(
+            label="BULLETS",
+            value=len(rewritten_bullets),
+            caption="Rewritten experience points",
+            tone="success",
+            suffix="",
         )
-    else:
-        st.info("No rewritten bullet points returned.")
+    with metric_3:
+        render_score_card(
+            label="ATS KEYWORDS",
+            value=len(keywords),
+            caption="Suggested additions",
+            tone="primary",
+            suffix="",
+        )
+    with metric_4:
+        render_score_card(
+            label="CAUTIONS",
+            value=len(cautions),
+            caption="Items requiring review",
+            tone="warning",
+            suffix="",
+        )
+
+    st.markdown("## Positioning upgrade")
+    st.caption(
+        "Use the suggested headline and summary as the primary narrative for the target role."
+    )
+
+    render_content_panel(
+        eyebrow="TARGET POSITIONING",
+        title="Suggested headline",
+        content=headline,
+        icon="🎯",
+        empty_message="No suggested headline was returned.",
+    )
+    render_content_panel(
+        eyebrow="PROFESSIONAL SUMMARY",
+        title="Rewritten summary",
+        content=rewritten_summary,
+        icon="📝",
+        empty_message="No rewritten summary was returned.",
+    )
+
+    st.markdown("## Rewritten experience")
+    st.caption(
+        "Review each bullet for factual accuracy before replacing content in the source CV."
+    )
+    render_numbered_rewrite_cards(rewritten_bullets)
+
+    st.markdown("## ATS enrichment and review")
+    st.caption(
+        "Add only truthful keywords and resolve every caution before submitting the CV."
+    )
 
     left, right = st.columns(2)
     with left:
-        bullet_card("ATS keywords to add", keywords, "No keyword suggestions returned.", "🔎", green=True)
+        st.markdown("### ✅ ATS keywords to add")
+        render_list_cards(
+            keywords,
+            kind="success",
+            empty_message="No ATS keyword suggestions were returned.",
+        )
     with right:
-        bullet_card("Cautions", cautions, "No cautions returned.", "⚠️", green=False)
+        st.markdown("### ⚠️ Cautions")
+        render_list_cards(
+            cautions,
+            kind="warning",
+            empty_message="No cautions were returned.",
+        )
 
     if "cv_rewrite_txt_report" not in st.session_state:
         st.session_state["cv_rewrite_txt_report"] = build_text_report(
@@ -520,14 +617,28 @@ def render_rewrite_result(result: Dict[str, Any]) -> None:
             job_description=job_description,
         )
 
-    st.markdown("---")
-    st.markdown('<div class="tm-section-title">Download Report</div>', unsafe_allow_html=True)
+    if "cv_rewrite_pdf_report" not in st.session_state:
+        with st.spinner("Preparing PDF report..."):
+            st.session_state["cv_rewrite_pdf_report"] = create_pdf_report(
+                result=result,
+                cv_filename=cv_filename,
+                job_description=job_description,
+            )
+
+    st.divider()
+    render_report_panel(
+        title="CV Rewrite report center",
+        description=(
+            "Export the suggested headline, rewritten summary, experience bullets, "
+            "ATS keyword additions, cautions, and the bounded Job Description appendix."
+        ),
+        icon="📥",
+    )
 
     col_txt, col_pdf = st.columns(2)
-
     with col_txt:
         st.download_button(
-            "📥 Export Rewrite (.txt)",
+            "⬇️ Export CV Rewrite Report (.txt)",
             data=st.session_state["cv_rewrite_txt_report"].encode("utf-8"),
             file_name="talentmatch_cv_rewrite.txt",
             mime="text/plain",
@@ -535,21 +646,19 @@ def render_rewrite_result(result: Dict[str, Any]) -> None:
         )
 
     with col_pdf:
-        if "cv_rewrite_pdf_report" not in st.session_state:
-            with st.spinner("Preparing PDF report..."):
-                st.session_state["cv_rewrite_pdf_report"] = create_pdf_report(
-                    result=result,
-                    cv_filename=cv_filename,
-                    job_description=job_description,
-                )
-
         pdf_bytes = st.session_state.get("cv_rewrite_pdf_report")
         if pdf_bytes:
             st.download_button(
-                "📄 Export Rewrite (.pdf)",
+                "📄 Export CV Rewrite Report (.pdf)",
                 data=pdf_bytes,
                 file_name="talentmatch_cv_rewrite_report.pdf",
                 mime="application/pdf",
+                use_container_width=True,
+            )
+        else:
+            st.button(
+                "📄 PDF report unavailable",
+                disabled=True,
                 use_container_width=True,
             )
 
@@ -559,94 +668,159 @@ def render_rewrite_result(result: Dict[str, Any]) -> None:
 # ------------------------------------------------------------
 
 
-render_hero(
-    "AI CV rewriting",
-    "CV Rewrite AI",
-    "Turn your CV into a sharper, role-aligned version with stronger summary, bullet points and ATS keyword suggestions.",
-    "✍️",
+render_page_intro(
+    kicker="AI CV TRANSFORMATION",
+    title="CV Rewrite AI",
+    subtitle=(
+        "Transform a source CV into a sharper, role-aligned version with a stronger "
+        "headline, professional summary, experience bullets, and ATS keyword guidance."
+    ),
+    icon="✍️",
+    badge="PRO WORKFLOW",
 )
 
 if not is_logged_in():
-    st.warning("Please login before using CV Rewrite AI.")
+    st.warning("Please log in before using CV Rewrite AI.")
     st.page_link("pages/login.py", label="🔐 Go to Login")
     st.stop()
 
-st.markdown('<div class="tm-section-title">Create a tailored rewrite</div>', unsafe_allow_html=True)
-left, right = st.columns([1, 1.25])
+st.markdown("## Run a new CV rewrite")
+st.caption(
+    "Upload one PDF CV and paste the complete target role description to generate "
+    "a focused, truthful rewrite."
+)
+
+render_action_panel(
+    eyebrow="AI WORKFLOW",
+    title="Prepare the rewrite",
+    description=(
+        "Use the complete source CV and exact job description. Better source material "
+        "produces stronger positioning, more relevant bullets, and safer ATS suggestions."
+    ),
+    icon="🚀",
+)
+
+left, right = st.columns([1, 1.15])
 
 with left:
     st.markdown(
         """
         <div class="tm-card">
             <div class="tm-card-title">📄 CV upload</div>
-            <div class="tm-muted">Upload your PDF CV. The AI will rewrite your positioning for the target job.</div>
+            <div class="tm-muted" style="margin-top:.55rem">
+                Upload one PDF CV. TalentMatch Pro will preserve the source facts while
+                improving role alignment and presentation.
+            </div>
         </div>
         """,
         unsafe_allow_html=True,
     )
+
     uploaded_file = st.file_uploader(
         "Upload CV (PDF)",
         type=["pdf"],
         accept_multiple_files=False,
+        key="cv_rewrite_upload",
     )
+
     if uploaded_file is not None:
         file_size_kb = len(uploaded_file.getvalue()) / 1024
-        st.success(f"Selected file: {uploaded_file.name} ({file_size_kb:.1f} KB)")
+        st.success(
+            f"Selected file: {uploaded_file.name} ({file_size_kb:.1f} KB)"
+        )
 
 with right:
     st.markdown(
         """
         <div class="tm-card">
-            <div class="tm-card-title">🧾 Target job description</div>
-            <div class="tm-muted">Paste the job ad so the rewrite can match the exact role, skills and language.</div>
+            <div class="tm-card-title">🧾 Job description</div>
+            <div class="tm-muted" style="margin-top:.55rem">
+                Paste the complete job advertisement so the rewrite can mirror the
+                correct role, skills, responsibilities, and professional language.
+            </div>
         </div>
         """,
         unsafe_allow_html=True,
     )
+
     job_description = st.text_area(
         "Job Description",
         value=DEFAULT_JOB_DESCRIPTION,
         height=330,
+        key="cv_rewrite_job_description_input",
     )
 
-if st.button("🚀 Rewrite CV", use_container_width=True):
+can_submit = (
+    uploaded_file is not None
+    and bool(job_description.strip())
+)
+
+rewrite_clicked = st.button(
+    "🚀 Rewrite CV",
+    type="primary",
+    use_container_width=True,
+    disabled=not can_submit,
+)
+
+if rewrite_clicked:
+    clear_cv_rewrite_state()
+
     if uploaded_file is None:
         st.error("Please upload a PDF CV.")
         st.stop()
 
-    if not job_description.strip():
+    normalized_job_description = job_description.strip()
+    if not normalized_job_description:
         st.error("Please paste a job description.")
         st.stop()
 
-    clear_cv_rewrite_state()
-
-    files = {"file": (uploaded_file.name, uploaded_file.getvalue(), "application/pdf")}
-    data = {"job_description": job_description.strip()}
+    files = {
+        "file": (
+            uploaded_file.name,
+            uploaded_file.getvalue(),
+            "application/pdf",
+        )
+    }
+    data = {"job_description": normalized_job_description}
 
     with st.spinner("Rewriting CV content..."):
-        response = api_post("/rewrite-cv", data=data, files=files, timeout=180)
+        response = api_post(
+            "/rewrite-cv",
+            data=data,
+            files=files,
+            timeout=180,
+        )
 
     if getattr(response, "status_code", None) != 200:
         st.error(f"CV rewrite failed: {extract_error_message(response)}")
         if getattr(response, "status_code", None) == 403:
-            st.warning("🚀 CV Rewrite AI is a Pro feature.")
-            st.page_link("pages/pricing.py", label="Upgrade to Pro", icon="🚀")
+            st.warning("CV Rewrite AI is a Pro feature.")
+            st.page_link(
+                "pages/pricing.py",
+                label="Upgrade to Pro",
+                icon="🚀",
+            )
         st.stop()
 
     try:
         payload = response.json()
     except Exception:
-        st.error(f"Backend returned invalid JSON: {getattr(response, 'text', '')[:1000]}")
+        st.error(
+            "Backend returned invalid JSON: "
+            f"{getattr(response, 'text', '')[:1000]}"
+        )
         st.stop()
 
     if not isinstance(payload, dict):
-        st.error("Backend returned invalid response format.")
+        st.error("Backend returned an invalid response format.")
         st.json(payload)
         st.stop()
 
     st.session_state["rewrite_result"] = payload
     st.session_state["cv_rewrite_filename"] = uploaded_file.name
-    st.session_state["cv_rewrite_job_description"] = job_description.strip()
+    st.session_state["cv_rewrite_job_description"] = normalized_job_description
+    st.session_state.pop("cv_rewrite_txt_report", None)
+    st.session_state.pop("cv_rewrite_pdf_report", None)
 
 result = st.session_state.get("rewrite_result")
 if isinstance(result, dict):
