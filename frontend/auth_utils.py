@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import os
 import re
+import time
 from typing import IO, Any, Mapping, Optional, Sequence, TypeAlias
 
 import requests
@@ -196,6 +197,10 @@ def clear_auth() -> None:
         "full_name",
         "display_name",
         "name",
+        "profile_last_refresh_at",
+        "profile_last_refresh_status",
+        "profile_last_refresh_error",
+        "profile_using_stale_cache",
     ]
 
     for key in keys:
@@ -315,35 +320,105 @@ def api_post(
 # =========================
 
 
+def _cached_profile() -> dict[str, Any] | None:
+    """Return the last successfully loaded profile without contacting the backend."""
+    profile = st.session_state.get("profile")
+    return profile if isinstance(profile, dict) and profile else None
+
+
+def _response_error_message(response: requests.Response | FakeResponse) -> str:
+    """Extract a bounded diagnostic message from an unsuccessful profile response."""
+    try:
+        payload = response.json()
+    except Exception:
+        payload = None
+
+    if isinstance(payload, dict):
+        detail = payload.get("detail")
+        error = payload.get("error")
+
+        if isinstance(detail, str) and detail.strip():
+            return detail.strip()[:500]
+
+        if isinstance(detail, dict):
+            message = detail.get("message")
+            if isinstance(message, str) and message.strip():
+                return message.strip()[:500]
+
+        if isinstance(error, str) and error.strip():
+            return error.strip()[:500]
+
+        if isinstance(error, dict):
+            message = error.get("message")
+            if isinstance(message, str) and message.strip():
+                return message.strip()[:500]
+
+    return str(getattr(response, "text", "") or "Profile refresh failed.")[:500]
+
+
 def refresh_profile() -> dict[str, Any] | None:
-    """Reload user profile from backend."""
+    """
+    Reload the authenticated profile without degrading access on transient failures.
+
+    A previously validated profile remains authoritative for the active Streamlit
+    session when `/me` is temporarily unavailable, rate-limited, or returns a
+    server-side error. Authentication failures do not overwrite that cache, but
+    they are recorded so the UI can surface the condition without silently
+    changing a paid account to Free.
+    """
+    cached_profile = _cached_profile()
+
     if not is_logged_in():
-        return None
+        st.session_state["profile_last_refresh_status"] = "not_authenticated"
+        st.session_state["profile_using_stale_cache"] = bool(cached_profile)
+        return cached_profile
 
     response = api_get("/me")
+    status_code = int(getattr(response, "status_code", 500) or 500)
 
-    if response.status_code != 200:
-        return None
+    if status_code != 200:
+        st.session_state["profile_last_refresh_at"] = time.time()
+        st.session_state["profile_last_refresh_status"] = f"http_{status_code}"
+        st.session_state["profile_last_refresh_error"] = _response_error_message(
+            response
+        )
+        st.session_state["profile_using_stale_cache"] = bool(cached_profile)
+        return cached_profile
 
     try:
         profile = response.json()
     except Exception:
-        return None
+        st.session_state["profile_last_refresh_at"] = time.time()
+        st.session_state["profile_last_refresh_status"] = "invalid_json"
+        st.session_state["profile_last_refresh_error"] = (
+            "Backend returned an invalid profile response."
+        )
+        st.session_state["profile_using_stale_cache"] = bool(cached_profile)
+        return cached_profile
 
-    if not isinstance(profile, dict):
-        return None
+    if not isinstance(profile, dict) or not profile:
+        st.session_state["profile_last_refresh_at"] = time.time()
+        st.session_state["profile_last_refresh_status"] = "invalid_profile"
+        st.session_state["profile_last_refresh_error"] = (
+            "Backend returned an empty or invalid profile."
+        )
+        st.session_state["profile_using_stale_cache"] = bool(cached_profile)
+        return cached_profile
 
     st.session_state["profile"] = profile
+    st.session_state["profile_last_refresh_at"] = time.time()
+    st.session_state["profile_last_refresh_status"] = "ok"
+    st.session_state["profile_last_refresh_error"] = ""
+    st.session_state["profile_using_stale_cache"] = False
     _sync_profile_to_session(profile)
     return profile
 
 
 def get_profile() -> dict[str, Any] | None:
-    """Get cached profile or refresh it."""
-    profile = st.session_state.get("profile")
-
-    if isinstance(profile, dict):
-        return profile
+    """Return the cached profile, loading it once when no cache exists."""
+    cached_profile = _cached_profile()
+    if cached_profile is not None:
+        return cached_profile
 
     return refresh_profile()
 
@@ -354,15 +429,19 @@ def load_profile() -> dict[str, Any] | None:
 
 
 def is_pro_user() -> bool:
-    """Check if current user has Pro access."""
+    """Check Pro access from the last successfully validated profile."""
     profile = get_profile()
 
     if not profile:
         return False
 
-    subscription_status = str(profile.get("subscription_status") or "").lower()
-    paypal_status = str(profile.get("paypal_subscription_status") or "").lower()
-    plan = str(profile.get("plan") or "").lower()
+    subscription_status = str(
+        profile.get("subscription_status") or ""
+    ).strip().lower()
+    paypal_status = str(
+        profile.get("paypal_subscription_status") or ""
+    ).strip().lower()
+    plan = str(profile.get("plan") or "").strip().lower()
 
     return bool(
         profile.get("is_pro")
