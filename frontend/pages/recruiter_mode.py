@@ -11,7 +11,15 @@ import streamlit as st
 
 from auth_utils import api_post, is_logged_in, is_pro_user
 from components.sidebar import render_sidebar
-from components.ui import apply_global_styles, render_hero, safe_html
+from components.ui import (
+    apply_global_styles,
+    render_action_panel,
+    render_list_cards,
+    render_page_intro,
+    render_report_panel,
+    render_score_card,
+    safe_html,
+)
 
 
 st.set_page_config(page_title="Recruiter Mode • TalentMatch Pro", page_icon="👥", layout="wide")
@@ -475,40 +483,92 @@ def clear_recruiter_state() -> None:
 
 
 def render_candidate_card(item: Dict[str, Any]) -> None:
-    strengths = "".join(f"<span class='tm-pill tm-pill-green'>{safe_html(value)}</span>" for value in item["strengths"][:12])
-    weaknesses = "".join(f"<span class='tm-pill'>{safe_html(value)}</span>" for value in item["weaknesses"][:12])
-    summary = safe_html(item["summary"] or "No candidate summary returned.")
-
+    """Render one ranked candidate with consistent recruiter intelligence sections."""
     st.markdown(
         f"""
         <div class="tm-card" style="margin-bottom:1rem">
-            <div class="tm-kicker">Rank #{safe_html(item["rank"])}</div>
-            <div class="tm-card-title">{safe_html(item["filename"])}</div>
-            <div class="tm-muted">{summary}</div>
-            <br>
-            <span class="tm-pill tm-pill-green">Score: {safe_html(item["score"])}/100</span>
-            <span class="tm-pill">Semantic: {safe_html(item["semantic_score"])}/100</span>
-            <span class="tm-pill">Keyword: {safe_html(item["keyword_score"])}/100</span>
-            <span class="tm-pill">{safe_html(item["verdict"])}</span>
-            <br><br>
-            <div class="tm-kicker">Strengths</div>
-            <div>{strengths or "<span class='tm-muted'>No strengths returned.</span>"}</div>
-            <br>
-            <div class="tm-kicker">Weaknesses / Gaps</div>
-            <div>{weaknesses or "<span class='tm-muted'>No weaknesses returned.</span>"}</div>
+            <div style="display:flex;justify-content:space-between;gap:1rem;align-items:flex-start;flex-wrap:wrap">
+                <div>
+                    <div class="tm-kicker">RANK #{safe_html(item["rank"])}</div>
+                    <div class="tm-card-title" style="margin-top:.35rem">
+                        {safe_html(item["filename"])}
+                    </div>
+                </div>
+                <span class="tm-pill tm-pill-green">
+                    {safe_html(item["score"])}/100 · {safe_html(item["verdict"])}
+                </span>
+            </div>
+            <div class="tm-muted" style="margin-top:.8rem">
+                {safe_html(item["summary"] or "No candidate summary returned.")}
+            </div>
         </div>
         """,
         unsafe_allow_html=True,
     )
 
+    score_col_1, score_col_2, score_col_3 = st.columns(3)
+    with score_col_1:
+        render_score_card(
+            label="OVERALL",
+            value=item["score"],
+            caption=item["verdict"],
+            tone="blue",
+        )
+    with score_col_2:
+        render_score_card(
+            label="SEMANTIC",
+            value=item["semantic_score"],
+            caption="Meaning and role alignment",
+            tone="green",
+        )
+    with score_col_3:
+        render_score_card(
+            label="KEYWORD",
+            value=item["keyword_score"],
+            caption="Target-role terminology",
+            tone="purple",
+        )
+
+    detail_left, detail_right = st.columns(2)
+    with detail_left:
+        st.markdown("#### ✅ Strengths")
+        render_list_cards(
+            item["strengths"],
+            kind="success",
+            empty_message="No strengths returned.",
+        )
+    with detail_right:
+        st.markdown("#### ⚠️ Weaknesses / gaps")
+        render_list_cards(
+            item["weaknesses"],
+            kind="warning",
+            empty_message="No weaknesses returned.",
+        )
+
+    if item["recommendations"]:
+        with st.expander("🎯 Candidate-specific recommendations"):
+            render_list_cards(
+                item["recommendations"],
+                kind="info",
+                empty_message="No candidate recommendations returned.",
+            )
+
 
 def render_results(result: Dict[str, Any]) -> None:
-    job_description = st.session_state.get("recruiter_job_description", "")
+    """Render recruiter ranking results and Candidate Database actions."""
+    job_description = str(
+        st.session_state.get("recruiter_job_description", "")
+    )
     candidates = candidate_list(result)
-    summary = str(result.get("summary") or result.get("recruiter_summary") or f"Recruiter ranking completed for {len(candidates)} candidate(s).")
+    summary = str(
+        result.get("summary")
+        or result.get("recruiter_summary")
+        or f"Recruiter ranking completed for {len(candidates)} candidate(s)."
+    )
     recommendations = normalize_list(result.get("recommendations"))
+
     if not recommendations:
-        seen = set()
+        seen: set[str] = set()
         for candidate in candidates:
             for recommendation in candidate.get("recommendations", []):
                 normalized = recommendation.strip()
@@ -517,28 +577,71 @@ def render_results(result: Dict[str, Any]) -> None:
                     seen.add(key)
                     recommendations.append(normalized)
 
-    st.success("Recruiter ranking completed.")
+    st.success("Recruiter ranking completed successfully and saved to History.")
 
     top = candidates[0] if candidates else None
-    col1, col2, col3 = st.columns(3)
-    with col1:
-        st.metric("Candidates", len(candidates))
-    with col2:
-        st.metric("Top score", f"{top['score']}/100" if top else "N/A")
-    with col3:
-        st.metric("Top candidate", top["filename"] if top else "N/A")
+    average_score = (
+        round(sum(item["score"] for item in candidates) / len(candidates))
+        if candidates
+        else 0
+    )
 
-    st.markdown('<div class="tm-section-title">Recruiter Summary</div>', unsafe_allow_html=True)
+    st.markdown("## Recruiter intelligence")
+    st.caption(
+        "Review the shortlist, compare ranking signals, and move qualified profiles "
+        "into Candidate Database."
+    )
+
+    metric_1, metric_2, metric_3, metric_4 = st.columns(4)
+    with metric_1:
+        render_score_card(
+            label="CANDIDATES",
+            value=len(candidates),
+            caption="Profiles ranked",
+            tone="blue",
+            suffix="",
+        )
+    with metric_2:
+        render_score_card(
+            label="TOP SCORE",
+            value=top["score"] if top else 0,
+            caption=top["verdict"] if top else "No result",
+            tone="green",
+        )
+    with metric_3:
+        render_score_card(
+            label="AVERAGE",
+            value=average_score,
+            caption="Average ranking score",
+            tone="purple",
+        )
+    with metric_4:
+        render_score_card(
+            label="TOP PROFILE",
+            value="READY" if top else "N/A",
+            caption=top["filename"] if top else "No candidate",
+            tone="amber",
+            suffix="",
+        )
+
+    st.markdown("## Executive recruiter summary")
     st.markdown(
         f"""
-        <div class="tm-card">
-            <div class="tm-muted">{safe_html(summary)}</div>
+        <div class="tm-card" style="border-left:5px solid #2563eb;padding:1.35rem 1.5rem">
+            <div class="tm-kicker">HIRING PERSPECTIVE</div>
+            <div class="tm-muted" style="margin-top:.65rem;line-height:1.7">
+                {safe_html(summary)}
+            </div>
         </div>
         """,
         unsafe_allow_html=True,
     )
 
     if candidates:
+        st.markdown("## Candidate leaderboard")
+        st.caption(
+            "The leaderboard provides a compact comparison before the detailed candidate review."
+        )
         table_rows = [
             {
                 "Rank": item["rank"],
@@ -550,39 +653,37 @@ def render_results(result: Dict[str, Any]) -> None:
             }
             for item in candidates
         ]
+        st.dataframe(
+            table_rows,
+            use_container_width=True,
+            hide_index=True,
+        )
 
-        st.markdown('<div class="tm-section-title">Candidate leaderboard</div>', unsafe_allow_html=True)
-        st.dataframe(table_rows, use_container_width=True, hide_index=True)
-
-        st.markdown('<div class="tm-section-title">Candidate details</div>', unsafe_allow_html=True)
+        st.markdown("## Candidate review")
         for item in candidates:
             render_candidate_card(item)
     else:
-        st.warning("No ranked candidates returned.")
+        st.warning("No ranked candidates were returned.")
 
-    st.markdown('<div class="tm-section-title">Overall Recommendations</div>', unsafe_allow_html=True)
-    if recommendations:
-        for index, item in enumerate(recommendations, start=1):
-            st.markdown(
-                f"""
-                <div class="tm-card" style="margin-bottom:.75rem">
-                    <div class="tm-kicker">Recommendation {index}</div>
-                    <div class="tm-muted">{safe_html(item)}</div>
-                </div>
-                """,
-                unsafe_allow_html=True,
-            )
-    else:
-        st.info("No overall recommendations returned.")
+    st.markdown("## Overall recommendations")
+    render_list_cards(
+        recommendations,
+        kind="info",
+        empty_message="No overall recommendations returned.",
+    )
 
-    st.markdown("---")
-    st.markdown('<div class="tm-section-title">Recruiter Workspace</div>', unsafe_allow_html=True)
-    st.caption("Save ranked candidates to Candidate Database for shortlisting, notes, status tracking and export.")
+    st.divider()
+    st.markdown("## Recruiter Workspace")
+    st.caption(
+        "Save ranked profiles to Candidate Database for shortlisting, notes, "
+        "status tracking, favorites, tags, and export."
+    )
 
     save_all_col, database_col = st.columns([1.2, 1])
     with save_all_col:
         save_all_clicked = st.button(
             "💾 Save all candidates to Candidate Database",
+            type="primary",
             use_container_width=True,
             disabled=not bool(candidates),
         )
@@ -595,17 +696,30 @@ def render_results(result: Dict[str, Any]) -> None:
 
     if save_all_clicked:
         saved_count = 0
+        duplicate_count = 0
         messages: List[str] = []
+
         with st.spinner("Saving candidates to Recruiter Workspace..."):
             for candidate in candidates:
-                saved, message = save_candidate_to_database(candidate, job_description)
+                saved, message = save_candidate_to_database(
+                    candidate,
+                    job_description,
+                )
                 messages.append(message)
                 if saved:
                     saved_count += 1
+                elif "already" in message.casefold():
+                    duplicate_count += 1
 
         if saved_count:
-            st.success(f"Saved {saved_count} of {len(candidates)} candidate(s) to Candidate Database.")
-        if saved_count < len(candidates):
+            st.success(
+                f"Saved {saved_count} of {len(candidates)} candidate(s) "
+                "to Candidate Database."
+            )
+        elif duplicate_count == len(candidates) and candidates:
+            st.info("All ranked candidates are already available in Candidate Database.")
+
+        if saved_count + duplicate_count < len(candidates):
             with st.expander("Save details"):
                 for message in messages:
                     st.write(f"• {message}")
@@ -614,36 +728,47 @@ def render_results(result: Dict[str, Any]) -> None:
         st.session_state["recruiter_csv_report"] = build_csv_report(result)
 
     if "recruiter_txt_report" not in st.session_state:
-        st.session_state["recruiter_txt_report"] = build_text_report(result, job_description)
+        st.session_state["recruiter_txt_report"] = build_text_report(
+            result,
+            job_description,
+        )
 
-    st.markdown("---")
-    st.markdown('<div class="tm-section-title">Download Reports</div>', unsafe_allow_html=True)
+    if "recruiter_pdf_report" not in st.session_state:
+        with st.spinner("Preparing PDF report..."):
+            st.session_state["recruiter_pdf_report"] = create_pdf_report(
+                result,
+                job_description,
+            )
+
+    st.divider()
+    render_report_panel(
+        title="Recruiter report center",
+        description=(
+            "Export the ranked shortlist as CSV and download complete TXT or PDF "
+            "reports with recruiter summary, candidate evidence, recommendations, "
+            "and Job Description context."
+        ),
+        icon="📥",
+    )
 
     col_csv, col_txt, col_pdf = st.columns(3)
-
     with col_csv:
         st.download_button(
-            "📊 Export Ranking (.csv)",
+            "📊 Export Candidate Ranking (.csv)",
             data=st.session_state["recruiter_csv_report"].encode("utf-8"),
             file_name="talentmatch_candidate_ranking.csv",
             mime="text/csv",
             use_container_width=True,
         )
-
     with col_txt:
         st.download_button(
-            "📥 Export Recruiter Report (.txt)",
+            "⬇️ Export Recruiter Report (.txt)",
             data=st.session_state["recruiter_txt_report"].encode("utf-8"),
             file_name="talentmatch_recruiter_mode_report.txt",
             mime="text/plain",
             use_container_width=True,
         )
-
     with col_pdf:
-        if "recruiter_pdf_report" not in st.session_state:
-            with st.spinner("Preparing PDF report..."):
-                st.session_state["recruiter_pdf_report"] = create_pdf_report(result, job_description)
-
         pdf_bytes = st.session_state.get("recruiter_pdf_report")
         if pdf_bytes:
             st.download_button(
@@ -653,17 +778,27 @@ def render_results(result: Dict[str, Any]) -> None:
                 mime="application/pdf",
                 use_container_width=True,
             )
+        else:
+            st.button(
+                "📄 PDF report unavailable",
+                disabled=True,
+                use_container_width=True,
+            )
 
 
-render_hero(
-    "Recruiter Workspace",
-    "Recruiter Mode",
-    "Rank candidates, review recruiter intelligence and save selected profiles to Candidate Database.",
-    "🏆",
+render_page_intro(
+    kicker="RECRUITER INTELLIGENCE",
+    title="Recruiter Mode",
+    subtitle=(
+        "Rank multiple candidates against one role, compare semantic and keyword "
+        "signals, review recruiter evidence, and save qualified profiles to Candidate Database."
+    ),
+    icon="🏆",
+    badge="PRO WORKSPACE",
 )
 
 if not is_logged_in():
-    st.warning("Please login before using Recruiter Mode.")
+    st.warning("Please log in before using Recruiter Mode.")
     st.page_link("pages/login.py", label="🔐 Go to Login")
     st.stop()
 
@@ -672,16 +807,33 @@ if not is_pro_user():
     st.page_link("pages/pricing.py", label="💳 Upgrade to Pro")
     st.stop()
 
-st.markdown('<div class="tm-section-title">Rank candidates</div>', unsafe_allow_html=True)
+st.markdown("## Rank candidates")
+st.caption(
+    "Upload up to 10 PDF CVs and compare every candidate against the same complete job description."
+)
 
-left, right = st.columns([1, 1.25])
+render_action_panel(
+    eyebrow="RECRUITER WORKFLOW",
+    title="Prepare the shortlist",
+    description=(
+        "Use complete source CVs and the exact target role. TalentMatch Pro will rank "
+        "candidates using combined, semantic, and keyword signals before you save them "
+        "to Candidate Database."
+    ),
+    icon="🚀",
+)
+
+left, right = st.columns([1, 1.15])
 
 with left:
     st.markdown(
         """
         <div class="tm-card">
             <div class="tm-card-title">📚 Candidate CVs</div>
-            <div class="tm-muted">Upload multiple PDF CVs. Maximum allowed: 10 candidates per ranking run.</div>
+            <div class="tm-muted" style="margin-top:.55rem">
+                Upload between 1 and 10 PDF CVs. Every profile is evaluated against
+                the same target role for a consistent comparison.
+            </div>
         </div>
         """,
         unsafe_allow_html=True,
@@ -691,32 +843,53 @@ with left:
         "Upload Candidate CVs (PDF)",
         type=["pdf"],
         accept_multiple_files=True,
+        key="recruiter_candidate_uploads",
     )
 
     if uploaded_files:
         st.success(f"Selected {len(uploaded_files)} candidate file(s).")
         for uploaded_file in uploaded_files[:10]:
-            st.caption(f"• {uploaded_file.name} ({uploaded_file.size / 1024:.1f} KB)")
+            st.caption(
+                f"• {uploaded_file.name} "
+                f"({uploaded_file.size / 1024:.1f} KB)"
+            )
 
 with right:
     st.markdown(
         """
         <div class="tm-card">
             <div class="tm-card-title">🧾 Job description</div>
-            <div class="tm-muted">Paste the target job description once. Every uploaded candidate is ranked against this role.</div>
+            <div class="tm-muted" style="margin-top:.55rem">
+                Paste the complete target role once. All uploaded candidates will
+                be ranked against the same responsibilities, skills, and requirements.
+            </div>
         </div>
         """,
         unsafe_allow_html=True,
     )
 
-    job_description = st.text_area("Job Description", value=DEFAULT_JOB_DESCRIPTION, height=330)
+    job_description = st.text_area(
+        "Job Description",
+        value=DEFAULT_JOB_DESCRIPTION,
+        height=330,
+        key="recruiter_job_description_input",
+    )
 
 file_count = len(uploaded_files or [])
+can_submit = (
+    1 <= file_count <= 10
+    and bool(job_description.strip())
+)
+
 run_clicked = st.button(
     "🚀 Rank Candidates",
+    type="primary",
     use_container_width=True,
-    disabled=file_count == 0 or not job_description.strip(),
+    disabled=not can_submit,
 )
+
+if file_count > 10:
+    st.error("Maximum 10 candidate CVs are allowed per ranking run.")
 
 if run_clicked:
     if not uploaded_files:
@@ -727,20 +900,33 @@ if run_clicked:
         st.error("Maximum 10 candidate CVs are allowed per ranking run.")
         st.stop()
 
-    if not job_description.strip():
+    normalized_job_description = job_description.strip()
+    if not normalized_job_description:
         st.error("Please paste the job description.")
         st.stop()
 
     clear_recruiter_state()
 
     files = [
-        ("files", (uploaded_file.name, uploaded_file.getvalue(), "application/pdf"))
+        (
+            "files",
+            (
+                uploaded_file.name,
+                uploaded_file.getvalue(),
+                "application/pdf",
+            ),
+        )
         for uploaded_file in uploaded_files
     ]
-    data = {"job_description": job_description.strip()}
+    data = {"job_description": normalized_job_description}
 
     with st.spinner("Ranking candidates with AI..."):
-        raw_response = api_post("/recruiter/rank-candidates", data=data, files=files, timeout=240)
+        raw_response = api_post(
+            "/recruiter/rank-candidates",
+            data=data,
+            files=files,
+            timeout=240,
+        )
 
     response, call_error = normalize_response(raw_response)
     if call_error:
@@ -757,8 +943,16 @@ if run_clicked:
         st.stop()
 
     st.session_state["recruiter_result"] = payload
-    st.session_state["recruiter_filenames"] = [uploaded_file.name for uploaded_file in uploaded_files]
-    st.session_state["recruiter_job_description"] = job_description.strip()
+    st.session_state["recruiter_filenames"] = [
+        uploaded_file.name
+        for uploaded_file in uploaded_files
+    ]
+    st.session_state["recruiter_job_description"] = (
+        normalized_job_description
+    )
+    st.session_state.pop("recruiter_csv_report", None)
+    st.session_state.pop("recruiter_txt_report", None)
+    st.session_state.pop("recruiter_pdf_report", None)
 
 result = st.session_state.get("recruiter_result")
 if isinstance(result, dict):
