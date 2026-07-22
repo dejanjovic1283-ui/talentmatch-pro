@@ -54,6 +54,30 @@ Requirements:
 BACKEND_URL = os.getenv("BACKEND_URL", "https://api.talentmatchcv.com").rstrip("/")
 
 
+def get_positive_int_env(name: str, default: int) -> int:
+    """Return a positive integer environment value or a safe default."""
+    raw_value = os.getenv(name)
+    if raw_value is None:
+        return default
+
+    try:
+        parsed_value = int(raw_value)
+    except (TypeError, ValueError):
+        return default
+
+    return parsed_value if parsed_value > 0 else default
+
+
+RECRUITER_MAX_CANDIDATES = get_positive_int_env(
+    "RECRUITER_MAX_CANDIDATES",
+    100,
+)
+RECRUITER_REQUEST_TIMEOUT_SECONDS = get_positive_int_env(
+    "RECRUITER_REQUEST_TIMEOUT_SECONDS",
+    900,
+)
+
+
 def get_auth_headers() -> Dict[str, str]:
     token = (
         st.session_state.get("id_token")
@@ -809,7 +833,7 @@ if not is_pro_user():
 
 st.markdown("## Rank candidates")
 st.caption(
-    "Upload up to 10 PDF CVs and compare every candidate against the same complete job description."
+    f"Upload up to {RECRUITER_MAX_CANDIDATES} PDF CVs and compare every candidate against the same complete job description."
 )
 
 render_action_panel(
@@ -827,12 +851,12 @@ left, right = st.columns([1, 1.15])
 
 with left:
     st.markdown(
-        """
+        f"""
         <div class="tm-card">
             <div class="tm-card-title">📚 Candidate CVs</div>
             <div class="tm-muted" style="margin-top:.55rem">
-                Upload between 1 and 10 PDF CVs. Every profile is evaluated against
-                the same target role for a consistent comparison.
+                Upload between 1 and {RECRUITER_MAX_CANDIDATES} PDF CVs. Every profile is
+                evaluated against the same target role for a consistent comparison.
             </div>
         </div>
         """,
@@ -847,12 +871,19 @@ with left:
     )
 
     if uploaded_files:
-        st.success(f"Selected {len(uploaded_files)} candidate file(s).")
-        for uploaded_file in uploaded_files[:10]:
-            st.caption(
-                f"• {uploaded_file.name} "
-                f"({uploaded_file.size / 1024:.1f} KB)"
-            )
+        selected_count = len(uploaded_files)
+        st.success(
+            f"Selected {selected_count} / {RECRUITER_MAX_CANDIDATES} candidate file(s)."
+        )
+        with st.expander(
+            f"📚 Review selected files ({selected_count})",
+            expanded=selected_count <= 10,
+        ):
+            for uploaded_file in uploaded_files:
+                st.caption(
+                    f"• {uploaded_file.name} "
+                    f"({uploaded_file.size / 1024:.1f} KB)"
+                )
 
 with right:
     st.markdown(
@@ -877,7 +908,7 @@ with right:
 
 file_count = len(uploaded_files or [])
 can_submit = (
-    1 <= file_count <= 10
+    1 <= file_count <= RECRUITER_MAX_CANDIDATES
     and bool(job_description.strip())
 )
 
@@ -888,16 +919,22 @@ run_clicked = st.button(
     disabled=not can_submit,
 )
 
-if file_count > 10:
-    st.error("Maximum 10 candidate CVs are allowed per ranking run.")
+if file_count > RECRUITER_MAX_CANDIDATES:
+    st.error(
+        f"Maximum {RECRUITER_MAX_CANDIDATES} candidate CVs are allowed "
+        "per ranking run."
+    )
 
 if run_clicked:
     if not uploaded_files:
         st.error("Please upload at least one candidate CV.")
         st.stop()
 
-    if len(uploaded_files) > 10:
-        st.error("Maximum 10 candidate CVs are allowed per ranking run.")
+    if len(uploaded_files) > RECRUITER_MAX_CANDIDATES:
+        st.error(
+            f"Maximum {RECRUITER_MAX_CANDIDATES} candidate CVs are allowed "
+            "per ranking run."
+        )
         st.stop()
 
     normalized_job_description = job_description.strip()
@@ -920,28 +957,61 @@ if run_clicked:
     ]
     data = {"job_description": normalized_job_description}
 
-    with st.spinner("Ranking candidates with AI..."):
-        raw_response = api_post(
-            "/recruiter/rank-candidates",
-            data=data,
-            files=files,
-            timeout=240,
+    progress = st.progress(
+        10,
+        text=(
+            f"Preparing {file_count} candidate CV(s) for secure upload..."
+        ),
+    )
+    status_box = st.empty()
+
+    try:
+        progress.progress(
+            35,
+            text=(
+                f"Uploading {file_count} candidate CV(s) to Recruiter Mode..."
+            ),
         )
+        status_box.info(
+            "The ranking request is running. Large batches can take several minutes."
+        )
+
+        with st.spinner("Ranking candidates with AI..."):
+            raw_response = api_post(
+                "/recruiter/rank-candidates",
+                data=data,
+                files=files,
+                timeout=RECRUITER_REQUEST_TIMEOUT_SECONDS,
+            )
+
+        progress.progress(
+            85,
+            text="Validating recruiter ranking results...",
+        )
+    finally:
+        status_box.empty()
 
     response, call_error = normalize_response(raw_response)
     if call_error:
+        progress.empty()
         st.error(f"Recruiter Mode failed: {call_error}")
         st.stop()
 
     payload, parse_error = response_to_json(response)
     if parse_error:
+        progress.empty()
         st.error(parse_error)
         st.stop()
 
     if not payload:
+        progress.empty()
         st.error("Recruiter Mode failed: empty backend response.")
         st.stop()
 
+    progress.progress(
+        100,
+        text=f"Ranking completed for {file_count} candidate CV(s).",
+    )
     st.session_state["recruiter_result"] = payload
     st.session_state["recruiter_filenames"] = [
         uploaded_file.name
@@ -953,6 +1023,7 @@ if run_clicked:
     st.session_state.pop("recruiter_csv_report", None)
     st.session_state.pop("recruiter_txt_report", None)
     st.session_state.pop("recruiter_pdf_report", None)
+    progress.empty()
 
 result = st.session_state.get("recruiter_result")
 if isinstance(result, dict):
