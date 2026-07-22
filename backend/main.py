@@ -2534,8 +2534,19 @@ async def recruiter_rank_candidates(
     if not files:
         raise HTTPException(status_code=400, detail="Please upload at least one CV.")
 
-    if len(files) > 10:
-        raise HTTPException(status_code=400, detail="Maximum 10 CV files allowed per ranking run.")
+    recruiter_max_candidates = get_positive_int_env(
+        "RECRUITER_MAX_CANDIDATES",
+        100,
+    )
+
+    if len(files) > recruiter_max_candidates:
+        raise HTTPException(
+            status_code=400,
+            detail=(
+                f"Maximum {recruiter_max_candidates} CV files allowed "
+                "per ranking run."
+            ),
+        )
 
     candidates = []
     first_pdf_bytes = None
