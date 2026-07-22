@@ -125,3 +125,24 @@ class BillingCheckoutResponse(APIResponseModel):
     """PayPal checkout URL payload."""
 
     checkout_url: AnyHttpUrl
+
+
+class RecruiterJobCreateResponse(APIResponseModel):
+    """Acknowledgement returned when a recruiter batch job is queued."""
+
+    job_id: Annotated[str, Field(min_length=36, max_length=36)]
+    status: Annotated[str, Field(min_length=1, max_length=32)]
+    progress: Annotated[int, Field(ge=0, le=100)] = 0
+    total_candidates: Annotated[int, Field(ge=1, le=100)]
+    processed_candidates: Annotated[int, Field(ge=0)] = 0
+
+
+class RecruiterJobStatusResponse(RecruiterJobCreateResponse):
+    """Current state and optional result of a recruiter batch job."""
+
+    result: dict | None = None
+    error_message: str | None = None
+    created_at: datetime
+    started_at: datetime | None = None
+    completed_at: datetime | None = None
+    updated_at: datetime

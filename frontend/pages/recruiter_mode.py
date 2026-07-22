@@ -502,6 +502,8 @@ def clear_recruiter_state() -> None:
         "recruiter_csv_report",
         "recruiter_txt_report",
         "recruiter_pdf_report",
+        "recruiter_active_job_id",
+        "recruiter_job_status",
     ]:
         st.session_state.pop(key, None)
 
@@ -943,87 +945,88 @@ if run_clicked:
         st.stop()
 
     clear_recruiter_state()
-
     files = [
         (
             "files",
-            (
-                uploaded_file.name,
-                uploaded_file.getvalue(),
-                "application/pdf",
-            ),
+            (uploaded_file.name, uploaded_file.getvalue(), "application/pdf"),
         )
         for uploaded_file in uploaded_files
     ]
     data = {"job_description": normalized_job_description}
 
-    progress = st.progress(
-        10,
-        text=(
-            f"Preparing {file_count} candidate CV(s) for secure upload..."
-        ),
-    )
-    status_box = st.empty()
-
-    try:
-        progress.progress(
-            35,
-            text=(
-                f"Uploading {file_count} candidate CV(s) to Recruiter Mode..."
-            ),
+    with st.spinner("Securely queuing recruiter batch..."):
+        raw_response = api_post(
+            "/recruiter/jobs",
+            data=data,
+            files=files,
+            timeout=RECRUITER_REQUEST_TIMEOUT_SECONDS,
         )
-        status_box.info(
-            "The ranking request is running. Large batches can take several minutes."
-        )
-
-        with st.spinner("Ranking candidates with AI..."):
-            raw_response = api_post(
-                "/recruiter/rank-candidates",
-                data=data,
-                files=files,
-                timeout=RECRUITER_REQUEST_TIMEOUT_SECONDS,
-            )
-
-        progress.progress(
-            85,
-            text="Validating recruiter ranking results...",
-        )
-    finally:
-        status_box.empty()
 
     response, call_error = normalize_response(raw_response)
     if call_error:
-        progress.empty()
         st.error(f"Recruiter Mode failed: {call_error}")
         st.stop()
 
     payload, parse_error = response_to_json(response)
     if parse_error:
-        progress.empty()
         st.error(parse_error)
         st.stop()
-
-    if not payload:
-        progress.empty()
-        st.error("Recruiter Mode failed: empty backend response.")
+    if not payload or not payload.get("job_id"):
+        st.error("Recruiter Mode failed: backend did not return a job ID.")
         st.stop()
 
-    progress.progress(
-        100,
-        text=f"Ranking completed for {file_count} candidate CV(s).",
-    )
-    st.session_state["recruiter_result"] = payload
-    st.session_state["recruiter_filenames"] = [
-        uploaded_file.name
-        for uploaded_file in uploaded_files
-    ]
-    st.session_state["recruiter_job_description"] = (
-        normalized_job_description
-    )
-    st.session_state.pop("recruiter_csv_report", None)
-    st.session_state.pop("recruiter_txt_report", None)
-    st.session_state.pop("recruiter_pdf_report", None)
-    progress.empty()
+    st.session_state["recruiter_active_job_id"] = str(payload["job_id"])
+    st.session_state["recruiter_job_status"] = payload
+    st.session_state["recruiter_filenames"] = [f.name for f in uploaded_files]
+    st.session_state["recruiter_job_description"] = normalized_job_description
+    st.success("Recruiter batch queued. Processing continues safely in the background.")
+    st.rerun()
+
+active_job_id = st.session_state.get("recruiter_active_job_id")
+if active_job_id:
+    st.divider()
+    st.markdown("## Batch processing status")
+    try:
+        job_response = requests.get(
+            f"{BACKEND_URL}/recruiter/jobs/{active_job_id}",
+            headers=get_auth_headers(),
+            timeout=60,
+        )
+    except requests.RequestException as exc:
+        st.warning(f"Could not refresh recruiter job status: {exc}")
+    else:
+        job_payload, job_error = response_to_json(job_response)
+        if job_error:
+            st.warning(job_error)
+        elif job_payload:
+            st.session_state["recruiter_job_status"] = job_payload
+            status = str(job_payload.get("status") or "queued")
+            progress_value = max(0, min(100, int(job_payload.get("progress") or 0)))
+            processed = int(job_payload.get("processed_candidates") or 0)
+            total = int(job_payload.get("total_candidates") or 0)
+            st.progress(
+                progress_value,
+                text=f"{status.title()} · {processed}/{total} candidates · {progress_value}%",
+            )
+
+            if status == "completed" and isinstance(job_payload.get("result"), dict):
+                st.session_state["recruiter_result"] = job_payload["result"]
+                st.session_state.pop("recruiter_active_job_id", None)
+                st.session_state.pop("recruiter_csv_report", None)
+                st.session_state.pop("recruiter_txt_report", None)
+                st.session_state.pop("recruiter_pdf_report", None)
+                st.success(f"Ranking completed for {total} candidate CV(s).")
+                st.rerun()
+            elif status == "failed":
+                st.session_state.pop("recruiter_active_job_id", None)
+                st.error(job_payload.get("error_message") or "Recruiter batch failed.")
+            else:
+                st.caption(
+                    "You may leave this page and return later. The job state is stored in the database."
+                )
+                import time as _time
+                _time.sleep(2)
+                st.rerun()
 
 result = st.session_state.get("recruiter_result")
 if isinstance(result, dict):

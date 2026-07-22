@@ -13,6 +13,7 @@ DEFAULT_PLAN: Final[str] = "free"
 DEFAULT_ANALYSIS_TYPE: Final[str] = "cv_analysis"
 DEFAULT_CANDIDATE_STATUS: Final[str] = "new"
 DEFAULT_CANDIDATE_SOURCE: Final[str] = "recruiter_mode"
+DEFAULT_RECRUITER_JOB_STATUS: Final[str] = "queued"
 EMPTY_JSON_LIST: Final[str] = "[]"
 
 
@@ -74,6 +75,11 @@ class User(Base):
     )
     recruiter_candidates: Mapped[list["RecruiterCandidate"]] = relationship(
         "RecruiterCandidate",
+        back_populates="user",
+        cascade="all, delete-orphan",
+    )
+    recruiter_jobs: Mapped[list["RecruiterJob"]] = relationship(
+        "RecruiterJob",
         back_populates="user",
         cascade="all, delete-orphan",
     )
@@ -313,4 +319,58 @@ class RecruiterCandidate(Base):
             f"RecruiterCandidate(id={self.id!r}, user_id={self.user_id!r}, "
             f"status={self.status!r}, score={self.score!r}, "
             f"favorite={self.favorite!r})"
+        )
+
+
+class RecruiterJob(Base):
+    """Persist a resumable Recruiter Mode batch job and its progress."""
+
+    __tablename__ = "recruiter_jobs"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    job_id: Mapped[str] = mapped_column(
+        String(36), unique=True, index=True, nullable=False
+    )
+    user_id: Mapped[int] = mapped_column(
+        ForeignKey("users.id"), index=True, nullable=False
+    )
+    status: Mapped[str] = mapped_column(
+        String(32),
+        default=DEFAULT_RECRUITER_JOB_STATUS,
+        server_default=text("'queued'"),
+        index=True,
+        nullable=False,
+    )
+    progress: Mapped[int] = mapped_column(
+        Integer, default=0, server_default=text("0"), nullable=False
+    )
+    total_candidates: Mapped[int] = mapped_column(
+        Integer, default=0, server_default=text("0"), nullable=False
+    )
+    processed_candidates: Mapped[int] = mapped_column(
+        Integer, default=0, server_default=text("0"), nullable=False
+    )
+    job_description: Mapped[str] = mapped_column(Text, nullable=False)
+    input_payload: Mapped[str] = mapped_column(Text, nullable=False)
+    result_payload: Mapped[str | None] = mapped_column(Text, nullable=True)
+    error_message: Mapped[str | None] = mapped_column(Text, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=utc_now, index=True, nullable=False
+    )
+    started_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    completed_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=utc_now, onupdate=utc_now, nullable=False
+    )
+
+    user: Mapped["User"] = relationship("User", back_populates="recruiter_jobs")
+
+    def __repr__(self) -> str:
+        return (
+            f"RecruiterJob(job_id={self.job_id!r}, user_id={self.user_id!r}, "
+            f"status={self.status!r}, progress={self.progress!r})"
         )

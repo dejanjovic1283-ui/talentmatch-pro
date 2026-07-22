@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from collections.abc import Callable
 from typing import Any
 
 from semantic_service import analyze_semantic_match
@@ -21,6 +22,7 @@ def candidate_verdict(score: int) -> str:
 def rank_candidates(
     candidates: list[dict[str, str]],
     job_description: str,
+    progress_callback: Callable[[int, int], None] | None = None,
 ) -> dict[str, Any]:
     """
     candidates format:
@@ -34,7 +36,9 @@ def rank_candidates(
 
     ranked: list[dict[str, Any]] = []
 
-    for candidate in candidates:
+    total_candidates = len(candidates)
+
+    for processed_count, candidate in enumerate(candidates, start=1):
         filename = candidate.get("filename", "candidate.pdf")
         cv_text = candidate.get("cv_text", "")
 
@@ -58,6 +62,8 @@ def rank_candidates(
                     "missing_keywords": [],
                 }
             )
+            if progress_callback is not None:
+                progress_callback(processed_count, total_candidates)
             continue
 
         analysis = analyze_semantic_match(
@@ -84,6 +90,9 @@ def rank_candidates(
                 "missing_keywords": analysis.get("missing_keywords", []),
             }
         )
+
+        if progress_callback is not None:
+            progress_callback(processed_count, total_candidates)
 
     ranked.sort(
         key=lambda item: int(item.get("combined_score", 0) or 0),
