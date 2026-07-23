@@ -1157,13 +1157,27 @@ def process_recruiter_job(job_id: str) -> None:
             pdf_bytes=first_pdf_bytes,
             job_description=job.job_description,
             score=top_score,
-            summary=result.get(
-                "summary",
+            summary=first_nonempty_text(
+                top_candidate.get("summary"),
+                result.get("summary"),
                 f"Recruiter ranking completed for {len(candidates)} candidate(s). Top candidate: {top_filename}.",
             ),
-            matched_skills=top_candidate.get("matched_skills", top_candidate.get("strengths", [])),
-            missing_skills=top_candidate.get("missing_skills", top_candidate.get("weaknesses", [])),
-            recommendations=result.get("recommendations", top_candidate.get("recommendations", [])),
+            matched_skills=first_nonempty_history_list(
+                top_candidate.get("matched_skills"),
+                top_candidate.get("strengths"),
+                result.get("matched_skills"),
+                result.get("strengths"),
+            ),
+            missing_skills=first_nonempty_history_list(
+                top_candidate.get("missing_skills"),
+                top_candidate.get("weaknesses"),
+                result.get("missing_skills"),
+                result.get("weaknesses"),
+            ),
+            recommendations=first_nonempty_history_list(
+                top_candidate.get("recommendations"),
+                result.get("recommendations"),
+            ),
         )
 
         completed_job = (
@@ -1798,6 +1812,29 @@ def normalize_history_list(value: object, *, maximum_items: int = 50) -> list[st
             break
 
     return normalized
+
+
+def first_nonempty_history_list(*values: object) -> list[str]:
+    """Return the first candidate value that normalizes to a non-empty list."""
+    for value in values:
+        normalized = normalize_history_list(value)
+        if normalized:
+            return normalized
+    return []
+
+
+def first_nonempty_text(*values: object, maximum_length: int = 12000) -> str:
+    """Return the first non-empty normalized text value."""
+    for value in values:
+        normalized = re.sub(r"\s+", " ", str(value or "")).strip()
+        if normalized:
+            return normalized[:maximum_length]
+    return ""
+
+
+def parse_stored_history_list(value: object) -> list[str]:
+    """Safely decode current and legacy history list storage formats."""
+    return normalize_history_list(value)
 
 
 def create_analysis_history_record(
@@ -2837,10 +2874,27 @@ async def recruiter_rank_candidates_legacy(
         db, current_user, analysis_type="recruiter_mode",
         cv_filename=top_filename, pdf_bytes=first_pdf_bytes,
         job_description=job_description, score=top_candidate.get("score", result.get("score", 0)),
-        summary=result.get("summary", "Recruiter ranking completed."),
-        matched_skills=top_candidate.get("matched_skills", top_candidate.get("strengths", [])),
-        missing_skills=top_candidate.get("missing_skills", top_candidate.get("weaknesses", [])),
-        recommendations=result.get("recommendations", top_candidate.get("recommendations", [])),
+        summary=first_nonempty_text(
+            top_candidate.get("summary"),
+            result.get("summary"),
+            "Recruiter ranking completed.",
+        ),
+        matched_skills=first_nonempty_history_list(
+            top_candidate.get("matched_skills"),
+            top_candidate.get("strengths"),
+            result.get("matched_skills"),
+            result.get("strengths"),
+        ),
+        missing_skills=first_nonempty_history_list(
+            top_candidate.get("missing_skills"),
+            top_candidate.get("weaknesses"),
+            result.get("missing_skills"),
+            result.get("weaknesses"),
+        ),
+        recommendations=first_nonempty_history_list(
+            top_candidate.get("recommendations"),
+            result.get("recommendations"),
+        ),
     )
     return result
 
@@ -2955,9 +3009,9 @@ def get_history(
             "job_description": record.job_description,
             "score": record.score,
             "summary": record.summary,
-            "matched_skills": json.loads(record.matched_skills or "[]"),
-            "missing_skills": json.loads(record.missing_skills or "[]"),
-            "recommendations": json.loads(record.recommendations or "[]"),
+            "matched_skills": parse_stored_history_list(record.matched_skills),
+            "missing_skills": parse_stored_history_list(record.missing_skills),
+            "recommendations": parse_stored_history_list(record.recommendations),
             "created_at": record.created_at,
         }
         for record in records

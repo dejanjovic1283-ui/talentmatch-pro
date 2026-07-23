@@ -86,6 +86,7 @@ class HistoryItemResponse(APIResponseModel):
     """History item returned to the frontend."""
 
     id: Identifier
+    analysis_type: Annotated[str, Field(min_length=1, max_length=50)] = "cv_analysis"
     cv_filename: ShortText | None = None
     cv_storage_path: Annotated[str, Field(max_length=500)] | None = None
     job_description: NonEmptyText

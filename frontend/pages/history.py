@@ -114,6 +114,14 @@ def safe_list(value: Any) -> list[str]:
     if value is None:
         return []
 
+    if isinstance(value, dict):
+        for key in ("items", "values", "data", "results"):
+            nested = value.get(key)
+            normalized = safe_list(nested)
+            if normalized:
+                return normalized
+        return []
+
     if isinstance(value, list):
         return [clean_export_text(item).strip() for item in value if clean_export_text(item).strip()]
 
@@ -341,6 +349,22 @@ def get_created_at(item: dict[str, Any]) -> str:
 
 
 
+def first_nonempty_item_list(item: dict[str, Any], *keys: str) -> list[str]:
+    """Resolve the first non-empty list from flat or nested report payloads."""
+    sources: list[dict[str, Any]] = [item]
+    for container_key in ("result", "results", "report", "analysis_result", "data", "payload", "details"):
+        nested = item.get(container_key)
+        if isinstance(nested, dict):
+            sources.append(nested)
+
+    for source in sources:
+        for key in keys:
+            normalized = safe_list(source.get(key))
+            if normalized:
+                return normalized
+    return []
+
+
 def report_section_data(item: dict[str, Any]) -> tuple[str, list[str], str, list[str]]:
     """Return report-type-aware labels and normalized positive/negative sections."""
     analysis_type = normalize_type(item)
@@ -348,39 +372,31 @@ def report_section_data(item: dict[str, Any]) -> tuple[str, list[str], str, list
     if analysis_type == "semantic_match":
         positive_label = "Matched Themes"
         negative_label = "Missing Themes"
-        positive = safe_list(
-            item.get("matched_themes")
-            or item.get("matched_skills")
-            or item.get("strengths")
+        positive = first_nonempty_item_list(
+            item, "matched_themes", "matched_skills", "strengths"
         )
-        negative = safe_list(
-            item.get("missing_themes")
-            or item.get("missing_skills")
-            or item.get("weaknesses")
+        negative = first_nonempty_item_list(
+            item, "missing_themes", "missing_skills", "weaknesses"
         )
     elif analysis_type in {"ats_checker", "ats"}:
         positive_label = "Matched Keywords"
         negative_label = "Missing Keywords"
-        positive = safe_list(
-            item.get("matched_keywords")
-            or item.get("matched_skills")
-            or item.get("strengths")
+        positive = first_nonempty_item_list(
+            item, "matched_keywords", "matched_skills", "strengths"
         )
-        negative = safe_list(
-            item.get("missing_keywords")
-            or item.get("missing_skills")
-            or item.get("weaknesses")
+        negative = first_nonempty_item_list(
+            item, "missing_keywords", "missing_skills", "weaknesses"
         )
     elif analysis_type == "recruiter_mode":
         positive_label = "Top Candidate Strengths"
         negative_label = "Top Candidate Gaps"
-        positive = safe_list(item.get("matched_skills") or item.get("strengths"))
-        negative = safe_list(item.get("missing_skills") or item.get("weaknesses"))
+        positive = first_nonempty_item_list(item, "matched_skills", "strengths")
+        negative = first_nonempty_item_list(item, "missing_skills", "weaknesses")
     else:
         positive_label = "Strengths"
         negative_label = "Weaknesses / Gaps"
-        positive = safe_list(item.get("strengths") or item.get("matched_skills"))
-        negative = safe_list(item.get("weaknesses") or item.get("missing_skills"))
+        positive = first_nonempty_item_list(item, "strengths", "matched_skills")
+        negative = first_nonempty_item_list(item, "weaknesses", "missing_skills")
 
     return positive_label, positive, negative_label, negative
 
@@ -515,7 +531,7 @@ def build_text_report(item: dict[str, Any], index: int | None = None) -> str:
     score = get_report_score(item)
     summary = clean_export_text(item.get("summary") or item.get("analysis") or "")
     positive_label, positive_values, negative_label, negative_values = report_section_data(item)
-    recommendations = safe_list(item.get("recommendations"))
+    recommendations = first_nonempty_item_list(item, "recommendations")
     job_description = clean_export_text(
         item.get("job_description")
         or item.get("job")
@@ -770,7 +786,7 @@ def build_pdf_report(items: list[dict[str, Any]], title: str = "TalentMatch Pro 
 
         summary = clean_export_text(item.get("summary") or item.get("analysis") or "")
         positive_label, strengths, negative_label, weaknesses = report_section_data(item)
-        recommendations = safe_list(item.get("recommendations"))
+        recommendations = first_nonempty_item_list(item, "recommendations")
         job_description = clean_export_text(item.get("job_description") or item.get("job") or item.get("description") or "")
 
         story.append(Paragraph(f"{idx}. {safe_html(cv_file)}", section_style))
@@ -1100,7 +1116,7 @@ for idx, item in enumerate(items, start=1):
     created_at = clean_export_text(get_created_at(item))
 
     positive_label, strengths, negative_label, missing = report_section_data(item)
-    recommendations = safe_list(item.get("recommendations"))
+    recommendations = first_nonempty_item_list(item, "recommendations")
     summary = clean_export_text(item.get("summary") or item.get("analysis") or "")
 
     report_text = build_text_report(item)
