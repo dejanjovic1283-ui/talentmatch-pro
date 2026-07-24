@@ -70,7 +70,7 @@ def get_positive_int_env(name: str, default: int) -> int:
 
 RECRUITER_MAX_CANDIDATES = get_positive_int_env(
     "RECRUITER_MAX_CANDIDATES",
-    100,
+    1000,
 )
 RECRUITER_REQUEST_TIMEOUT_SECONDS = get_positive_int_env(
     "RECRUITER_REQUEST_TIMEOUT_SECONDS",

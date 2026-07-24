@@ -134,7 +134,7 @@ class RecruiterJobCreateResponse(APIResponseModel):
     job_id: Annotated[str, Field(min_length=36, max_length=36)]
     status: Annotated[str, Field(min_length=1, max_length=32)]
     progress: Annotated[int, Field(ge=0, le=100)] = 0
-    total_candidates: Annotated[int, Field(ge=1, le=100)]
+    total_candidates: Annotated[int, Field(ge=1, le=1000)]
     processed_candidates: Annotated[int, Field(ge=0)] = 0
 
 

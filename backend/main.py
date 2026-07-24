@@ -141,7 +141,13 @@ from db import (
     get_db,
     SessionLocal,
 )
-from models import AnalysisRecord, RecruiterCandidate, RecruiterJob, User
+from models import (
+    AnalysisRecord,
+    RecruiterCandidate,
+    RecruiterJob,
+    RecruiterJobCandidate,
+    User,
+)
 from observability import METRICS
 from openai_service import (
     AIServiceError,
@@ -151,7 +157,7 @@ from openai_service import (
 )
 from pdf_report import build_analysis_pdf_report
 from pdf_utils import extract_text_from_pdf
-from recruiter_service import rank_candidates
+from recruiter_service import analyze_candidate, build_ranking_result, rank_candidates
 from schemas import (
     AnalysisResponse,
     HistoryItemResponse,
@@ -239,6 +245,27 @@ def run_lightweight_migrations() -> None:
         "CREATE INDEX IF NOT EXISTS ix_recruiter_jobs_job_id ON recruiter_jobs (job_id)",
         "CREATE INDEX IF NOT EXISTS ix_recruiter_jobs_status ON recruiter_jobs (status)",
         "CREATE INDEX IF NOT EXISTS ix_recruiter_jobs_created_at ON recruiter_jobs (created_at)",
+        """
+        CREATE TABLE IF NOT EXISTS recruiter_job_candidates (
+            id INTEGER PRIMARY KEY,
+            job_id VARCHAR(36) NOT NULL,
+            position INTEGER NOT NULL,
+            filename VARCHAR(255) NOT NULL,
+            cv_text TEXT NOT NULL,
+            status VARCHAR(32) DEFAULT 'pending',
+            result_payload TEXT,
+            error_message TEXT,
+            attempts INTEGER DEFAULT 0,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            started_at TIMESTAMP,
+            completed_at TIMESTAMP,
+            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY(job_id) REFERENCES recruiter_jobs(job_id) ON DELETE CASCADE
+        )
+        """,
+        "CREATE INDEX IF NOT EXISTS ix_recruiter_job_candidates_job_id ON recruiter_job_candidates (job_id)",
+        "CREATE INDEX IF NOT EXISTS ix_recruiter_job_candidates_status ON recruiter_job_candidates (status)",
+        "CREATE UNIQUE INDEX IF NOT EXISTS ux_recruiter_job_candidates_job_position ON recruiter_job_candidates (job_id, position)",
     ]
 
     for migration in migrations:
@@ -1098,136 +1125,202 @@ def recruiter_job_to_dict(job: RecruiterJob, *, include_result: bool = True) -> 
 
 
 def process_recruiter_job(job_id: str) -> None:
-    db = SessionLocal()
+    """Process a durable recruiter batch with per-candidate checkpoints."""
+    setup_db = SessionLocal()
     try:
-        job = db.query(RecruiterJob).filter(RecruiterJob.job_id == job_id).first()
+        job = setup_db.query(RecruiterJob).filter(RecruiterJob.job_id == job_id).first()
         if job is None or job.status == "completed":
             return
-
-        active_job = job
-        processing_started_at = datetime.now(timezone.utc)
-
-        active_job.status = "processing"
-        active_job.started_at = active_job.started_at or processing_started_at
-        active_job.error_message = None
-        active_job.updated_at = processing_started_at
-        db.commit()
-
-        payload = json.loads(active_job.input_payload)
-        candidates = payload.get("candidates") or []
-        first_pdf_base64 = payload.get("first_pdf_base64")
+        started_at = datetime.now(timezone.utc)
+        job.status = "processing"
+        job.started_at = job.started_at or started_at
+        job.error_message = None
+        job.updated_at = started_at
+        setup_db.commit()
+        owner_id = job.user_id
+        job_description = job.job_description
+        total_candidates = int(job.total_candidates or 0)
+        metadata = json.loads(job.input_payload or "{}")
+        first_filename = str(metadata.get("first_filename") or "candidate.pdf")
+        first_pdf_base64 = metadata.get("first_pdf_base64")
         first_pdf_bytes = (
             base64.b64decode(first_pdf_base64)
             if isinstance(first_pdf_base64, str) and first_pdf_base64
             else None
         )
+    finally:
+        setup_db.close()
 
-        if not isinstance(candidates, list) or not candidates:
-            raise ValueError("Recruiter job contains no candidates.")
-
-        def update_progress(processed: int, total: int) -> None:
-            active_job.processed_candidates = processed
-            active_job.total_candidates = total
-            active_job.progress = min(
-                99,
-                max(1, round((processed / max(total, 1)) * 95)),
+    candidate_ids_db = SessionLocal()
+    try:
+        candidate_ids = [
+            row.id
+            for row in (
+                candidate_ids_db.query(RecruiterJobCandidate)
+                .filter(
+                    RecruiterJobCandidate.job_id == job_id,
+                    RecruiterJobCandidate.status.in_(["pending", "processing", "failed"]),
+                )
+                .order_by(RecruiterJobCandidate.position.asc())
+                .all()
             )
-            active_job.updated_at = datetime.now(timezone.utc)
-            db.commit()
+        ]
+    finally:
+        candidate_ids_db.close()
 
-        result = rank_candidates(
-            candidates=candidates,
-            job_description=active_job.job_description,
-            progress_callback=update_progress,
+    for candidate_id in candidate_ids:
+        candidate_db = SessionLocal()
+        try:
+            checkpoint = (
+                candidate_db.query(RecruiterJobCandidate)
+                .filter(RecruiterJobCandidate.id == candidate_id)
+                .first()
+            )
+            if checkpoint is None or checkpoint.status == "completed":
+                continue
+            checkpoint.status = "processing"
+            checkpoint.started_at = checkpoint.started_at or datetime.now(timezone.utc)
+            checkpoint.attempts = int(checkpoint.attempts or 0) + 1
+            checkpoint.error_message = None
+            checkpoint.updated_at = datetime.now(timezone.utc)
+            candidate_db.commit()
+
+            result = analyze_candidate(
+                {"filename": checkpoint.filename, "cv_text": checkpoint.cv_text},
+                job_description,
+            )
+            completed_at = datetime.now(timezone.utc)
+            checkpoint.result_payload = json.dumps(result, ensure_ascii=False)
+            checkpoint.status = "completed"
+            checkpoint.error_message = None
+            checkpoint.completed_at = completed_at
+            checkpoint.updated_at = completed_at
+            candidate_db.commit()
+        except Exception as exc:
+            candidate_db.rollback()
+            failed_checkpoint = (
+                candidate_db.query(RecruiterJobCandidate)
+                .filter(RecruiterJobCandidate.id == candidate_id)
+                .first()
+            )
+            if failed_checkpoint is not None:
+                failed_checkpoint.status = "failed"
+                failed_checkpoint.error_message = str(exc)[:1000]
+                failed_checkpoint.updated_at = datetime.now(timezone.utc)
+                candidate_db.commit()
+            logger.exception(
+                "Recruiter candidate checkpoint failed.",
+                extra={"event": "recruiter_candidate_checkpoint_failed", "operation": job_id},
+            )
+        finally:
+            candidate_db.close()
+
+        progress_db = SessionLocal()
+        try:
+            completed_count = (
+                progress_db.query(RecruiterJobCandidate)
+                .filter(
+                    RecruiterJobCandidate.job_id == job_id,
+                    RecruiterJobCandidate.status.in_(["completed", "failed"]),
+                )
+                .count()
+            )
+            progress_job = progress_db.query(RecruiterJob).filter(RecruiterJob.job_id == job_id).first()
+            if progress_job is not None:
+                progress_job.processed_candidates = completed_count
+                progress_job.progress = min(99, max(1, round((completed_count / max(total_candidates, 1)) * 95)))
+                progress_job.updated_at = datetime.now(timezone.utc)
+                progress_db.commit()
+        finally:
+            progress_db.close()
+
+    finalize_db = SessionLocal()
+    try:
+        rows = (
+            finalize_db.query(RecruiterJobCandidate)
+            .filter(RecruiterJobCandidate.job_id == job_id)
+            .order_by(RecruiterJobCandidate.position.asc())
+            .all()
         )
-
-        ranked_candidates = result.get("candidates", result.get("ranked_candidates", []))
-        top_candidate = ranked_candidates[0] if ranked_candidates else {}
-        top_filename = top_candidate.get("filename", payload.get("first_filename", "candidate.pdf"))
-        top_score = top_candidate.get("score", result.get("score", 0))
-        current_user = db.query(User).filter(User.id == job.user_id).first()
+        results: list[dict] = []
+        for row in rows:
+            if row.result_payload:
+                try:
+                    parsed = json.loads(row.result_payload)
+                    if isinstance(parsed, dict):
+                        results.append(parsed)
+                except json.JSONDecodeError:
+                    continue
+        if not results:
+            raise ValueError("Recruiter ranking produced no candidate results.")
+        ranking_result = build_ranking_result(results)
+        top_candidate = ranking_result.get("top_candidate") or {}
+        top_filename = str(top_candidate.get("filename") or first_filename)
+        top_score = top_candidate.get("score", ranking_result.get("score", 0))
+        current_user = finalize_db.query(User).filter(User.id == owner_id).first()
         if current_user is None:
             raise ValueError("Recruiter job owner no longer exists.")
-
         create_analysis_history_record(
-            db,
+            finalize_db,
             current_user,
             analysis_type="recruiter_mode",
             cv_filename=top_filename,
             pdf_bytes=first_pdf_bytes,
-            job_description=job.job_description,
+            job_description=job_description,
             score=top_score,
             summary=first_nonempty_text(
                 top_candidate.get("summary"),
-                result.get("summary"),
-                f"Recruiter ranking completed for {len(candidates)} candidate(s). Top candidate: {top_filename}.",
+                ranking_result.get("summary"),
+                f"Recruiter ranking completed for {len(results)} candidate(s).",
             ),
             matched_skills=first_nonempty_history_list(
                 top_candidate.get("matched_skills"),
+                top_candidate.get("matched_themes"),
                 top_candidate.get("strengths"),
-                result.get("matched_skills"),
-                result.get("strengths"),
             ),
             missing_skills=first_nonempty_history_list(
                 top_candidate.get("missing_skills"),
+                top_candidate.get("missing_themes"),
                 top_candidate.get("weaknesses"),
-                result.get("missing_skills"),
-                result.get("weaknesses"),
             ),
-            recommendations=first_nonempty_history_list(
-                top_candidate.get("recommendations"),
-                result.get("recommendations"),
-            ),
+            recommendations=first_nonempty_history_list(top_candidate.get("recommendations")),
         )
-
-        completed_job = (
-            db.query(RecruiterJob)
-            .filter(RecruiterJob.job_id == job_id)
-            .first()
-        )
+        completed_job = finalize_db.query(RecruiterJob).filter(RecruiterJob.job_id == job_id).first()
         if completed_job is None:
             return
-
+        failed_count = sum(1 for row in rows if row.status == "failed")
         completed_at = datetime.now(timezone.utc)
-        completed_job.status = "completed"
+        completed_job.status = "completed" if results else "failed"
         completed_job.progress = 100
-        completed_job.processed_candidates = completed_job.total_candidates
-        completed_job.result_payload = json.dumps(result, ensure_ascii=False)
+        completed_job.processed_candidates = len(rows)
+        completed_job.result_payload = json.dumps(ranking_result, ensure_ascii=False)
+        completed_job.error_message = (
+            f"{failed_count} candidate(s) could not be analyzed." if failed_count else None
+        )
         completed_job.input_payload = "{}"
         completed_job.completed_at = completed_at
         completed_job.updated_at = completed_at
-        db.commit()
+        finalize_db.commit()
         logger.info(
             "Recruiter batch job completed.",
-            extra={
-                "event": "recruiter_job_completed",
-                "user_id": completed_job.user_id,
-                "operation": job_id,
-            },
+            extra={"event": "recruiter_job_completed", "user_id": owner_id, "operation": job_id},
         )
     except Exception:
-        db.rollback()
-        failed_job = (
-            db.query(RecruiterJob)
-            .filter(RecruiterJob.job_id == job_id)
-            .first()
-        )
+        finalize_db.rollback()
+        failed_job = finalize_db.query(RecruiterJob).filter(RecruiterJob.job_id == job_id).first()
         if failed_job is not None:
             failed_at = datetime.now(timezone.utc)
             failed_job.status = "failed"
-            failed_job.error_message = (
-                "Recruiter ranking could not be completed. Please retry the batch."
-            )
+            failed_job.error_message = "Recruiter ranking could not be completed. Please retry the batch."
             failed_job.completed_at = failed_at
             failed_job.updated_at = failed_at
-            db.commit()
+            finalize_db.commit()
         logger.exception(
             "Recruiter batch job failed.",
             extra={"event": "recruiter_job_failed", "operation": job_id, "retryable": True},
         )
     finally:
-        db.close()
-
+        finalize_db.close()
 
 def submit_recruiter_job(job_id: str) -> None:
     RECRUITER_JOB_EXECUTOR.submit(process_recruiter_job, job_id)
@@ -2760,7 +2853,7 @@ async def create_recruiter_job(
     if not current_user.is_pro:
         raise HTTPException(status_code=403, detail="Recruiter Mode is a Pro feature.")
 
-    recruiter_max_candidates = get_positive_int_env("RECRUITER_MAX_CANDIDATES", 100)
+    recruiter_max_candidates = get_positive_int_env("RECRUITER_MAX_CANDIDATES", 1000)
     if not files:
         raise HTTPException(status_code=400, detail="Please upload at least one CV.")
     if len(files) > recruiter_max_candidates:
@@ -2773,11 +2866,11 @@ async def create_recruiter_job(
     if not normalized_job_description:
         raise HTTPException(status_code=400, detail="Please provide a job description.")
 
-    candidates: list[dict[str, str]] = []
+    extracted_candidates: list[tuple[int, str, str]] = []
     first_pdf_bytes: bytes | None = None
     first_filename = "candidate.pdf"
 
-    for uploaded_file in files:
+    for position, uploaded_file in enumerate(files, start=1):
         pdf_bytes = await uploaded_file.read()
         filename = uploaded_file.filename or "candidate.pdf"
         if first_pdf_bytes is None and pdf_bytes:
@@ -2788,11 +2881,10 @@ async def create_recruiter_job(
         except Exception as exc:
             logger.warning("CV text extraction failed for %s: %s", filename, exc)
             cv_text = ""
-        candidates.append({"filename": filename, "cv_text": cv_text})
+        extracted_candidates.append((position, filename[:255], cv_text))
 
     job_id = str(uuid.uuid4())
     input_payload = {
-        "candidates": candidates,
         "first_filename": first_filename,
         "first_pdf_base64": (
             base64.b64encode(first_pdf_bytes).decode("ascii")
@@ -2805,12 +2897,23 @@ async def create_recruiter_job(
         user_id=current_user.id,
         status="queued",
         progress=0,
-        total_candidates=len(candidates),
+        total_candidates=len(extracted_candidates),
         processed_candidates=0,
         job_description=normalized_job_description[:30000],
         input_payload=json.dumps(input_payload, ensure_ascii=False),
     )
     db.add(job)
+    db.flush()
+    db.add_all([
+        RecruiterJobCandidate(
+            job_id=job_id,
+            position=position,
+            filename=filename,
+            cv_text=cv_text,
+            status="pending",
+        )
+        for position, filename, cv_text in extracted_candidates
+    ])
     db.commit()
     db.refresh(job)
     submit_recruiter_job(job.job_id)

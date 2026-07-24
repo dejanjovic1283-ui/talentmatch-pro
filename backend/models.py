@@ -322,6 +322,41 @@ class RecruiterCandidate(Base):
         )
 
 
+
+
+class RecruiterJobCandidate(Base):
+    """Persist one candidate checkpoint inside a resumable recruiter batch."""
+
+    __tablename__ = "recruiter_job_candidates"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    job_id: Mapped[str] = mapped_column(
+        ForeignKey("recruiter_jobs.job_id", ondelete="CASCADE"),
+        index=True,
+        nullable=False,
+    )
+    position: Mapped[int] = mapped_column(Integer, nullable=False)
+    filename: Mapped[str] = mapped_column(String(255), nullable=False)
+    cv_text: Mapped[str] = mapped_column(Text, nullable=False)
+    status: Mapped[str] = mapped_column(
+        String(32), default="pending", server_default=text("'pending'"), index=True, nullable=False
+    )
+    result_payload: Mapped[str | None] = mapped_column(Text, nullable=True)
+    error_message: Mapped[str | None] = mapped_column(Text, nullable=True)
+    attempts: Mapped[int] = mapped_column(Integer, default=0, server_default=text("0"), nullable=False)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=utc_now, nullable=False
+    )
+    started_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    completed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=utc_now, onupdate=utc_now, nullable=False
+    )
+
+    job: Mapped["RecruiterJob"] = relationship(
+        "RecruiterJob", back_populates="candidate_checkpoints"
+    )
+
 class RecruiterJob(Base):
     """Persist a resumable Recruiter Mode batch job and its progress."""
 
@@ -368,6 +403,12 @@ class RecruiterJob(Base):
     )
 
     user: Mapped["User"] = relationship("User", back_populates="recruiter_jobs")
+    candidate_checkpoints: Mapped[list["RecruiterJobCandidate"]] = relationship(
+        "RecruiterJobCandidate",
+        back_populates="job",
+        cascade="all, delete-orphan",
+        order_by="RecruiterJobCandidate.position",
+    )
 
     def __repr__(self) -> str:
         return (
