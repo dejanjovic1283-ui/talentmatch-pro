@@ -62,6 +62,7 @@ Good English communication skills.
 """.strip()
 
 MAX_LIST_ITEMS = 40
+VISIBLE_LIST_ITEMS = 12
 MAX_LIST_ITEM_CHARS = 500
 MAX_SUMMARY_CHARS = 4_000
 MAX_JOB_DESCRIPTION_CHARS = 15_000
@@ -334,6 +335,17 @@ def score_tone(score: int) -> Tuple[str, str]:
     if score >= 40:
         return "#D97706", "Needs optimization"
     return "#DC2626", "Low alignment"
+
+
+def readiness_label(score: int) -> str:
+    """Return a compact readiness label that fits enterprise KPI cards."""
+    if score >= 80:
+        return "Ready"
+    if score >= 60:
+        return "Competitive"
+    if score >= 40:
+        return "Needs work"
+    return "Low"
 
 
 def extract_report_data(data: Dict[str, Any]) -> Dict[str, Any]:
@@ -902,6 +914,35 @@ def clear_semantic_state() -> None:
         st.session_state.pop(key, None)
 
 
+def render_bounded_list_cards(
+    items: List[str],
+    *,
+    kind: str,
+    empty_message: str,
+    expander_label: str,
+) -> None:
+    """Render a balanced list and place overflow items in an expandable panel."""
+    visible_items = items[:VISIBLE_LIST_ITEMS]
+    overflow_items = items[VISIBLE_LIST_ITEMS:]
+
+    render_list_cards(
+        visible_items,
+        kind=kind,
+        empty_message=empty_message,
+    )
+
+    if overflow_items:
+        with st.expander(
+            f"{expander_label} ({len(overflow_items)} more)",
+            expanded=False,
+        ):
+            render_list_cards(
+                overflow_items,
+                kind=kind,
+                empty_message=empty_message,
+            )
+
+
 def render_recommendations(items: List[str]) -> None:
     if not items:
         st.info("No recommendations returned.")
@@ -911,10 +952,10 @@ def render_recommendations(items: List[str]) -> None:
         st.markdown(
             (
                 '<div class="tm-card" style="margin-bottom:.75rem;display:grid;'
-                'grid-template-columns:54px 1fr;gap:1rem;align-items:start;">'
-                '<div style="width:42px;height:42px;border-radius:12px;display:flex;'
+                'grid-template-columns:62px 1fr;gap:1rem;align-items:start;">'
+                '<div style="width:48px;height:48px;border-radius:14px;display:flex;'
                 'align-items:center;justify-content:center;background:#EFF6FF;'
-                'color:#2563EB;font-weight:800;">'
+                'color:#2563EB;font-size:1.05rem;font-weight:850;">'
                 f'{index}</div>'
                 '<div>'
                 f'<div class="tm-kicker">Priority {index}</div>'
@@ -950,6 +991,7 @@ def render_results(data: Dict[str, Any]) -> None:
     )
 
     _, confidence = score_tone(combined_score)
+    readiness = readiness_label(combined_score)
 
     st.success("Semantic match completed and saved to History.")
 
@@ -990,7 +1032,7 @@ def render_results(data: Dict[str, Any]) -> None:
     with kpi_4:
         render_score_card(
             label="Readiness",
-            value=confidence,
+            value=readiness,
             caption=f"{len(recommendations)} priority actions",
             tone="purple",
             suffix="",
@@ -1030,18 +1072,20 @@ def render_results(data: Dict[str, Any]) -> None:
 
     with theme_left:
         st.markdown("### ✅ Matched themes")
-        render_list_cards(
+        render_bounded_list_cards(
             matched_themes,
             kind="success",
             empty_message="No matched themes returned.",
+            expander_label="Show additional matched themes",
         )
 
     with theme_right:
         st.markdown("### ⚠️ Missing themes")
-        render_list_cards(
+        render_bounded_list_cards(
             missing_themes,
             kind="warning",
             empty_message="No missing themes found.",
+            expander_label="Show additional missing themes",
         )
 
     render_section_title(
@@ -1053,18 +1097,20 @@ def render_results(data: Dict[str, Any]) -> None:
 
     with keyword_left:
         st.markdown("### 🔎 Matched keywords")
-        render_list_cards(
+        render_bounded_list_cards(
             matched_keywords,
             kind="success",
             empty_message="No matched keywords returned.",
+            expander_label="Show additional matched keywords",
         )
 
     with keyword_right:
         st.markdown("### 🎯 Missing keywords")
-        render_list_cards(
+        render_bounded_list_cards(
             missing_keywords,
             kind="warning",
             empty_message="No missing keywords found.",
+            expander_label="Show additional missing keywords",
         )
 
     render_section_title(
