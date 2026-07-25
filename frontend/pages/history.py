@@ -1101,61 +1101,60 @@ def calculate_score_analytics(items: list[dict[str, Any]]) -> dict[str, int]:
     }
 
 
+def _render_distribution_panel(title: str, rows: list[tuple[str, int, int]]) -> None:
+    row_html = "".join(
+        (
+            '<div class="tm-history-bar-row">'
+            '<div class="tm-history-bar-label">'
+            f'<span>{safe_html(label)}</span>'
+            f'<span>{value} · {percent}%</span>'
+            '</div>'
+            '<div class="tm-history-bar-track">'
+            f'<div class="tm-history-bar-fill" style="width: {percent}%;"></div>'
+            '</div>'
+            '</div>'
+        )
+        for label, value, percent in rows
+    )
+    panel_html = (
+        '<div class="tm-history-distribution">'
+        f'<div class="tm-history-distribution-title">{safe_html(title)}</div>'
+        f'{row_html}'
+        '</div>'
+    )
+    st.markdown(panel_html, unsafe_allow_html=True)
+
+
 def render_distribution(counts: dict[str, int]) -> None:
     total = max(1, counts["total"])
-    rows = (
+    report_rows = (
         ("ATS Checker", counts["ats_checker"]),
         ("Semantic Match", counts["semantic_match"]),
         ("Recruiter Mode", counts["recruiter_mode"]),
         ("CV Analysis", counts["cv_analysis"]),
         ("CV Rewrite", counts["cv_rewrite"]),
     )
-    html_rows = []
-    for label, value in rows:
-        percent = round((value / total) * 100)
-        html_rows.append(
-            f"""
-            <div class="tm-history-bar-row">
-                <div class="tm-history-bar-label"><span>{safe_html(label)}</span><span>{value} · {percent}%</span></div>
-                <div class="tm-history-bar-track"><div class="tm-history-bar-fill" style="width:{percent}%"></div></div>
-            </div>
-            """
-        )
-    st.markdown(
-        '<div class="tm-history-distribution">'
-        '<div class="tm-history-distribution-title">Report distribution</div>'
-        + "".join(html_rows)
-        + "</div>",
-        unsafe_allow_html=True,
-    )
+    rows = [
+        (label, value, round((value / total) * 100))
+        for label, value in report_rows
+    ]
+    _render_distribution_panel("Report distribution", rows)
 
 
 def render_score_distribution(items: list[dict[str, Any]]) -> None:
-    scores = [get_report_score(item) for item in items if get_report_score(item) >= 0]
-    buckets = {
-        "Strong (75–100)": sum(1 for score in scores if score >= 75),
-        "Competitive (50–74)": sum(1 for score in scores if 50 <= score < 75),
-        "Needs work (0–49)": sum(1 for score in scores if score < 50),
-    }
-    total = max(1, len(scores))
-    rows = []
-    for label, value in buckets.items():
-        percent = round((value / total) * 100)
-        rows.append(
-            f"""
-            <div class="tm-history-bar-row">
-                <div class="tm-history-bar-label"><span>{safe_html(label)}</span><span>{value} · {percent}%</span></div>
-                <div class="tm-history-bar-track"><div class="tm-history-bar-fill" style="width:{percent}%"></div></div>
-            </div>
-            """
-        )
-    st.markdown(
-        '<div class="tm-history-distribution">'
-        '<div class="tm-history-distribution-title">Score distribution</div>'
-        + "".join(rows)
-        + "</div>",
-        unsafe_allow_html=True,
+    scores = [get_report_score(item) for item in items]
+    valid_scores = [score for score in scores if score >= 0]
+    buckets = (
+        ("Strong (75–100)", sum(1 for score in valid_scores if score >= 75)),
+        ("Competitive (50–74)", sum(1 for score in valid_scores if 50 <= score < 75)),
+        ("Needs work (0–49)", sum(1 for score in valid_scores if score < 50)),
     )
+    total = max(1, len(valid_scores))
+    rows = [
+        (label, value, round((value / total) * 100))
+        for label, value in buckets
+    ]
+    _render_distribution_panel("Score distribution", rows)
 
 
 def report_badge_html(item: dict[str, Any]) -> str:
