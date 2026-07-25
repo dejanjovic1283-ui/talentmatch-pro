@@ -13,18 +13,32 @@ import streamlit as st
 
 from auth_utils import api_get, is_logged_in, is_pro_user
 from components.sidebar import render_sidebar
-from components.ui import apply_global_styles, render_hero
+from components.ui import (
+    apply_global_styles,
+    render_action_panel,
+    render_empty_state,
+    render_kpi_card,
+    render_list_cards,
+    render_page_intro,
+    render_report_panel,
+    render_score_card,
+    render_section_title,
+)
 
 
 st.set_page_config(page_title="History • TalentMatch Pro", page_icon="📜", layout="wide")
 apply_global_styles()
 render_sidebar()
 
-render_hero(
-    "History",
-    "Your saved TalentMatch Pro reports",
-    "Browse, search and export your TalentMatch reports.",
-    "📜",
+render_page_intro(
+    kicker="REPORT INTELLIGENCE",
+    title="History",
+    subtitle=(
+        "Search, compare, export, and manage every saved TalentMatch Pro report "
+        "from one production-grade workspace."
+    ),
+    icon="📜",
+    badge="PROFI-EXTRA",
 )
 
 
@@ -932,39 +946,300 @@ def sort_score(item: dict[str, Any]) -> int:
     return get_report_score(item)
 
 
+
+
+def render_history_css() -> None:
+    st.markdown(
+        """
+        <style>
+        .tm-history-toolbar {
+            border: 1px solid rgba(148, 163, 184, .22);
+            border-radius: 28px;
+            padding: 1.15rem 1.2rem .35rem 1.2rem;
+            background:
+                radial-gradient(circle at top right, rgba(37, 99, 235, .10), transparent 34%),
+                rgba(255, 255, 255, .88);
+            box-shadow: 0 20px 56px rgba(15, 23, 42, .07);
+            margin: .75rem 0 1.1rem 0;
+        }
+        .tm-history-report {
+            border: 1px solid rgba(148, 163, 184, .22);
+            border-radius: 30px;
+            padding: 1.35rem;
+            background:
+                radial-gradient(circle at 100% 0%, rgba(37, 99, 235, .10), transparent 31%),
+                radial-gradient(circle at 0% 100%, rgba(16, 185, 129, .08), transparent 34%),
+                rgba(255, 255, 255, .94);
+            box-shadow: 0 24px 68px rgba(15, 23, 42, .08);
+            margin-bottom: 1rem;
+        }
+        .tm-history-head {
+            display: flex;
+            align-items: flex-start;
+            justify-content: space-between;
+            gap: 1rem;
+            margin-bottom: .85rem;
+        }
+        .tm-history-title {
+            color: #0f172a;
+            font-size: 1.08rem;
+            line-height: 1.35;
+            font-weight: 950;
+            letter-spacing: -.02em;
+            overflow-wrap: anywhere;
+        }
+        .tm-history-meta {
+            color: #64748b;
+            font-size: .82rem;
+            font-weight: 700;
+            margin-top: .25rem;
+        }
+        .tm-history-score {
+            min-width: 88px;
+            text-align: center;
+            border-radius: 22px;
+            padding: .72rem .8rem;
+            border: 1px solid rgba(148, 163, 184, .20);
+            background: rgba(248, 250, 252, .90);
+        }
+        .tm-history-score-value {
+            font-size: 1.55rem;
+            line-height: 1;
+            font-weight: 950;
+            letter-spacing: -.05em;
+        }
+        .tm-history-score-label {
+            color: #64748b;
+            font-size: .7rem;
+            font-weight: 900;
+            text-transform: uppercase;
+            letter-spacing: .08em;
+            margin-top: .3rem;
+        }
+        .tm-history-summary {
+            border: 1px solid rgba(148, 163, 184, .18);
+            border-radius: 20px;
+            padding: .9rem 1rem;
+            background: rgba(248, 250, 252, .78);
+            color: #334155;
+            line-height: 1.68;
+            margin: .7rem 0 1rem 0;
+        }
+        .tm-history-pill {
+            display: inline-flex;
+            align-items: center;
+            gap: .35rem;
+            padding: .34rem .7rem;
+            border-radius: 999px;
+            font-size: .73rem;
+            font-weight: 950;
+            letter-spacing: .045em;
+            text-transform: uppercase;
+            border: 1px solid rgba(148, 163, 184, .20);
+        }
+        .tm-history-distribution {
+            border: 1px solid rgba(148, 163, 184, .20);
+            border-radius: 26px;
+            padding: 1rem 1.1rem;
+            background: rgba(255, 255, 255, .88);
+            box-shadow: 0 18px 52px rgba(15, 23, 42, .06);
+            min-height: 100%;
+        }
+        .tm-history-distribution-title {
+            color: #0f172a;
+            font-weight: 950;
+            margin-bottom: .75rem;
+        }
+        .tm-history-bar-row { margin: .68rem 0; }
+        .tm-history-bar-label {
+            display: flex;
+            justify-content: space-between;
+            gap: 1rem;
+            color: #475569;
+            font-size: .78rem;
+            font-weight: 850;
+            margin-bottom: .3rem;
+        }
+        .tm-history-bar-track {
+            height: 9px;
+            border-radius: 999px;
+            background: #e2e8f0;
+            overflow: hidden;
+        }
+        .tm-history-bar-fill {
+            height: 100%;
+            border-radius: 999px;
+            background: linear-gradient(90deg, #2563eb, #10b981);
+        }
+        .tm-history-danger {
+            border: 1px solid rgba(239, 68, 68, .24);
+            border-radius: 26px;
+            padding: 1rem 1.1rem;
+            background: rgba(254, 242, 242, .78);
+            margin-top: 1rem;
+        }
+        @media (max-width: 800px) {
+            .tm-history-head { flex-direction: column; }
+            .tm-history-score { width: 100%; }
+        }
+        </style>
+        """,
+        unsafe_allow_html=True,
+    )
+
+
+def calculate_score_analytics(items: list[dict[str, Any]]) -> dict[str, int]:
+    scores = [get_report_score(item) for item in items]
+    scored = [score for score in scores if score > 0]
+    if not scored:
+        return {"average": 0, "highest": 0, "lowest": 0, "strong": 0}
+    return {
+        "average": round(sum(scored) / len(scored)),
+        "highest": max(scored),
+        "lowest": min(scored),
+        "strong": sum(1 for score in scored if score >= 75),
+    }
+
+
+def render_distribution(counts: dict[str, int]) -> None:
+    total = max(1, counts["total"])
+    rows = (
+        ("ATS Checker", counts["ats_checker"]),
+        ("Semantic Match", counts["semantic_match"]),
+        ("Recruiter Mode", counts["recruiter_mode"]),
+        ("CV Analysis", counts["cv_analysis"]),
+        ("CV Rewrite", counts["cv_rewrite"]),
+    )
+    html_rows = []
+    for label, value in rows:
+        percent = round((value / total) * 100)
+        html_rows.append(
+            f"""
+            <div class="tm-history-bar-row">
+                <div class="tm-history-bar-label"><span>{safe_html(label)}</span><span>{value} · {percent}%</span></div>
+                <div class="tm-history-bar-track"><div class="tm-history-bar-fill" style="width:{percent}%"></div></div>
+            </div>
+            """
+        )
+    st.markdown(
+        '<div class="tm-history-distribution">'
+        '<div class="tm-history-distribution-title">Report distribution</div>'
+        + "".join(html_rows)
+        + "</div>",
+        unsafe_allow_html=True,
+    )
+
+
+def render_score_distribution(items: list[dict[str, Any]]) -> None:
+    scores = [get_report_score(item) for item in items if get_report_score(item) >= 0]
+    buckets = {
+        "Strong (75–100)": sum(1 for score in scores if score >= 75),
+        "Competitive (50–74)": sum(1 for score in scores if 50 <= score < 75),
+        "Needs work (0–49)": sum(1 for score in scores if score < 50),
+    }
+    total = max(1, len(scores))
+    rows = []
+    for label, value in buckets.items():
+        percent = round((value / total) * 100)
+        rows.append(
+            f"""
+            <div class="tm-history-bar-row">
+                <div class="tm-history-bar-label"><span>{safe_html(label)}</span><span>{value} · {percent}%</span></div>
+                <div class="tm-history-bar-track"><div class="tm-history-bar-fill" style="width:{percent}%"></div></div>
+            </div>
+            """
+        )
+    st.markdown(
+        '<div class="tm-history-distribution">'
+        '<div class="tm-history-distribution-title">Score distribution</div>'
+        + "".join(rows)
+        + "</div>",
+        unsafe_allow_html=True,
+    )
+
+
+def report_badge_html(item: dict[str, Any]) -> str:
+    analysis_type = normalize_type(item)
+    label, background, color = BADGE_STYLES.get(
+        analysis_type,
+        (history_label(item), "#ECEFF1", "#263238"),
+    )
+    return (
+        f'<span class="tm-history-pill" style="background:{background};color:{color}">'
+        f'{safe_html(label)}</span>'
+    )
+
+
+def report_identity(item: dict[str, Any], index: int) -> str:
+    record_id = item.get("id")
+    if record_id is not None:
+        return f"{record_id}"
+    return f"{index}-{get_cv_filename(item)}-{get_created_at(item)}"
+
+
+render_history_css()
+
 if not is_logged_in():
-    st.warning("Please login before viewing history.")
+    render_empty_state(
+        title="Sign in to open History",
+        message="Your saved reports are private and available only after authentication.",
+        icon="🔐",
+    )
     st.page_link("pages/login.py", label="🔐 Go to Login")
     st.stop()
 
+render_action_panel(
+    title="Report intelligence workspace",
+    description=(
+        "Filter every saved analysis, compare score trends, export professional records, "
+        "and safely manage report retention from one place."
+    ),
+    icon="📚",
+    eyebrow="HISTORY COMMAND CENTER",
+)
 
-control_left, control_right = st.columns([2, 1])
+st.markdown('<div class="tm-history-toolbar">', unsafe_allow_html=True)
+filter_col, search_col, sort_col, refresh_col = st.columns([1.25, 2.1, 1.3, .75])
 
-with control_left:
-    selected_label = st.radio(
-        "Filter by analysis type",
+with filter_col:
+    selected_label = st.selectbox(
+        "Report type",
         list(FILTER_OPTIONS.keys()),
-        horizontal=True,
-        label_visibility="collapsed",
+        key="history_type_filter",
     )
 
-with control_right:
-    if st.button("🔄 Refresh", use_container_width=True):
+with search_col:
+    search_query = st.text_input(
+        "Search reports",
+        placeholder="Filename, summary, report type, or job description...",
+        key="history_search_query",
+    )
+
+with sort_col:
+    sort_option = st.selectbox(
+        "Sort",
+        ["Newest first", "Oldest first", "Highest score", "Lowest score", "Filename A–Z"],
+        key="history_sort_option",
+    )
+
+with refresh_col:
+    st.write("")
+    if st.button("🔄 Refresh", use_container_width=True, key="history_refresh"):
         clear_history_cache()
         st.rerun()
+
+st.markdown("</div>", unsafe_allow_html=True)
 
 selected_type = FILTER_OPTIONS[selected_label]
 cache_key = f"history_items::{selected_type or 'all'}"
 
 if cache_key not in st.session_state:
-    with st.spinner("Loading history..."):
+    with st.spinner("Loading secure report history..."):
         response = api_get(history_endpoint(selected_type), timeout=90)
         parsed_items, error = parse_history_response(response)
-
         if error:
             st.error(error)
             st.stop()
-
         st.session_state[cache_key] = parsed_items or []
 
 items_raw = st.session_state.get(cache_key, [])
@@ -973,124 +1248,255 @@ all_items_for_counts: list[dict[str, Any]] = items
 
 if selected_type is not None:
     if "history_items::all" not in st.session_state:
-        with st.spinner("Loading counters..."):
+        with st.spinner("Loading report analytics..."):
             response_all = api_get("/history", timeout=90)
             parsed_all, error_all = parse_history_response(response_all)
-            if error_all or not isinstance(parsed_all, list):
-                all_items_for_counts = items
-            else:
-                all_items_for_counts = parsed_all
+            all_items_for_counts = parsed_all if not error_all and isinstance(parsed_all, list) else items
             st.session_state["history_items::all"] = all_items_for_counts
     else:
         cached_all = st.session_state.get("history_items::all", [])
         all_items_for_counts = cached_all if isinstance(cached_all, list) else []
 
-
-st.markdown('<div class="tm-section-title">History overview</div>', unsafe_allow_html=True)
 counts = calculate_counts(all_items_for_counts)
+score_analytics = calculate_score_analytics(all_items_for_counts)
 
+render_section_title(
+    "Executive overview",
+    "Live report inventory and score intelligence across the complete account history.",
+)
 metric_cols = st.columns(6)
 with metric_cols[0]:
-    render_history_info_card("Total", str(counts["total"]), "Saved reports", "📊")
+    render_kpi_card("Total reports", counts["total"], "📊", "Saved securely")
 with metric_cols[1]:
-    render_history_info_card("ATS Checker", str(counts["ats_checker"]), "Keyword checks", "📋")
+    render_kpi_card("Average score", f'{score_analytics["average"]}/100', "📈", "Across scored reports")
 with metric_cols[2]:
-    render_history_info_card("Semantic", str(counts["semantic_match"]), "AI matches", "🧠")
+    render_kpi_card("Highest score", f'{score_analytics["highest"]}/100', "🏆", "Best recorded result")
 with metric_cols[3]:
-    render_history_info_card("Recruiter", str(counts["recruiter_mode"]), "Rankings", "🏆")
+    render_kpi_card("Strong matches", score_analytics["strong"], "🔥", "Score 75 or higher")
 with metric_cols[4]:
-    render_history_info_card("Analysis", str(counts["cv_analysis"]), "CV reports", "📄")
+    render_kpi_card("Recruiter", counts["recruiter_mode"], "👥", "Ranking reports")
 with metric_cols[5]:
-    render_history_info_card("Rewrite", str(counts["cv_rewrite"]), "CV rewrites", "✍️")
+    render_kpi_card("AI workflows", counts["semantic_match"] + counts["cv_rewrite"], "🧠", "Semantic + rewrite")
 
-st.markdown('<div class="tm-section-title">Search and sort</div>', unsafe_allow_html=True)
-search_col, sort_col = st.columns([2, 1])
-
-with search_col:
-    search_query = st.text_input(
-        "Search reports",
-        placeholder="Search by filename...",
-        label_visibility="collapsed",
-    )
-
-with sort_col:
-    sort_option = st.selectbox(
-        "Sort history",
-        ["Newest first", "Oldest first", "Highest score", "Lowest score"],
-        label_visibility="collapsed",
-    )
+analytics_left, analytics_right = st.columns(2)
+with analytics_left:
+    render_distribution(counts)
+with analytics_right:
+    render_score_distribution(all_items_for_counts)
 
 filtered_items = list(items)
-
-if search_query.strip():
-    query = search_query.strip().lower()
-    filtered_items = [
-        item
-        for item in filtered_items
-        if query in get_cv_filename(item).lower()
-    ]
+query = search_query.strip().casefold()
+if query:
+    def searchable_text(item: dict[str, Any]) -> str:
+        values = (
+            get_cv_filename(item),
+            history_label(item),
+            item.get("summary"),
+            item.get("analysis"),
+            item.get("job_description"),
+            item.get("job"),
+        )
+        return " ".join(clean_export_text(value) for value in values if value).casefold()
+    filtered_items = [item for item in filtered_items if query in searchable_text(item)]
 
 if sort_option == "Newest first":
-    filtered_items = sorted(filtered_items, key=sort_created_at, reverse=True)
+    filtered_items.sort(key=sort_created_at, reverse=True)
 elif sort_option == "Oldest first":
-    filtered_items = sorted(filtered_items, key=sort_created_at)
+    filtered_items.sort(key=sort_created_at)
 elif sort_option == "Highest score":
-    filtered_items = sorted(filtered_items, key=sort_score, reverse=True)
+    filtered_items.sort(key=sort_score, reverse=True)
 elif sort_option == "Lowest score":
-    filtered_items = sorted(filtered_items, key=sort_score)
+    filtered_items.sort(key=sort_score)
+else:
+    filtered_items.sort(key=lambda item: get_cv_filename(item).casefold())
 
-items = filtered_items
-
-render_export_panel()
+render_report_panel(
+    title="History export center",
+    description=(
+        "Export the current filtered result set as portable TXT or a branded PDF. "
+        "Individual reports remain available inside every report card."
+    ),
+    icon="📦",
+)
 
 history_title = (
     "TalentMatch Pro - Complete History Report"
     if selected_type is None
     else f"TalentMatch Pro - {selected_label} History Report"
 )
-history_txt = build_history_text_report(items, title=history_title)
-history_pdf = build_pdf_report(items, title=history_title)
+history_txt = build_history_text_report(filtered_items, title=history_title)
+history_pdf = build_pdf_report(filtered_items, title=history_title)
 
-download_col1, download_col2 = st.columns(2)
-
-with download_col1:
+export_left, export_right, export_meta = st.columns([1, 1, 1.15])
+with export_left:
     st.download_button(
-        "⬇️ Export History (.txt)",
+        "⬇️ Export filtered history (.txt)",
         data=history_txt.encode("utf-8"),
         file_name="talentmatch_history.txt",
         mime="text/plain",
         use_container_width=True,
-        disabled=not items,
+        disabled=not filtered_items,
     )
-
-with download_col2:
+with export_right:
     if is_pro_user():
         st.download_button(
-            "📄 Export History PDF",
+            "📄 Export filtered history (.pdf)",
             data=history_pdf or b"PDF export requires reportlab.",
             file_name="talentmatch_history_report.pdf",
             mime="application/pdf" if history_pdf else "text/plain",
             use_container_width=True,
-            disabled=not items or history_pdf is None,
+            disabled=not filtered_items or history_pdf is None,
         )
     else:
-        st.info("🔒 History PDF Report is available in Pro.")
-        st.page_link("pages/pricing.py", label="💳 Upgrade to Pro")
+        st.page_link("pages/pricing.py", label="🔒 Unlock PDF export with Pro")
+with export_meta:
+    st.info(f"Current view: {len(filtered_items)} of {len(items)} report(s).")
 
-st.markdown('<div class="tm-section-title">Danger zone</div>', unsafe_allow_html=True)
-with st.expander("🗑 Delete All History"):
-    st.warning("This deletes all history records for your account. This action cannot be undone.")
+render_section_title(
+    "Saved reports",
+    "Open detailed evidence, download individual files, or remove records you no longer need.",
+)
+
+if not filtered_items:
+    render_empty_state(
+        title="No matching reports",
+        message="Change the search text or report filter, or run a new TalentMatch analysis.",
+        icon="📭",
+    )
+else:
+    page_size = st.select_slider(
+        "Reports per page",
+        options=[5, 10, 20, 50],
+        value=10,
+        key="history_page_size",
+    )
+    total_pages = max(1, (len(filtered_items) + page_size - 1) // page_size)
+    current_page = st.number_input(
+        "Page",
+        min_value=1,
+        max_value=total_pages,
+        value=min(int(st.session_state.get("history_current_page", 1)), total_pages),
+        step=1,
+        key="history_current_page",
+    )
+    start_index = (int(current_page) - 1) * page_size
+    page_items = filtered_items[start_index : start_index + page_size]
+    st.caption(
+        f"Showing {start_index + 1}–{min(start_index + page_size, len(filtered_items))} "
+        f"of {len(filtered_items)} report(s) · Page {current_page} of {total_pages}"
+    )
+
+    for position, item in enumerate(page_items, start=start_index + 1):
+        score = get_report_score(item)
+        numeric_score = score_number(score)
+        cv_file = clean_export_text(get_cv_filename(item))
+        created_at = format_created_at(get_created_at(item))
+        positive_label, strengths, negative_label, gaps = report_section_data(item)
+        recommendations = first_nonempty_item_list(item, "recommendations")
+        summary = clean_export_text(item.get("summary") or item.get("analysis") or "")
+        report_text = build_text_report(item)
+        report_filename = safe_report_filename(cv_file)
+        item_pdf_bytes = build_pdf_report([item], title=f"TalentMatch Pro - {history_label(item)} Report")
+        identity = report_identity(item, position)
+
+        st.markdown('<div class="tm-history-report">', unsafe_allow_html=True)
+        score_hex = score_color(numeric_score)
+        st.markdown(
+            f"""
+            <div class="tm-history-head">
+                <div>
+                    {report_badge_html(item)}
+                    <div class="tm-history-title">{position}. {safe_html(cv_file)}</div>
+                    <div class="tm-history-meta">Saved {safe_html(created_at)}</div>
+                </div>
+                <div class="tm-history-score">
+                    <div class="tm-history-score-value" style="color:{score_hex}">{numeric_score}</div>
+                    <div class="tm-history-score-label">out of 100</div>
+                </div>
+            </div>
+            """,
+            unsafe_allow_html=True,
+        )
+
+        if summary:
+            st.markdown(
+                f'<div class="tm-history-summary"><b>Executive summary</b><br>{safe_html(summary)}</div>',
+                unsafe_allow_html=True,
+            )
+
+        evidence_left, evidence_right, evidence_action = st.columns([1, 1, 1])
+        with evidence_left:
+            render_list_cards(strengths, kind="success", empty_message=f"No {positive_label.lower()} saved.")
+        with evidence_right:
+            render_list_cards(gaps, kind="danger", empty_message=f"No {negative_label.lower()} saved.")
+        with evidence_action:
+            render_list_cards(recommendations, kind="info", empty_message="No recommendations saved.")
+
+        with st.expander("📋 Full report controls", expanded=False):
+            export_one, export_two = st.columns(2)
+            with export_one:
+                st.download_button(
+                    "⬇️ Download TXT",
+                    data=report_text.encode("utf-8"),
+                    file_name=f"{report_filename}.txt",
+                    mime="text/plain",
+                    use_container_width=True,
+                    key=f"history_txt_{identity}",
+                )
+            with export_two:
+                if is_pro_user():
+                    st.download_button(
+                        "📄 Download PDF",
+                        data=item_pdf_bytes or b"PDF export requires reportlab.",
+                        file_name=f"{report_filename}.pdf",
+                        mime="application/pdf" if item_pdf_bytes else "text/plain",
+                        use_container_width=True,
+                        disabled=item_pdf_bytes is None,
+                        key=f"history_pdf_{identity}",
+                    )
+                else:
+                    st.page_link("pages/pricing.py", label="🔒 Upgrade for PDF export")
+
+            record_id = item.get("id")
+            if record_id is None:
+                st.info("This legacy report has no record ID and cannot be deleted individually.")
+            else:
+                confirm_delete = st.checkbox(
+                    "I understand this permanently deletes the report.",
+                    key=f"confirm_delete_{identity}",
+                )
+                if st.button(
+                    "🗑 Delete this report",
+                    type="secondary",
+                    use_container_width=True,
+                    disabled=not confirm_delete,
+                    key=f"delete_history_{identity}",
+                ):
+                    ok, message = delete_history_record(int(record_id))
+                    if ok:
+                        st.success(message)
+                        clear_history_cache()
+                        st.rerun()
+                    st.error(message)
+
+        st.markdown("</div>", unsafe_allow_html=True)
+
+render_section_title(
+    "Data retention controls",
+    "Permanent deletion is intentionally separated from normal report workflows.",
+)
+st.markdown('<div class="tm-history-danger">', unsafe_allow_html=True)
+with st.expander("🗑 Delete all History records", expanded=False):
+    st.warning("This permanently deletes every History record for your account and cannot be undone.")
     delete_all_confirm = st.text_input(
         "Type DELETE ALL to confirm",
         key="delete_all_history_confirm",
     )
-    delete_all_disabled = delete_all_confirm.strip() != "DELETE ALL"
-
     if st.button(
-        "🗑 Delete All History",
+        "🗑 Permanently delete all History",
         type="secondary",
         use_container_width=True,
-        disabled=delete_all_disabled or not all_items_for_counts,
+        disabled=delete_all_confirm.strip() != "DELETE ALL" or not all_items_for_counts,
         key="delete_all_history_button",
     ):
         ok, message = delete_all_history_records()
@@ -1098,138 +1504,5 @@ with st.expander("🗑 Delete All History"):
             st.success(message)
             clear_history_cache()
             st.rerun()
-        else:
-            st.error(message)
-
-st.divider()
-
-if not items:
-    render_empty_history_state()
-    st.page_link("app.py", label="🚀 Run your first CV analysis")
-    st.stop()
-
-
-for idx, item in enumerate(items, start=1):
-    score = get_report_score(item)
-    numeric_score = score_number(score)
-    cv_file = clean_export_text(get_cv_filename(item))
-    created_at = clean_export_text(get_created_at(item))
-
-    positive_label, strengths, negative_label, missing = report_section_data(item)
-    recommendations = first_nonempty_item_list(item, "recommendations")
-    summary = clean_export_text(item.get("summary") or item.get("analysis") or "")
-
-    report_text = build_text_report(item)
-    report_filename = safe_report_filename(cv_file)
-    item_pdf_bytes = build_pdf_report([item], title=f"TalentMatch Pro - {history_label(item)} Report")
-
-    with st.container(border=True):
-        render_badge(item)
-
-        top_left, top_mid, top_right = st.columns([2.4, 1, 1])
-
-        with top_left:
-            st.subheader(f"{idx}. {cv_file}")
-            if created_at:
-                st.caption(created_at)
-
-        with top_mid:
-            st.caption("Score")
-            st.markdown(
-                f"""
-                <div style="font-size:2rem;font-weight:900;color:{score_color(numeric_score)};">
-                    {numeric_score}/100
-                </div>
-                """,
-                unsafe_allow_html=True,
-            )
-
-        with top_right:
-            st.caption("Type")
-            st.metric(label="Report", value=history_label(item))
-
-        if summary:
-            st.markdown("**Summary**")
-            st.write(summary)
-
-        skills_col, gaps_col = st.columns(2)
-
-        with skills_col:
-            st.markdown(f"✅ **{positive_label}**")
-            if strengths:
-                for skill in strengths:
-                    st.markdown(f"- {skill}")
-            else:
-                st.caption(f"No {positive_label.lower()} saved.")
-
-        with gaps_col:
-            st.markdown(f"❌ **{negative_label}**")
-            if missing:
-                for skill in missing:
-                    st.markdown(f"- {skill}")
-            else:
-                st.caption(f"No {negative_label.lower()} saved.")
-
-        if recommendations:
-            st.markdown("💡 **Recommendations**")
-            for recommendation in recommendations:
-                st.markdown(f"- {recommendation}")
-
-        st.markdown("---")
-        st.markdown("### Export Report")
-
-        report_col1, report_col2 = st.columns(2)
-
-        with report_col1:
-            st.download_button(
-                label="⬇️ Export Report (.txt)",
-                data=report_text.encode("utf-8"),
-                file_name=f"{report_filename}.txt",
-                mime="text/plain",
-                use_container_width=True,
-                key=f"history_txt_{idx}_{cv_file}_{created_at}",
-            )
-
-        with report_col2:
-            if is_pro_user():
-                st.download_button(
-                    label="📄 Export PDF Report",
-                    data=item_pdf_bytes or b"PDF export requires reportlab.",
-                    file_name=f"{report_filename}.pdf",
-                    mime="application/pdf" if item_pdf_bytes else "text/plain",
-                    use_container_width=True,
-                    disabled=item_pdf_bytes is None,
-                    key=f"history_pdf_{idx}_{cv_file}_{created_at}",
-                )
-            else:
-                st.info("🔒 PDF Report is available in Pro.")
-                st.page_link("pages/pricing.py", label="💳 Upgrade to Pro")
-
-        st.markdown("---")
-        st.markdown("### Delete History Item")
-
-        record_id = item.get("id")
-        if record_id is None:
-            st.info("This history item cannot be deleted because it has no record ID.")
-        else:
-            confirm_key = f"confirm_delete_{record_id}_{idx}"
-            button_key = f"delete_history_{record_id}_{idx}"
-            confirm_delete = st.checkbox(
-                "I understand this will permanently delete this history item.",
-                key=confirm_key,
-            )
-
-            if st.button(
-                "🗑 Delete this history item",
-                type="secondary",
-                use_container_width=True,
-                disabled=not confirm_delete,
-                key=button_key,
-            ):
-                ok, message = delete_history_record(int(record_id))
-                if ok:
-                    st.success(message)
-                    clear_history_cache()
-                    st.rerun()
-                else:
-                    st.error(message)
+        st.error(message)
+st.markdown("</div>", unsafe_allow_html=True)
