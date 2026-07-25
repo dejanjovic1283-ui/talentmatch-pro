@@ -11,7 +11,17 @@ import streamlit as st
 
 from auth_utils import api_post, is_logged_in, is_pro_user
 from components.sidebar import render_sidebar
-from components.ui import apply_global_styles, render_hero, safe_html
+from components.ui import (
+    apply_global_styles,
+    render_action_panel,
+    render_list_cards,
+    render_page_intro,
+    render_progress_card,
+    render_report_panel,
+    render_score_card,
+    render_section_title,
+    safe_html,
+)
 
 
 st.set_page_config(
@@ -880,6 +890,7 @@ def create_pdf_report(
         )
         return None
 
+
 def clear_semantic_state() -> None:
     for key in (
         "semantic_result",
@@ -891,302 +902,31 @@ def clear_semantic_state() -> None:
         st.session_state.pop(key, None)
 
 
-def render_semantic_styles() -> None:
-    """Apply page-scoped enterprise styling without changing Semantic Match logic."""
-    st.markdown(
-        """
-        <style>
-        .tm-semantic-shell {
-            position: relative;
-            overflow: hidden;
-            border: 1px solid rgba(148, 163, 184, .22);
-            border-radius: 30px;
-            padding: 1.15rem 1.2rem;
-            margin: .9rem 0 1.2rem;
-            background:
-                radial-gradient(circle at 100% 0%, rgba(37, 99, 235, .12), transparent 34%),
-                radial-gradient(circle at 0% 100%, rgba(14, 165, 233, .08), transparent 36%),
-                rgba(255, 255, 255, .92);
-            box-shadow: 0 24px 70px rgba(15, 23, 42, .08);
-            backdrop-filter: blur(16px);
-        }
+def render_recommendations(items: List[str]) -> None:
+    if not items:
+        st.info("No recommendations returned.")
+        return
 
-        .tm-semantic-shell::after {
-            content: "";
-            position: absolute;
-            inset: auto -80px -100px auto;
-            width: 210px;
-            height: 210px;
-            border-radius: 999px;
-            background: rgba(37, 99, 235, .08);
-            pointer-events: none;
-        }
-
-        .tm-semantic-cta {
-            position: relative;
-            overflow: hidden;
-            border: 1px solid rgba(37, 99, 235, .24);
-            border-radius: 28px;
-            padding: 1.35rem 1.45rem;
-            margin: .85rem 0 1.1rem;
-            background:
-                linear-gradient(135deg, rgba(239, 246, 255, .98), rgba(255, 255, 255, .96));
-            box-shadow: 0 22px 64px rgba(37, 99, 235, .12);
-        }
-
-        .tm-semantic-cta-title {
-            color: #0f172a;
-            font-size: 1.18rem;
-            line-height: 1.35;
-            font-weight: 950;
-            letter-spacing: -.025em;
-            margin-bottom: .35rem;
-        }
-
-        .tm-semantic-cta-copy {
-            color: #475569;
-            line-height: 1.65;
-            max-width: 760px;
-        }
-
-        .tm-semantic-trust-row {
-            display: flex;
-            flex-wrap: wrap;
-            gap: .55rem;
-            margin-top: .9rem;
-        }
-
-        .tm-semantic-trust {
-            display: inline-flex;
-            align-items: center;
-            gap: .35rem;
-            padding: .38rem .72rem;
-            border-radius: 999px;
-            border: 1px solid rgba(148, 163, 184, .20);
-            background: rgba(255, 255, 255, .86);
-            color: #334155;
-            font-size: .76rem;
-            font-weight: 850;
-        }
-
-        div[data-testid="stPageLink"] a[href*="pricing"] {
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            min-height: 3rem;
-            border: 1px solid #1d4ed8 !important;
-            border-radius: 14px !important;
-            background: linear-gradient(135deg, #2563eb, #1d4ed8) !important;
-            color: #ffffff !important;
-            font-weight: 900 !important;
-            text-decoration: none !important;
-            box-shadow: 0 14px 34px rgba(37, 99, 235, .28);
-            transition:
-                transform .18s ease,
-                box-shadow .18s ease,
-                filter .18s ease;
-        }
-
-        div[data-testid="stPageLink"] a[href*="pricing"]:hover {
-            transform: translateY(-2px);
-            box-shadow: 0 20px 42px rgba(37, 99, 235, .34);
-            filter: brightness(1.03);
-        }
-
-        div[data-testid="stPageLink"] a[href*="pricing"] p,
-        div[data-testid="stPageLink"] a[href*="pricing"] span {
-            color: #ffffff !important;
-            font-weight: 900 !important;
-        }
-
-        div[data-testid="stButton"] > button[kind="primary"],
-        div[data-testid="stButton"] > button {
-            min-height: 3.05rem;
-            border-radius: 14px;
-            font-weight: 900;
-            transition:
-                transform .18s ease,
-                box-shadow .18s ease,
-                filter .18s ease;
-        }
-
-        div[data-testid="stButton"] > button:hover:not(:disabled) {
-            transform: translateY(-2px);
-            box-shadow: 0 16px 36px rgba(37, 99, 235, .20);
-        }
-
-        div[data-testid="stDownloadButton"] > button {
-            min-height: 3rem;
-            border-radius: 14px;
-            font-weight: 850;
-            transition:
-                transform .18s ease,
-                box-shadow .18s ease;
-        }
-
-        div[data-testid="stDownloadButton"] > button:hover:not(:disabled) {
-            transform: translateY(-2px);
-            box-shadow: 0 14px 32px rgba(15, 23, 42, .12);
-        }
-
-        .tm-card {
-            border-radius: 24px !important;
-            border: 1px solid rgba(148, 163, 184, .20) !important;
-            box-shadow: 0 18px 52px rgba(15, 23, 42, .07) !important;
-            transition:
-                transform .2s ease,
-                box-shadow .2s ease,
-                border-color .2s ease;
-        }
-
-        .tm-card:hover {
-            transform: translateY(-3px);
-            border-color: rgba(37, 99, 235, .24) !important;
-            box-shadow: 0 26px 66px rgba(15, 23, 42, .11) !important;
-        }
-
-        div[data-testid="stFileUploader"] {
-            border-radius: 20px;
-        }
-
-        div[data-testid="stTextArea"] textarea {
-            border-radius: 16px;
-            line-height: 1.55;
-        }
-
-        .tm-section-title {
-            margin-top: 1.55rem !important;
-            margin-bottom: .8rem !important;
-            letter-spacing: -.02em;
-        }
-
-        @media (max-width: 800px) {
-            .tm-semantic-shell,
-            .tm-semantic-cta {
-                border-radius: 22px;
-                padding: 1rem;
-            }
-        }
-        </style>
-        """,
-        unsafe_allow_html=True,
-    )
-
-
-def render_kpi_card(
-    label: str,
-    value: str,
-    caption: str,
-    accent: str,
-) -> None:
-    st.markdown(
-        f"""
-        <div class="tm-card" style="
-            border-top:4px solid {safe_html(accent)};
-            min-height:168px;
-            display:flex;
-            flex-direction:column;
-            justify-content:space-between;
-        ">
-            <div class="tm-kicker">{safe_html(label)}</div>
-            <div style="
-                font-size:2.35rem;
-                font-weight:800;
-                line-height:1;
-                color:#0F172A;
-                margin:.55rem 0;
-            ">{safe_html(value)}</div>
-            <div class="tm-muted">{safe_html(caption)}</div>
-        </div>
-        """,
-        unsafe_allow_html=True,
-    )
-
-
-def render_progress_card(
-    combined_score: int,
-    verdict: str,
-) -> None:
-    accent, confidence = score_tone(combined_score)
-    st.markdown(
-        f"""
-        <div class="tm-card" style="margin-top:.8rem">
-            <div style="
-                display:flex;
-                justify-content:space-between;
-                align-items:center;
-                gap:1rem;
-                flex-wrap:wrap;
-            ">
-                <div>
-                    <div class="tm-kicker">Overall role alignment</div>
-                    <div class="tm-card-title" style="margin-top:.25rem">
-                        {safe_html(verdict)}
-                    </div>
-                </div>
-                <div style="font-weight:800;color:{safe_html(accent)}">
-                    {safe_html(confidence)}
-                </div>
-            </div>
-            <div style="
-                width:100%;
-                height:14px;
-                margin-top:1rem;
-                border-radius:999px;
-                background:#E2E8F0;
-                overflow:hidden;
-            ">
-                <div style="
-                    width:{combined_score}%;
-                    height:100%;
-                    background:{safe_html(accent)};
-                    border-radius:999px;
-                "></div>
-            </div>
-        </div>
-        """,
-        unsafe_allow_html=True,
-    )
-
-
-def render_list_card(
-    title: str,
-    items: List[str],
-    icon: str,
-    *,
-    positive: bool = False,
-) -> None:
-    pill_class = "tm-pill tm-pill-green" if positive else "tm-pill"
-    if items:
-        chips = "".join(
-            f"<span class='{pill_class}'>{safe_html(item)}</span>"
-            for item in items[:MAX_LIST_ITEMS]
+    for index, item in enumerate(items, start=1):
+        st.markdown(
+            (
+                '<div class="tm-card" style="margin-bottom:.75rem;display:grid;'
+                'grid-template-columns:54px 1fr;gap:1rem;align-items:start;">'
+                '<div style="width:42px;height:42px;border-radius:12px;display:flex;'
+                'align-items:center;justify-content:center;background:#EFF6FF;'
+                'color:#2563EB;font-weight:800;">'
+                f'{index}</div>'
+                '<div>'
+                f'<div class="tm-kicker">Priority {index}</div>'
+                '<div class="tm-muted" style="margin-top:.25rem">'
+                f'{safe_html(item)}</div>'
+                '</div></div>'
+            ),
+            unsafe_allow_html=True,
         )
-    else:
-        chips = "<div class='tm-muted'>No items returned.</div>"
-
-    st.markdown(
-        f"""
-        <div class="tm-card" style="min-height:230px">
-            <div class="tm-card-title">
-                {safe_html(icon)} {safe_html(title)}
-            </div>
-            <div style="margin-top:.8rem">{chips}</div>
-        </div>
-        """,
-        unsafe_allow_html=True,
-    )
 
 
 def render_results(data: Dict[str, Any]) -> None:
-    cv_filename = clean_text(
-        st.session_state.get("semantic_filename", "uploaded_cv.pdf"),
-        max_chars=200,
-    )
-    job_description = clean_text(
-        st.session_state.get("semantic_job_description", ""),
-        max_chars=MAX_JOB_DESCRIPTION_CHARS,
-    )
     report = extract_report_data(data)
 
     combined_score = report["combined_score"]
@@ -1200,156 +940,154 @@ def render_results(data: Dict[str, Any]) -> None:
     missing_keywords = report["missing_keywords"]
     recommendations = report["recommendations"]
 
+    cv_filename = clean_text(
+        st.session_state.get("semantic_filename", "uploaded_cv.pdf"),
+        max_chars=200,
+    )
+    job_description = clean_text(
+        st.session_state.get("semantic_job_description", ""),
+        max_chars=MAX_JOB_DESCRIPTION_CHARS,
+    )
+
+    _, confidence = score_tone(combined_score)
+
     st.success("Semantic match completed and saved to History.")
 
-    st.markdown(
-        '<div class="tm-section-title">Match Intelligence</div>',
-        unsafe_allow_html=True,
+    render_section_title(
+        "Semantic intelligence",
+        "A recruiter-ready overview of semantic alignment, keyword coverage, and priority improvements.",
     )
+
     kpi_1, kpi_2, kpi_3, kpi_4 = st.columns(4)
 
-    accent, confidence = score_tone(combined_score)
     with kpi_1:
-        render_kpi_card(
-            "Overall Match",
-            f"{combined_score}/100",
-            verdict,
-            accent,
+        render_score_card(
+            label="Overall match",
+            value=combined_score,
+            caption=verdict,
+            tone="blue",
+            suffix="/100",
         )
+
     with kpi_2:
-        render_kpi_card(
-            "Semantic Alignment",
-            f"{semantic_score}/100",
-            f"{len(matched_themes)} matched themes",
-            "#0EA5E9",
+        render_score_card(
+            label="Semantic",
+            value=semantic_score,
+            caption=f"{len(matched_themes)} matched themes",
+            tone="green",
+            suffix="/100",
         )
+
     with kpi_3:
-        render_kpi_card(
-            "Keyword Coverage",
-            f"{keyword_score}/100",
-            f"{len(matched_keywords)} matched keywords",
-            "#8B5CF6",
+        render_score_card(
+            label="Keyword",
+            value=keyword_score,
+            caption=f"{len(matched_keywords)} matched keywords",
+            tone="amber",
+            suffix="/100",
         )
+
     with kpi_4:
-        render_kpi_card(
-            "Recruiter Readiness",
-            confidence,
-            f"{len(recommendations)} priority actions",
-            "#14B8A6",
+        render_score_card(
+            label="Readiness",
+            value=confidence,
+            caption=f"{len(recommendations)} priority actions",
+            tone="purple",
+            suffix="",
         )
 
-    render_progress_card(combined_score, verdict)
-
-    st.markdown(
-        '<div class="tm-section-title">Executive Recruiter Summary</div>',
-        unsafe_allow_html=True,
-    )
-    st.markdown(
-        f"""
-        <div class="tm-card" style="
-            border-left:5px solid #2563EB;
-            padding:1.35rem 1.5rem;
-        ">
-            <div class="tm-kicker">Hiring perspective</div>
-            <div style="
-                margin-top:.55rem;
-                line-height:1.7;
-                color:#475569;
-                font-size:1rem;
-            ">{safe_html(summary)}</div>
-        </div>
-        """,
-        unsafe_allow_html=True,
+    render_progress_card(
+        title="Overall semantic alignment",
+        value=combined_score,
+        total=100,
+        subtitle=f"{verdict} • {confidence}",
+        icon="🧠",
     )
 
-    st.markdown(
-        '<div class="tm-section-title">Semantic Coverage</div>',
-        unsafe_allow_html=True,
+    if summary:
+        render_section_title(
+            "Executive recruiter summary",
+            "The core hiring perspective distilled into one concise assessment.",
+        )
+        st.markdown(
+            (
+                '<div class="tm-card" style="border-left:5px solid #2563EB;'
+                'padding:1.35rem 1.5rem;">'
+                '<div class="tm-kicker">Hiring perspective</div>'
+                '<div style="margin-top:.55rem;line-height:1.7;color:#475569;'
+                'font-size:1rem;">'
+                f'{safe_html(summary)}</div></div>'
+            ),
+            unsafe_allow_html=True,
+        )
+
+    render_section_title(
+        "Semantic coverage",
+        "Compare confirmed role themes with the highest-priority missing themes.",
     )
-    left, right = st.columns(2)
-    with left:
-        render_list_card(
-            "Matched Themes",
+
+    theme_left, theme_right = st.columns(2)
+
+    with theme_left:
+        st.markdown("### ✅ Matched themes")
+        render_list_cards(
             matched_themes,
-            "✅",
-            positive=True,
+            kind="success",
+            empty_message="No matched themes returned.",
         )
-    with right:
-        render_list_card(
-            "Missing Themes",
+
+    with theme_right:
+        st.markdown("### ⚠️ Missing themes")
+        render_list_cards(
             missing_themes,
-            "⚠️",
+            kind="warning",
+            empty_message="No missing themes found.",
         )
+
+    render_section_title(
+        "Keyword coverage",
+        "Compare confirmed keywords with the highest-priority missing terms.",
+    )
 
     keyword_left, keyword_right = st.columns(2)
+
     with keyword_left:
-        render_list_card(
-            "Matched Keywords",
+        st.markdown("### 🔎 Matched keywords")
+        render_list_cards(
             matched_keywords,
-            "🔎",
-            positive=True,
-        )
-    with keyword_right:
-        render_list_card(
-            "Missing Keywords",
-            missing_keywords,
-            "🎯",
+            kind="success",
+            empty_message="No matched keywords returned.",
         )
 
-    st.markdown(
-        '<div class="tm-section-title">Priority Recommendations</div>',
-        unsafe_allow_html=True,
+    with keyword_right:
+        st.markdown("### 🎯 Missing keywords")
+        render_list_cards(
+            missing_keywords,
+            kind="warning",
+            empty_message="No missing keywords found.",
+        )
+
+    render_section_title(
+        "Priority recommendations",
+        "Apply these actions first to improve semantic fit and recruiter confidence.",
     )
-    if recommendations:
-        for index, item in enumerate(recommendations, start=1):
-            st.markdown(
-                f"""
-                <div class="tm-card" style="
-                    margin-bottom:.75rem;
-                    display:grid;
-                    grid-template-columns:54px 1fr;
-                    gap:1rem;
-                    align-items:start;
-                ">
-                    <div style="
-                        width:42px;
-                        height:42px;
-                        border-radius:12px;
-                        display:flex;
-                        align-items:center;
-                        justify-content:center;
-                        background:#EFF6FF;
-                        color:#2563EB;
-                        font-weight:800;
-                    ">{index}</div>
-                    <div>
-                        <div class="tm-kicker">Priority {index}</div>
-                        <div class="tm-muted" style="margin-top:.25rem">
-                            {safe_html(item)}
-                        </div>
-                    </div>
-                </div>
-                """,
-                unsafe_allow_html=True,
-            )
-    else:
-        st.info("No recommendations returned.")
+    render_recommendations(recommendations)
 
     if "semantic_txt_report" not in st.session_state:
         st.session_state["semantic_txt_report"] = build_text_report(
-            data,
-            cv_filename,
-            job_description,
+            data=data,
+            cv_filename=cv_filename,
+            job_description=job_description,
         )
 
-    st.markdown("---")
-    st.markdown(
-        '<div class="tm-section-title">Download Report</div>',
-        unsafe_allow_html=True,
-    )
-    st.caption(
-        "Exports include the complete score breakdown, recruiter summary, "
-        "semantic coverage and a bounded Job Description appendix."
+    st.divider()
+    render_report_panel(
+        title="Semantic Match report center",
+        description=(
+            "Export score breakdown, semantic coverage, recommendations, and a bounded "
+            "Job Description appendix."
+        ),
+        icon="📥",
     )
 
     col_txt, col_pdf = st.columns(2)
@@ -1367,9 +1105,9 @@ def render_results(data: Dict[str, Any]) -> None:
         if "semantic_pdf_report" not in st.session_state:
             with st.spinner("Preparing enterprise PDF report..."):
                 st.session_state["semantic_pdf_report"] = create_pdf_report(
-                    data,
-                    cv_filename,
-                    job_description,
+                    data=data,
+                    cv_filename=cv_filename,
+                    job_description=job_description,
                 )
 
         pdf_bytes = st.session_state.get("semantic_pdf_report")
@@ -1383,35 +1121,15 @@ def render_results(data: Dict[str, Any]) -> None:
             )
 
 
-render_semantic_styles()
-
-render_hero(
-    "SEMANTIC INTELLIGENCE",
-    "Semantic Match",
-    "Compare meaning, role alignment, skills coverage and recruiter readiness.",
-    "🧠",
-)
-
-st.markdown(
-    """
-    <div class="tm-semantic-shell">
-        <div class="tm-kicker">ENTERPRISE MATCH WORKSPACE</div>
-        <div class="tm-card-title" style="margin-top:.28rem">
-            Turn one CV and one job description into recruiter-grade match intelligence.
-        </div>
-        <div class="tm-muted" style="margin-top:.5rem;max-width:900px;line-height:1.7">
-            Evaluate semantic fit, keyword coverage, missing themes and practical optimization
-            priorities in a single secure workflow. Every completed analysis is saved to History.
-        </div>
-        <div class="tm-semantic-trust-row">
-            <span class="tm-semantic-trust">🔐 Private workspace</span>
-            <span class="tm-semantic-trust">🧠 AI semantic scoring</span>
-            <span class="tm-semantic-trust">📜 History persistence</span>
-            <span class="tm-semantic-trust">📄 TXT and PDF exports</span>
-        </div>
-    </div>
-    """,
-    unsafe_allow_html=True,
+render_page_intro(
+    kicker="SEMANTIC INTELLIGENCE",
+    title="Semantic Match",
+    subtitle=(
+        "Compare meaning, role alignment, skills coverage, and recruiter readiness "
+        "before every application."
+    ),
+    icon="🧠",
+    badge="PRO WORKFLOW",
 )
 
 if not is_logged_in():
@@ -1420,32 +1138,31 @@ if not is_logged_in():
     st.stop()
 
 if not is_pro_user():
-    st.markdown(
-        """
-        <div class="tm-semantic-cta">
-            <div class="tm-kicker">PRO WORKFLOW</div>
-            <div class="tm-semantic-cta-title">Unlock Semantic Match with TalentMatch Pro</div>
-            <div class="tm-semantic-cta-copy">
-                Compare meaning beyond exact keywords, reveal missing role themes, receive
-                recruiter-focused recommendations and export complete professional reports.
-                Billing is handled exclusively through PayPal.
-            </div>
-            <div class="tm-semantic-trust-row">
-                <span class="tm-semantic-trust">✓ Semantic + keyword scoring</span>
-                <span class="tm-semantic-trust">✓ Recruiter readiness</span>
-                <span class="tm-semantic-trust">✓ PDF export</span>
-                <span class="tm-semantic-trust">✓ Saved History</span>
-            </div>
-        </div>
-        """,
-        unsafe_allow_html=True,
+    render_action_panel(
+        title="Unlock Semantic Match",
+        description=(
+            "Upgrade to Pro to compare semantic fit, keyword coverage, missing themes, "
+            "and recruiter readiness with downloadable TXT and PDF reports."
+        ),
+        icon="🔒",
+        eyebrow="PRO FEATURE",
     )
     st.page_link("pages/pricing.py", label="💳 Upgrade to Pro")
     st.stop()
 
-st.markdown(
-    '<div class="tm-section-title">Run a new semantic match</div>',
-    unsafe_allow_html=True,
+render_section_title(
+    "Run a new semantic match",
+    "Upload one CV and paste the complete job description for a focused semantic assessment.",
+)
+
+render_action_panel(
+    title="Prepare the semantic match",
+    description=(
+        "Use a complete PDF CV and the exact job description. Better source material "
+        "produces more accurate semantic coverage and stronger recommendations."
+    ),
+    icon="🚀",
+    eyebrow="SEMANTIC WORKFLOW",
 )
 
 left, right = st.columns([1, 1.25])
@@ -1457,16 +1174,18 @@ with left:
             <div class="tm-card-title">📄 CV upload</div>
             <div class="tm-muted">
                 Upload one PDF CV. TalentMatch Pro compares role meaning,
-                experience signals, themes and keyword coverage.
+                experience signals, themes, and keyword coverage.
             </div>
         </div>
         """,
         unsafe_allow_html=True,
     )
+
     uploaded_file = st.file_uploader(
         "Upload CV (PDF)",
         type=["pdf"],
         accept_multiple_files=False,
+        help="Upload one PDF CV or resume.",
     )
 
     if uploaded_file is not None:
@@ -1483,12 +1202,13 @@ with right:
             <div class="tm-card-title">🧾 Job description</div>
             <div class="tm-muted">
                 Paste the complete job advertisement for the most accurate
-                semantic, keyword and recruiter-readiness scoring.
+                semantic, keyword, and recruiter-readiness scoring.
             </div>
         </div>
         """,
         unsafe_allow_html=True,
     )
+
     job_description = st.text_area(
         "Job Description",
         value=DEFAULT_JOB_DESCRIPTION,
@@ -1498,6 +1218,7 @@ with right:
 
 run_clicked = st.button(
     "🚀 Run Semantic Match",
+    type="primary",
     use_container_width=True,
     disabled=uploaded_file is None or not job_description.strip(),
 )
@@ -1538,8 +1259,8 @@ if run_clicked:
     response, call_error = normalize_response(raw_response)
     if call_error:
         st.error(
-            f"Semantic Match failed: "
-            f"{clean_text(call_error, max_chars=500)}"
+            "Semantic Match failed: "
+            + clean_text(call_error, max_chars=500)
         )
         st.stop()
 
