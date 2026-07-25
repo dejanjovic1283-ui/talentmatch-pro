@@ -348,6 +348,19 @@ def score_color(score: Any) -> str:
     return "#B3261E"
 
 
+def score_status(score: Any) -> str:
+    numeric_score = score_number(score)
+    if numeric_score >= 85:
+        return "Excellent"
+    if numeric_score >= 75:
+        return "Strong"
+    if numeric_score >= 60:
+        return "Competitive"
+    if numeric_score >= 40:
+        return "Needs work"
+    return "Low"
+
+
 def get_cv_filename(item: dict[str, Any]) -> str:
     return str(
         item.get("cv_filename")
@@ -948,6 +961,70 @@ def sort_score(item: dict[str, Any]) -> int:
 
 
 
+def render_history_evidence_cards(
+    title: str,
+    icon: str,
+    values: list[str],
+    *,
+    kind: str,
+    empty_message: str,
+    key_prefix: str,
+    visible_limit: int = 8,
+) -> None:
+    palette = {
+        "success": ("#ECFDF5", "#A7F3D0", "#047857", "rgba(16,185,129,.12)"),
+        "danger": ("#FFF7ED", "#FED7AA", "#B45309", "rgba(245,158,11,.12)"),
+        "info": ("#EFF6FF", "#BFDBFE", "#0369A1", "rgba(37,99,235,.12)"),
+    }
+    background, border, color, shadow = palette.get(
+        kind,
+        ("#F8FAFC", "#CBD5E1", "#334155", "rgba(15,23,42,.08)"),
+    )
+
+    st.markdown(
+        (
+            '<div class="tm-history-column-title">'
+            f'<span>{safe_html(icon)}</span>'
+            f'<span>{safe_html(title)}</span>'
+            '</div>'
+        ),
+        unsafe_allow_html=True,
+    )
+
+    source = values or [empty_message]
+    visible = source[:visible_limit]
+    remaining = source[visible_limit:]
+
+    cards_html = "".join(
+        (
+            '<div class="tm-history-evidence-card" '
+            f'style="background:{background};border-color:{border};'
+            f'color:{color};box-shadow:0 14px 34px {shadow};">'
+            f'{safe_html(value)}'
+            '</div>'
+        )
+        for value in visible
+    )
+    st.markdown(cards_html, unsafe_allow_html=True)
+
+    if remaining:
+        with st.expander(
+            f"Show additional {title.lower()} ({len(remaining)} more)",
+            expanded=False,
+        ):
+            remaining_html = "".join(
+                (
+                    '<div class="tm-history-evidence-card tm-history-evidence-card--compact" '
+                    f'style="background:{background};border-color:{border};'
+                    f'color:{color};box-shadow:0 12px 28px {shadow};">'
+                    f'{safe_html(value)}'
+                    '</div>'
+                )
+                for value in remaining
+            )
+            st.markdown(remaining_html, unsafe_allow_html=True)
+
+
 def render_history_css() -> None:
     st.markdown(
         """
@@ -955,132 +1032,272 @@ def render_history_css() -> None:
         .tm-history-toolbar {
             border: 1px solid rgba(148, 163, 184, .22);
             border-radius: 28px;
-            padding: 1.15rem 1.2rem .35rem 1.2rem;
+            padding: 1.2rem 1.25rem .4rem;
             background:
-                radial-gradient(circle at top right, rgba(37, 99, 235, .10), transparent 34%),
-                rgba(255, 255, 255, .88);
-            box-shadow: 0 20px 56px rgba(15, 23, 42, .07);
-            margin: .75rem 0 1.1rem 0;
+                radial-gradient(circle at 100% 0%, rgba(37,99,235,.12), transparent 34%),
+                radial-gradient(circle at 0% 100%, rgba(16,185,129,.09), transparent 34%),
+                rgba(255,255,255,.90);
+            box-shadow: 0 24px 70px rgba(15,23,42,.09);
+            backdrop-filter: blur(18px);
+            margin: .85rem 0 1.4rem;
         }
+
         .tm-history-report {
-            border: 1px solid rgba(148, 163, 184, .22);
-            border-radius: 30px;
-            padding: 1.35rem;
+            position: relative;
+            overflow: hidden;
+            border: 1px solid rgba(148,163,184,.22);
+            border-radius: 32px;
+            padding: 1.55rem;
             background:
-                radial-gradient(circle at 100% 0%, rgba(37, 99, 235, .10), transparent 31%),
-                radial-gradient(circle at 0% 100%, rgba(16, 185, 129, .08), transparent 34%),
-                rgba(255, 255, 255, .94);
-            box-shadow: 0 24px 68px rgba(15, 23, 42, .08);
-            margin-bottom: 1rem;
+                radial-gradient(circle at 100% 0%, rgba(37,99,235,.12), transparent 30%),
+                radial-gradient(circle at 0% 100%, rgba(16,185,129,.10), transparent 34%),
+                rgba(255,255,255,.94);
+            box-shadow:
+                0 28px 78px rgba(15,23,42,.11),
+                inset 0 1px 0 rgba(255,255,255,.92);
+            backdrop-filter: blur(20px);
+            margin: 1rem 0 1.4rem;
+            transition: transform .22s ease, box-shadow .22s ease, border-color .22s ease;
         }
+
+        .tm-history-report:hover {
+            transform: translateY(-4px);
+            border-color: rgba(37,99,235,.28);
+            box-shadow:
+                0 36px 92px rgba(15,23,42,.15),
+                0 0 0 1px rgba(37,99,235,.05);
+        }
+
+        .tm-history-report::after {
+            content: "";
+            position: absolute;
+            width: 230px;
+            height: 230px;
+            right: -110px;
+            bottom: -130px;
+            border-radius: 50%;
+            background: radial-gradient(circle, rgba(37,99,235,.10), transparent 68%);
+            pointer-events: none;
+        }
+
         .tm-history-head {
             display: flex;
             align-items: flex-start;
             justify-content: space-between;
-            gap: 1rem;
-            margin-bottom: .85rem;
+            gap: 1.25rem;
+            margin-bottom: 1.1rem;
+            position: relative;
+            z-index: 1;
         }
+
         .tm-history-title {
             color: #0f172a;
-            font-size: 1.08rem;
+            font-size: 1.24rem;
             line-height: 1.35;
             font-weight: 950;
-            letter-spacing: -.02em;
+            letter-spacing: -.03em;
             overflow-wrap: anywhere;
-        }
-        .tm-history-meta {
-            color: #64748b;
-            font-size: .82rem;
-            font-weight: 700;
             margin-top: .25rem;
         }
-        .tm-history-score {
-            min-width: 88px;
-            text-align: center;
-            border-radius: 22px;
-            padding: .72rem .8rem;
-            border: 1px solid rgba(148, 163, 184, .20);
-            background: rgba(248, 250, 252, .90);
+
+        .tm-history-meta {
+            color: #64748b;
+            font-size: .84rem;
+            font-weight: 750;
+            margin-top: .35rem;
         }
+
+        .tm-history-score {
+            min-width: 138px;
+            text-align: center;
+            border-radius: 26px;
+            padding: 1rem .95rem;
+            border: 1px solid rgba(148,163,184,.22);
+            background:
+                radial-gradient(circle at 50% 0%, rgba(37,99,235,.14), transparent 62%),
+                rgba(248,250,252,.94);
+            box-shadow:
+                0 18px 44px rgba(15,23,42,.10),
+                inset 0 1px 0 rgba(255,255,255,.95);
+        }
+
+        .tm-history-score-kicker {
+            color: #2563eb;
+            font-size: .68rem;
+            font-weight: 950;
+            text-transform: uppercase;
+            letter-spacing: .12em;
+            margin-bottom: .45rem;
+        }
+
         .tm-history-score-value {
-            font-size: 1.55rem;
+            font-size: 2.35rem;
             line-height: 1;
             font-weight: 950;
-            letter-spacing: -.05em;
+            letter-spacing: -.06em;
         }
+
+        .tm-history-score-status {
+            color: #475569;
+            font-size: .8rem;
+            line-height: 1.2;
+            font-weight: 850;
+            margin-top: .45rem;
+        }
+
         .tm-history-score-label {
-            color: #64748b;
-            font-size: .7rem;
+            color: #94a3b8;
+            font-size: .64rem;
             font-weight: 900;
             text-transform: uppercase;
-            letter-spacing: .08em;
-            margin-top: .3rem;
+            letter-spacing: .09em;
+            margin-top: .28rem;
         }
+
         .tm-history-summary {
-            border: 1px solid rgba(148, 163, 184, .18);
-            border-radius: 20px;
-            padding: .9rem 1rem;
-            background: rgba(248, 250, 252, .78);
-            color: #334155;
-            line-height: 1.68;
-            margin: .7rem 0 1rem 0;
+            border: 1px solid rgba(191,219,254,.95);
+            border-left: 5px solid #2563eb;
+            border-radius: 24px;
+            padding: 1.2rem 1.35rem;
+            background:
+                linear-gradient(135deg, rgba(239,246,255,.98), rgba(248,250,252,.92));
+            box-shadow: 0 18px 48px rgba(37,99,235,.09);
+            color: #475569;
+            line-height: 1.72;
+            margin: .9rem 0 1.25rem;
+            position: relative;
+            z-index: 1;
         }
+
+        .tm-history-summary-label {
+            color: #2563eb;
+            font-size: .73rem;
+            font-weight: 950;
+            letter-spacing: .12em;
+            text-transform: uppercase;
+            margin-bottom: .5rem;
+        }
+
         .tm-history-pill {
             display: inline-flex;
             align-items: center;
             gap: .35rem;
-            padding: .34rem .7rem;
+            padding: .38rem .78rem;
             border-radius: 999px;
-            font-size: .73rem;
+            font-size: .72rem;
             font-weight: 950;
-            letter-spacing: .045em;
+            letter-spacing: .055em;
             text-transform: uppercase;
-            border: 1px solid rgba(148, 163, 184, .20);
+            border: 1px solid rgba(148,163,184,.20);
+            box-shadow: 0 8px 22px rgba(15,23,42,.06);
         }
+
+        .tm-history-column-title {
+            display: flex;
+            align-items: center;
+            gap: .55rem;
+            color: #0f172a;
+            font-size: 1.06rem;
+            font-weight: 950;
+            letter-spacing: -.02em;
+            margin: .35rem 0 .7rem;
+        }
+
+        .tm-history-evidence-card {
+            border: 1px solid;
+            border-radius: 22px;
+            padding: 1rem 1.05rem;
+            min-height: 64px;
+            display: flex;
+            align-items: center;
+            font-size: .94rem;
+            line-height: 1.45;
+            font-weight: 650;
+            margin-bottom: .75rem;
+            transition: transform .2s ease, box-shadow .2s ease, border-color .2s ease;
+        }
+
+        .tm-history-evidence-card:hover {
+            transform: translateY(-3px);
+            filter: saturate(1.04);
+        }
+
+        .tm-history-evidence-card--compact {
+            min-height: 58px;
+            padding: .85rem 1rem;
+        }
+
         .tm-history-distribution {
-            border: 1px solid rgba(148, 163, 184, .20);
-            border-radius: 26px;
-            padding: 1rem 1.1rem;
-            background: rgba(255, 255, 255, .88);
-            box-shadow: 0 18px 52px rgba(15, 23, 42, .06);
+            border: 1px solid rgba(148,163,184,.20);
+            border-radius: 28px;
+            padding: 1.2rem 1.25rem;
+            background:
+                radial-gradient(circle at 100% 0%, rgba(37,99,235,.09), transparent 38%),
+                rgba(255,255,255,.92);
+            box-shadow: 0 22px 62px rgba(15,23,42,.09);
             min-height: 100%;
+            transition: transform .2s ease, box-shadow .2s ease;
         }
+
+        .tm-history-distribution:hover {
+            transform: translateY(-3px);
+            box-shadow: 0 30px 76px rgba(15,23,42,.12);
+        }
+
         .tm-history-distribution-title {
             color: #0f172a;
+            font-size: 1.02rem;
             font-weight: 950;
-            margin-bottom: .75rem;
+            margin-bottom: .9rem;
         }
-        .tm-history-bar-row { margin: .68rem 0; }
+
+        .tm-history-bar-row { margin: .82rem 0; }
+
         .tm-history-bar-label {
             display: flex;
             justify-content: space-between;
             gap: 1rem;
             color: #475569;
-            font-size: .78rem;
+            font-size: .8rem;
             font-weight: 850;
-            margin-bottom: .3rem;
+            margin-bottom: .38rem;
         }
+
         .tm-history-bar-track {
-            height: 9px;
+            height: 12px;
             border-radius: 999px;
             background: #e2e8f0;
             overflow: hidden;
+            box-shadow: inset 0 1px 3px rgba(15,23,42,.08);
         }
+
         .tm-history-bar-fill {
             height: 100%;
             border-radius: 999px;
-            background: linear-gradient(90deg, #2563eb, #10b981);
+            background: linear-gradient(90deg, #2563eb, #0ea5e9 52%, #10b981);
+            box-shadow: 0 0 18px rgba(37,99,235,.22);
+            animation: tmHistoryGrow .7s ease both;
+            transform-origin: left;
         }
+
+        @keyframes tmHistoryGrow {
+            from { transform: scaleX(0); opacity: .4; }
+            to { transform: scaleX(1); opacity: 1; }
+        }
+
         .tm-history-danger {
-            border: 1px solid rgba(239, 68, 68, .24);
-            border-radius: 26px;
-            padding: 1rem 1.1rem;
-            background: rgba(254, 242, 242, .78);
+            border: 1px solid rgba(239,68,68,.24);
+            border-radius: 28px;
+            padding: 1.1rem 1.2rem;
+            background: linear-gradient(135deg, rgba(254,242,242,.88), rgba(255,255,255,.92));
+            box-shadow: 0 18px 50px rgba(239,68,68,.07);
             margin-top: 1rem;
         }
-        @media (max-width: 800px) {
+
+        @media (max-width: 900px) {
             .tm-history-head { flex-direction: column; }
             .tm-history-score { width: 100%; }
+            .tm-history-report { padding: 1.15rem; border-radius: 26px; }
         }
         </style>
         """,
@@ -1263,19 +1480,53 @@ render_section_title(
     "Executive overview",
     "Live report inventory and score intelligence across the complete account history.",
 )
-metric_cols = st.columns(6)
-with metric_cols[0]:
-    render_kpi_card("Total reports", counts["total"], "📊", "Saved securely")
-with metric_cols[1]:
-    render_kpi_card("Average score", f'{score_analytics["average"]}/100', "📈", "Across scored reports")
-with metric_cols[2]:
-    render_kpi_card("Highest score", f'{score_analytics["highest"]}/100', "🏆", "Best recorded result")
-with metric_cols[3]:
-    render_kpi_card("Strong matches", score_analytics["strong"], "🔥", "Score 75 or higher")
-with metric_cols[4]:
-    render_kpi_card("Recruiter", counts["recruiter_mode"], "👥", "Ranking reports")
-with metric_cols[5]:
-    render_kpi_card("AI workflows", counts["semantic_match"] + counts["cv_rewrite"], "🧠", "Semantic + rewrite")
+metric_row_one = st.columns(3)
+with metric_row_one[0]:
+    render_score_card(
+        label="Total reports",
+        value=counts["total"],
+        caption="Saved securely",
+        tone="blue",
+    )
+with metric_row_one[1]:
+    render_score_card(
+        label="Average score",
+        value=score_analytics["average"],
+        caption="Across scored reports",
+        tone="green",
+        suffix="/100",
+    )
+with metric_row_one[2]:
+    render_score_card(
+        label="Highest score",
+        value=score_analytics["highest"],
+        caption="Best recorded result",
+        tone="amber",
+        suffix="/100",
+    )
+
+metric_row_two = st.columns(3)
+with metric_row_two[0]:
+    render_score_card(
+        label="Strong matches",
+        value=score_analytics["strong"],
+        caption="Score 75 or higher",
+        tone="purple",
+    )
+with metric_row_two[1]:
+    render_score_card(
+        label="Recruiter reports",
+        value=counts["recruiter_mode"],
+        caption="Candidate ranking reports",
+        tone="blue",
+    )
+with metric_row_two[2]:
+    render_score_card(
+        label="AI workflows",
+        value=counts["semantic_match"] + counts["cv_rewrite"],
+        caption="Semantic Match + CV Rewrite",
+        tone="green",
+    )
 
 analytics_left, analytics_right = st.columns(2)
 with analytics_left:
@@ -1409,7 +1660,9 @@ else:
                     <div class="tm-history-meta">Saved {safe_html(created_at)}</div>
                 </div>
                 <div class="tm-history-score">
+                    <div class="tm-history-score-kicker">Overall score</div>
                     <div class="tm-history-score-value" style="color:{score_hex}">{numeric_score}</div>
+                    <div class="tm-history-score-status">{safe_html(score_status(numeric_score))}</div>
                     <div class="tm-history-score-label">out of 100</div>
                 </div>
             </div>
@@ -1419,17 +1672,43 @@ else:
 
         if summary:
             st.markdown(
-                f'<div class="tm-history-summary"><b>Executive summary</b><br>{safe_html(summary)}</div>',
+                (
+                    '<div class="tm-history-summary">'
+                    '<div class="tm-history-summary-label">AI executive summary</div>'
+                    f'<div>{safe_html(summary)}</div>'
+                    '</div>'
+                ),
                 unsafe_allow_html=True,
             )
 
         evidence_left, evidence_right, evidence_action = st.columns([1, 1, 1])
         with evidence_left:
-            render_list_cards(strengths, kind="success", empty_message=f"No {positive_label.lower()} saved.")
+            render_history_evidence_cards(
+                positive_label,
+                "✅",
+                strengths,
+                kind="success",
+                empty_message=f"No {positive_label.lower()} saved.",
+                key_prefix=f"positive_{identity}",
+            )
         with evidence_right:
-            render_list_cards(gaps, kind="danger", empty_message=f"No {negative_label.lower()} saved.")
+            render_history_evidence_cards(
+                negative_label,
+                "⚠️",
+                gaps,
+                kind="danger",
+                empty_message=f"No {negative_label.lower()} saved.",
+                key_prefix=f"negative_{identity}",
+            )
         with evidence_action:
-            render_list_cards(recommendations, kind="info", empty_message="No recommendations saved.")
+            render_history_evidence_cards(
+                "Recommendations",
+                "💡",
+                recommendations,
+                kind="info",
+                empty_message="No recommendations saved.",
+                key_prefix=f"recommendations_{identity}",
+            )
 
         with st.expander("📋 Full report controls", expanded=False):
             export_one, export_two = st.columns(2)
