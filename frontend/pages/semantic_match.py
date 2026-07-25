@@ -891,6 +891,188 @@ def clear_semantic_state() -> None:
         st.session_state.pop(key, None)
 
 
+def render_semantic_styles() -> None:
+    """Apply page-scoped enterprise styling without changing Semantic Match logic."""
+    st.markdown(
+        """
+        <style>
+        .tm-semantic-shell {
+            position: relative;
+            overflow: hidden;
+            border: 1px solid rgba(148, 163, 184, .22);
+            border-radius: 30px;
+            padding: 1.15rem 1.2rem;
+            margin: .9rem 0 1.2rem;
+            background:
+                radial-gradient(circle at 100% 0%, rgba(37, 99, 235, .12), transparent 34%),
+                radial-gradient(circle at 0% 100%, rgba(14, 165, 233, .08), transparent 36%),
+                rgba(255, 255, 255, .92);
+            box-shadow: 0 24px 70px rgba(15, 23, 42, .08);
+            backdrop-filter: blur(16px);
+        }
+
+        .tm-semantic-shell::after {
+            content: "";
+            position: absolute;
+            inset: auto -80px -100px auto;
+            width: 210px;
+            height: 210px;
+            border-radius: 999px;
+            background: rgba(37, 99, 235, .08);
+            pointer-events: none;
+        }
+
+        .tm-semantic-cta {
+            position: relative;
+            overflow: hidden;
+            border: 1px solid rgba(37, 99, 235, .24);
+            border-radius: 28px;
+            padding: 1.35rem 1.45rem;
+            margin: .85rem 0 1.1rem;
+            background:
+                linear-gradient(135deg, rgba(239, 246, 255, .98), rgba(255, 255, 255, .96));
+            box-shadow: 0 22px 64px rgba(37, 99, 235, .12);
+        }
+
+        .tm-semantic-cta-title {
+            color: #0f172a;
+            font-size: 1.18rem;
+            line-height: 1.35;
+            font-weight: 950;
+            letter-spacing: -.025em;
+            margin-bottom: .35rem;
+        }
+
+        .tm-semantic-cta-copy {
+            color: #475569;
+            line-height: 1.65;
+            max-width: 760px;
+        }
+
+        .tm-semantic-trust-row {
+            display: flex;
+            flex-wrap: wrap;
+            gap: .55rem;
+            margin-top: .9rem;
+        }
+
+        .tm-semantic-trust {
+            display: inline-flex;
+            align-items: center;
+            gap: .35rem;
+            padding: .38rem .72rem;
+            border-radius: 999px;
+            border: 1px solid rgba(148, 163, 184, .20);
+            background: rgba(255, 255, 255, .86);
+            color: #334155;
+            font-size: .76rem;
+            font-weight: 850;
+        }
+
+        div[data-testid="stPageLink"] a[href*="pricing"] {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            min-height: 3rem;
+            border: 1px solid #1d4ed8 !important;
+            border-radius: 14px !important;
+            background: linear-gradient(135deg, #2563eb, #1d4ed8) !important;
+            color: #ffffff !important;
+            font-weight: 900 !important;
+            text-decoration: none !important;
+            box-shadow: 0 14px 34px rgba(37, 99, 235, .28);
+            transition:
+                transform .18s ease,
+                box-shadow .18s ease,
+                filter .18s ease;
+        }
+
+        div[data-testid="stPageLink"] a[href*="pricing"]:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 20px 42px rgba(37, 99, 235, .34);
+            filter: brightness(1.03);
+        }
+
+        div[data-testid="stPageLink"] a[href*="pricing"] p,
+        div[data-testid="stPageLink"] a[href*="pricing"] span {
+            color: #ffffff !important;
+            font-weight: 900 !important;
+        }
+
+        div[data-testid="stButton"] > button[kind="primary"],
+        div[data-testid="stButton"] > button {
+            min-height: 3.05rem;
+            border-radius: 14px;
+            font-weight: 900;
+            transition:
+                transform .18s ease,
+                box-shadow .18s ease,
+                filter .18s ease;
+        }
+
+        div[data-testid="stButton"] > button:hover:not(:disabled) {
+            transform: translateY(-2px);
+            box-shadow: 0 16px 36px rgba(37, 99, 235, .20);
+        }
+
+        div[data-testid="stDownloadButton"] > button {
+            min-height: 3rem;
+            border-radius: 14px;
+            font-weight: 850;
+            transition:
+                transform .18s ease,
+                box-shadow .18s ease;
+        }
+
+        div[data-testid="stDownloadButton"] > button:hover:not(:disabled) {
+            transform: translateY(-2px);
+            box-shadow: 0 14px 32px rgba(15, 23, 42, .12);
+        }
+
+        .tm-card {
+            border-radius: 24px !important;
+            border: 1px solid rgba(148, 163, 184, .20) !important;
+            box-shadow: 0 18px 52px rgba(15, 23, 42, .07) !important;
+            transition:
+                transform .2s ease,
+                box-shadow .2s ease,
+                border-color .2s ease;
+        }
+
+        .tm-card:hover {
+            transform: translateY(-3px);
+            border-color: rgba(37, 99, 235, .24) !important;
+            box-shadow: 0 26px 66px rgba(15, 23, 42, .11) !important;
+        }
+
+        div[data-testid="stFileUploader"] {
+            border-radius: 20px;
+        }
+
+        div[data-testid="stTextArea"] textarea {
+            border-radius: 16px;
+            line-height: 1.55;
+        }
+
+        .tm-section-title {
+            margin-top: 1.55rem !important;
+            margin-bottom: .8rem !important;
+            letter-spacing: -.02em;
+        }
+
+        @media (max-width: 800px) {
+            .tm-semantic-shell,
+            .tm-semantic-cta {
+                border-radius: 22px;
+                padding: 1rem;
+            }
+        }
+        </style>
+        """,
+        unsafe_allow_html=True,
+    )
+
+
 def render_kpi_card(
     label: str,
     value: str,
@@ -1201,11 +1383,35 @@ def render_results(data: Dict[str, Any]) -> None:
             )
 
 
+render_semantic_styles()
+
 render_hero(
     "SEMANTIC INTELLIGENCE",
     "Semantic Match",
     "Compare meaning, role alignment, skills coverage and recruiter readiness.",
     "🧠",
+)
+
+st.markdown(
+    """
+    <div class="tm-semantic-shell">
+        <div class="tm-kicker">ENTERPRISE MATCH WORKSPACE</div>
+        <div class="tm-card-title" style="margin-top:.28rem">
+            Turn one CV and one job description into recruiter-grade match intelligence.
+        </div>
+        <div class="tm-muted" style="margin-top:.5rem;max-width:900px;line-height:1.7">
+            Evaluate semantic fit, keyword coverage, missing themes and practical optimization
+            priorities in a single secure workflow. Every completed analysis is saved to History.
+        </div>
+        <div class="tm-semantic-trust-row">
+            <span class="tm-semantic-trust">🔐 Private workspace</span>
+            <span class="tm-semantic-trust">🧠 AI semantic scoring</span>
+            <span class="tm-semantic-trust">📜 History persistence</span>
+            <span class="tm-semantic-trust">📄 TXT and PDF exports</span>
+        </div>
+    </div>
+    """,
+    unsafe_allow_html=True,
 )
 
 if not is_logged_in():
@@ -1214,7 +1420,26 @@ if not is_logged_in():
     st.stop()
 
 if not is_pro_user():
-    st.warning("Semantic Match is a Pro feature.")
+    st.markdown(
+        """
+        <div class="tm-semantic-cta">
+            <div class="tm-kicker">PRO WORKFLOW</div>
+            <div class="tm-semantic-cta-title">Unlock Semantic Match with TalentMatch Pro</div>
+            <div class="tm-semantic-cta-copy">
+                Compare meaning beyond exact keywords, reveal missing role themes, receive
+                recruiter-focused recommendations and export complete professional reports.
+                Billing is handled exclusively through PayPal.
+            </div>
+            <div class="tm-semantic-trust-row">
+                <span class="tm-semantic-trust">✓ Semantic + keyword scoring</span>
+                <span class="tm-semantic-trust">✓ Recruiter readiness</span>
+                <span class="tm-semantic-trust">✓ PDF export</span>
+                <span class="tm-semantic-trust">✓ Saved History</span>
+            </div>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
     st.page_link("pages/pricing.py", label="💳 Upgrade to Pro")
     st.stop()
 
