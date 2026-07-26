@@ -1029,7 +1029,8 @@ def render_history_css() -> None:
     st.markdown(
         """
         <style>
-        .tm-history-toolbar {
+        .tm-history-toolbar,
+        .st-key-history_toolbar {
             border: 1px solid rgba(148, 163, 184, .22);
             border-radius: 28px;
             padding: 1.2rem 1.25rem .4rem;
@@ -1042,7 +1043,8 @@ def render_history_css() -> None:
             margin: .85rem 0 1.4rem;
         }
 
-        .tm-history-report {
+        .tm-history-report,
+        [class*="st-key-history_report_"] {
             position: relative;
             overflow: hidden;
             border: 1px solid rgba(148,163,184,.22);
@@ -1060,7 +1062,8 @@ def render_history_css() -> None:
             transition: transform .22s ease, box-shadow .22s ease, border-color .22s ease;
         }
 
-        .tm-history-report:hover {
+        .tm-history-report:hover,
+        [class*="st-key-history_report_"]:hover {
             transform: translateY(-4px);
             border-color: rgba(37,99,235,.28);
             box-shadow:
@@ -1068,7 +1071,8 @@ def render_history_css() -> None:
                 0 0 0 1px rgba(37,99,235,.05);
         }
 
-        .tm-history-report::after {
+        .tm-history-report::after,
+        [class*="st-key-history_report_"]::after {
             content: "";
             position: absolute;
             width: 230px;
@@ -1285,7 +1289,8 @@ def render_history_css() -> None:
             to { transform: scaleX(1); opacity: 1; }
         }
 
-        .tm-history-danger {
+        .tm-history-danger,
+        .st-key-history_retention {
             border: 1px solid rgba(239,68,68,.24);
             border-radius: 28px;
             padding: 1.1rem 1.2rem;
@@ -1294,10 +1299,134 @@ def render_history_css() -> None:
             margin-top: 1rem;
         }
 
+        /* Final History UI polish */
+        .st-key-history_toolbar {
+            animation: tmHistoryFadeUp .45s ease both;
+        }
+
+        .st-key-history_toolbar [data-baseweb="select"] > div,
+        .st-key-history_toolbar input {
+            border-radius: 18px !important;
+            border-color: rgba(148,163,184,.24) !important;
+            background: rgba(248,250,252,.88) !important;
+            transition: border-color .18s ease, box-shadow .18s ease, transform .18s ease;
+        }
+
+        .st-key-history_toolbar [data-baseweb="select"] > div:focus-within,
+        .st-key-history_toolbar input:focus {
+            border-color: rgba(37,99,235,.48) !important;
+            box-shadow: 0 0 0 4px rgba(37,99,235,.10) !important;
+        }
+
+        .st-key-history_toolbar button {
+            min-height: 48px;
+            border-radius: 18px !important;
+            font-weight: 800 !important;
+            transition: transform .18s ease, box-shadow .18s ease, border-color .18s ease;
+        }
+
+        .st-key-history_toolbar button:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 14px 30px rgba(37,99,235,.13);
+        }
+
+        [class*="st-key-history_report_"] {
+            animation: tmHistoryFadeUp .48s ease both;
+            isolation: isolate;
+        }
+
+        [class*="st-key-history_report_"] [data-testid="stExpander"] {
+            border: 1px solid rgba(148,163,184,.20);
+            border-radius: 22px;
+            overflow: hidden;
+            background: rgba(248,250,252,.72);
+            box-shadow: 0 12px 34px rgba(15,23,42,.06);
+        }
+
+        [class*="st-key-history_report_"] [data-testid="stExpander"] summary {
+            font-weight: 800;
+        }
+
+        [class*="st-key-history_report_"] button,
+        [class*="st-key-history_report_"] [data-testid="stDownloadButton"] button {
+            border-radius: 18px !important;
+            min-height: 48px;
+            font-weight: 800 !important;
+            transition: transform .18s ease, box-shadow .18s ease;
+        }
+
+        [class*="st-key-history_report_"] button:hover,
+        [class*="st-key-history_report_"] [data-testid="stDownloadButton"] button:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 14px 32px rgba(15,23,42,.10);
+        }
+
+        .st-key-history_retention [data-testid="stExpander"] {
+            border-radius: 22px;
+            overflow: hidden;
+            border: 1px solid rgba(239,68,68,.20);
+            background: rgba(255,255,255,.70);
+        }
+
+        .st-key-history_retention button {
+            border-radius: 18px !important;
+            min-height: 48px;
+            font-weight: 850 !important;
+        }
+
+        div[data-testid="stDownloadButton"] > button {
+            border-radius: 18px !important;
+            min-height: 48px;
+            font-weight: 800 !important;
+            transition: transform .18s ease, box-shadow .18s ease;
+        }
+
+        div[data-testid="stDownloadButton"] > button:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 14px 32px rgba(15,23,42,.10);
+        }
+
+        div[data-testid="stAlert"] {
+            border-radius: 18px;
+        }
+
+        div[data-testid="stSlider"] {
+            padding: .25rem .1rem .35rem;
+        }
+
+        @keyframes tmHistoryFadeUp {
+            from { opacity: 0; transform: translateY(10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        @media (prefers-reduced-motion: reduce) {
+            .tm-history-report,
+            [class*="st-key-history_report_"],
+            .tm-history-evidence-card,
+            .tm-history-distribution,
+            .tm-history-bar-fill,
+            .st-key-history_toolbar,
+            button {
+                animation: none !important;
+                transition: none !important;
+                transform: none !important;
+            }
+        }
+
         @media (max-width: 900px) {
             .tm-history-head { flex-direction: column; }
             .tm-history-score { width: 100%; }
-            .tm-history-report { padding: 1.15rem; border-radius: 26px; }
+            .tm-history-report,
+            [class*="st-key-history_report_"] { padding: 1.15rem; border-radius: 26px; }
+            .tm-history-summary { padding: 1rem 1.05rem; border-radius: 20px; }
+        }
+
+        @media (max-width: 640px) {
+            .st-key-history_toolbar { padding: .9rem .85rem .2rem; border-radius: 22px; }
+            .tm-history-title { font-size: 1.08rem; }
+            .tm-history-column-title { font-size: .98rem; }
+            .tm-history-evidence-card { min-height: 56px; padding: .82rem .9rem; border-radius: 18px; }
+            .tm-history-distribution { padding: 1rem; border-radius: 22px; }
         }
         </style>
         """,
@@ -1414,37 +1543,35 @@ render_action_panel(
     eyebrow="HISTORY COMMAND CENTER",
 )
 
-st.markdown('<div class="tm-history-toolbar">', unsafe_allow_html=True)
-filter_col, search_col, sort_col, refresh_col = st.columns([1.25, 2.1, 1.3, .75])
+with st.container(border=False, key="history_toolbar"):
+    filter_col, search_col, sort_col, refresh_col = st.columns([1.25, 2.1, 1.3, .75])
 
-with filter_col:
-    selected_label = st.selectbox(
-        "Report type",
-        list(FILTER_OPTIONS.keys()),
-        key="history_type_filter",
-    )
+    with filter_col:
+        selected_label = st.selectbox(
+            "Report type",
+            list(FILTER_OPTIONS.keys()),
+            key="history_type_filter",
+        )
 
-with search_col:
-    search_query = st.text_input(
-        "Search reports",
-        placeholder="Filename, summary, report type, or job description...",
-        key="history_search_query",
-    )
+    with search_col:
+        search_query = st.text_input(
+            "Search reports",
+            placeholder="Filename, summary, report type, or job description...",
+            key="history_search_query",
+        )
 
-with sort_col:
-    sort_option = st.selectbox(
-        "Sort",
-        ["Newest first", "Oldest first", "Highest score", "Lowest score", "Filename A–Z"],
-        key="history_sort_option",
-    )
+    with sort_col:
+        sort_option = st.selectbox(
+            "Sort",
+            ["Newest first", "Oldest first", "Highest score", "Lowest score", "Filename A–Z"],
+            key="history_sort_option",
+        )
 
-with refresh_col:
-    st.write("")
-    if st.button("🔄 Refresh", use_container_width=True, key="history_refresh"):
-        clear_history_cache()
-        st.rerun()
-
-st.markdown("</div>", unsafe_allow_html=True)
+    with refresh_col:
+        st.write("")
+        if st.button("🔄 Refresh", use_container_width=True, key="history_refresh"):
+            clear_history_cache()
+            st.rerun()
 
 selected_type = FILTER_OPTIONS[selected_label]
 cache_key = f"history_items::{selected_type or 'all'}"
@@ -1487,6 +1614,7 @@ with metric_row_one[0]:
         value=counts["total"],
         caption="Saved securely",
         tone="blue",
+        suffix="",
     )
 with metric_row_one[1]:
     render_score_card(
@@ -1512,6 +1640,7 @@ with metric_row_two[0]:
         value=score_analytics["strong"],
         caption="Score 75 or higher",
         tone="purple",
+        suffix="",
     )
 with metric_row_two[1]:
     render_score_card(
@@ -1519,6 +1648,7 @@ with metric_row_two[1]:
         value=counts["recruiter_mode"],
         caption="Candidate ranking reports",
         tone="blue",
+        suffix="",
     )
 with metric_row_two[2]:
     render_score_card(
@@ -1526,6 +1656,7 @@ with metric_row_two[2]:
         value=counts["semantic_match"] + counts["cv_rewrite"],
         caption="Semantic Match + CV Rewrite",
         tone="green",
+        suffix="",
     )
 
 analytics_left, analytics_right = st.columns(2)
@@ -1649,138 +1780,136 @@ else:
         item_pdf_bytes = build_pdf_report([item], title=f"TalentMatch Pro - {history_label(item)} Report")
         identity = report_identity(item, position)
 
-        st.markdown('<div class="tm-history-report">', unsafe_allow_html=True)
-        score_hex = score_color(numeric_score)
-        st.markdown(
-            f"""
-            <div class="tm-history-head">
-                <div>
-                    {report_badge_html(item)}
-                    <div class="tm-history-title">{position}. {safe_html(cv_file)}</div>
-                    <div class="tm-history-meta">Saved {safe_html(created_at)}</div>
-                </div>
-                <div class="tm-history-score">
-                    <div class="tm-history-score-kicker">Overall score</div>
-                    <div class="tm-history-score-value" style="color:{score_hex}">{numeric_score}</div>
-                    <div class="tm-history-score-status">{safe_html(score_status(numeric_score))}</div>
-                    <div class="tm-history-score-label">out of 100</div>
-                </div>
-            </div>
-            """,
-            unsafe_allow_html=True,
-        )
-
-        if summary:
+        with st.container(border=False, key=f"history_report_{identity}"):
+            score_hex = score_color(numeric_score)
             st.markdown(
-                (
-                    '<div class="tm-history-summary">'
-                    '<div class="tm-history-summary-label">AI executive summary</div>'
-                    f'<div>{safe_html(summary)}</div>'
-                    '</div>'
-                ),
+                f"""
+                <div class="tm-history-head">
+                    <div>
+                        {report_badge_html(item)}
+                        <div class="tm-history-title">{position}. {safe_html(cv_file)}</div>
+                        <div class="tm-history-meta">Saved {safe_html(created_at)}</div>
+                    </div>
+                    <div class="tm-history-score">
+                        <div class="tm-history-score-kicker">Overall score</div>
+                        <div class="tm-history-score-value" style="color:{score_hex}">{numeric_score}</div>
+                        <div class="tm-history-score-status">{safe_html(score_status(numeric_score))}</div>
+                        <div class="tm-history-score-label">out of 100</div>
+                    </div>
+                </div>
+                """,
                 unsafe_allow_html=True,
             )
 
-        evidence_left, evidence_right, evidence_action = st.columns([1, 1, 1])
-        with evidence_left:
-            render_history_evidence_cards(
-                positive_label,
-                "✅",
-                strengths,
-                kind="success",
-                empty_message=f"No {positive_label.lower()} saved.",
-                key_prefix=f"positive_{identity}",
-            )
-        with evidence_right:
-            render_history_evidence_cards(
-                negative_label,
-                "⚠️",
-                gaps,
-                kind="danger",
-                empty_message=f"No {negative_label.lower()} saved.",
-                key_prefix=f"negative_{identity}",
-            )
-        with evidence_action:
-            render_history_evidence_cards(
-                "Recommendations",
-                "💡",
-                recommendations,
-                kind="info",
-                empty_message="No recommendations saved.",
-                key_prefix=f"recommendations_{identity}",
-            )
-
-        with st.expander("📋 Full report controls", expanded=False):
-            export_one, export_two = st.columns(2)
-            with export_one:
-                st.download_button(
-                    "⬇️ Download TXT",
-                    data=report_text.encode("utf-8"),
-                    file_name=f"{report_filename}.txt",
-                    mime="text/plain",
-                    use_container_width=True,
-                    key=f"history_txt_{identity}",
+            if summary:
+                st.markdown(
+                    (
+                        '<div class="tm-history-summary">'
+                        '<div class="tm-history-summary-label">AI executive summary</div>'
+                        f'<div>{safe_html(summary)}</div>'
+                        '</div>'
+                    ),
+                    unsafe_allow_html=True,
                 )
-            with export_two:
-                if is_pro_user():
+
+            evidence_left, evidence_right, evidence_action = st.columns([1, 1, 1])
+            with evidence_left:
+                render_history_evidence_cards(
+                    positive_label,
+                    "✅",
+                    strengths,
+                    kind="success",
+                    empty_message=f"No {positive_label.lower()} saved.",
+                    key_prefix=f"positive_{identity}",
+                )
+            with evidence_right:
+                render_history_evidence_cards(
+                    negative_label,
+                    "⚠️",
+                    gaps,
+                    kind="danger",
+                    empty_message=f"No {negative_label.lower()} saved.",
+                    key_prefix=f"negative_{identity}",
+                )
+            with evidence_action:
+                render_history_evidence_cards(
+                    "Recommendations",
+                    "💡",
+                    recommendations,
+                    kind="info",
+                    empty_message="No recommendations saved.",
+                    key_prefix=f"recommendations_{identity}",
+                )
+
+            with st.expander("📋 Full report controls", expanded=False):
+                export_one, export_two = st.columns(2)
+                with export_one:
                     st.download_button(
-                        "📄 Download PDF",
-                        data=item_pdf_bytes or b"PDF export requires reportlab.",
-                        file_name=f"{report_filename}.pdf",
-                        mime="application/pdf" if item_pdf_bytes else "text/plain",
+                        "⬇️ Download TXT",
+                        data=report_text.encode("utf-8"),
+                        file_name=f"{report_filename}.txt",
+                        mime="text/plain",
                         use_container_width=True,
-                        disabled=item_pdf_bytes is None,
-                        key=f"history_pdf_{identity}",
+                        key=f"history_txt_{identity}",
                     )
+                with export_two:
+                    if is_pro_user():
+                        st.download_button(
+                            "📄 Download PDF",
+                            data=item_pdf_bytes or b"PDF export requires reportlab.",
+                            file_name=f"{report_filename}.pdf",
+                            mime="application/pdf" if item_pdf_bytes else "text/plain",
+                            use_container_width=True,
+                            disabled=item_pdf_bytes is None,
+                            key=f"history_pdf_{identity}",
+                        )
+                    else:
+                        st.page_link("pages/pricing.py", label="🔒 Upgrade for PDF export")
+
+                record_id = item.get("id")
+                if record_id is None:
+                    st.info("This legacy report has no record ID and cannot be deleted individually.")
                 else:
-                    st.page_link("pages/pricing.py", label="🔒 Upgrade for PDF export")
+                    confirm_delete = st.checkbox(
+                        "I understand this permanently deletes the report.",
+                        key=f"confirm_delete_{identity}",
+                    )
+                    if st.button(
+                        "🗑 Delete this report",
+                        type="secondary",
+                        use_container_width=True,
+                        disabled=not confirm_delete,
+                        key=f"delete_history_{identity}",
+                    ):
+                        ok, message = delete_history_record(int(record_id))
+                        if ok:
+                            st.success(message)
+                            clear_history_cache()
+                            st.rerun()
+                        st.error(message)
 
-            record_id = item.get("id")
-            if record_id is None:
-                st.info("This legacy report has no record ID and cannot be deleted individually.")
-            else:
-                confirm_delete = st.checkbox(
-                    "I understand this permanently deletes the report.",
-                    key=f"confirm_delete_{identity}",
-                )
-                if st.button(
-                    "🗑 Delete this report",
-                    type="secondary",
-                    use_container_width=True,
-                    disabled=not confirm_delete,
-                    key=f"delete_history_{identity}",
-                ):
-                    ok, message = delete_history_record(int(record_id))
-                    if ok:
-                        st.success(message)
-                        clear_history_cache()
-                        st.rerun()
-                    st.error(message)
-
-        st.markdown("</div>", unsafe_allow_html=True)
 
 render_section_title(
     "Data retention controls",
     "Permanent deletion is intentionally separated from normal report workflows.",
 )
-st.markdown('<div class="tm-history-danger">', unsafe_allow_html=True)
-with st.expander("🗑 Delete all History records", expanded=False):
-    st.warning("This permanently deletes every History record for your account and cannot be undone.")
-    delete_all_confirm = st.text_input(
-        "Type DELETE ALL to confirm",
-        key="delete_all_history_confirm",
-    )
-    if st.button(
-        "🗑 Permanently delete all History",
-        type="secondary",
-        use_container_width=True,
-        disabled=delete_all_confirm.strip() != "DELETE ALL" or not all_items_for_counts,
-        key="delete_all_history_button",
-    ):
-        ok, message = delete_all_history_records()
-        if ok:
-            st.success(message)
-            clear_history_cache()
-            st.rerun()
-        st.error(message)
-st.markdown("</div>", unsafe_allow_html=True)
+with st.container(border=False, key="history_retention"):
+    with st.expander("🗑 Delete all History records", expanded=False):
+        st.warning("This permanently deletes every History record for your account and cannot be undone.")
+        delete_all_confirm = st.text_input(
+            "Type DELETE ALL to confirm",
+            key="delete_all_history_confirm",
+        )
+        if st.button(
+            "🗑 Permanently delete all History",
+            type="secondary",
+            use_container_width=True,
+            disabled=delete_all_confirm.strip() != "DELETE ALL" or not all_items_for_counts,
+            key="delete_all_history_button",
+        ):
+            ok, message = delete_all_history_records()
+            if ok:
+                st.success(message)
+                clear_history_cache()
+                st.rerun()
+            st.error(message)
