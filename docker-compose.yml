@@ -5,22 +5,31 @@ services:
     build:
       context: .
       dockerfile: Dockerfile.backend
+
     container_name: talentmatch-backend
     init: true
     restart: unless-stopped
+
     env_file:
-      - path: ./backend/.env
-        required: false
+      - path: ./backend/.env.development
+        required: true
+
     environment:
       PORT: "8000"
+      APP_ENV: "development"
       ENVIRONMENT: "development"
       DATABASE_URL: "sqlite:////app/data/talentmatch.db"
       FRONTEND_URL: "http://localhost:8501"
       CORS_ORIGINS: "http://localhost:8501,http://127.0.0.1:8501"
+      GOOGLE_APPLICATION_CREDENTIALS: "/app/serviceAccountKey.json"
+
     ports:
       - "8000:8000"
+
     volumes:
-      - backend-data:/app/data
+      - ./backend/talentmatch.db:/app/data/talentmatch.db
+      - ./backend/serviceAccountKey.json:/app/serviceAccountKey.json:ro
+
     healthcheck:
       test:
         [
@@ -33,6 +42,7 @@ services:
       timeout: 5s
       start_period: 25s
       retries: 5
+
     networks:
       - talentmatch-network
 
@@ -40,23 +50,31 @@ services:
     build:
       context: .
       dockerfile: Dockerfile.frontend
+
     container_name: talentmatch-frontend
     init: true
     restart: unless-stopped
+
     env_file:
-      - path: ./frontend/.env
-        required: false
+      - path: ./frontend/.env.development
+        required: true
+
     environment:
       PORT: "8501"
+      APP_ENV: "development"
+      ENVIRONMENT: "development"
       BACKEND_URL: "http://backend:8000"
       API_BASE_URL: "http://backend:8000"
       STREAMLIT_BROWSER_GATHER_USAGE_STATS: "false"
       STREAMLIT_SERVER_HEADLESS: "true"
+
     ports:
       - "8501:8501"
+
     depends_on:
       backend:
         condition: service_healthy
+
     healthcheck:
       test:
         [
@@ -69,12 +87,9 @@ services:
       timeout: 5s
       start_period: 30s
       retries: 5
+
     networks:
       - talentmatch-network
-
-volumes:
-  backend-data:
-    name: talentmatch-backend-data
 
 networks:
   talentmatch-network:
