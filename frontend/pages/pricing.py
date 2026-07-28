@@ -67,6 +67,17 @@ st.markdown(
         position: relative;
         overflow: hidden;
         padding: 1.2rem 0 0.4rem 0;
+        border-radius: 34px;
+        filter:
+            drop-shadow(0 22px 34px rgba(15, 23, 42, 0.08))
+            drop-shadow(0 8px 16px rgba(37, 99, 235, 0.05));
+        transition: filter 220ms ease, transform 220ms ease;
+    }
+
+    .tm-pricing-shell:hover {
+        filter:
+            drop-shadow(0 28px 44px rgba(15, 23, 42, 0.10))
+            drop-shadow(0 10px 20px rgba(37, 99, 235, 0.07));
     }
 
     .tm-pricing-shell::before {
@@ -90,8 +101,31 @@ st.markdown(
     .tm-quote-card {
         border: 1px solid rgba(148, 163, 184, 0.22);
         background: rgba(255, 255, 255, 0.80);
-        box-shadow: 0 22px 60px rgba(15, 23, 42, 0.07);
+        box-shadow:
+            0 18px 46px rgba(15, 23, 42, 0.065),
+            0 2px 8px rgba(15, 23, 42, 0.035),
+            inset 0 1px 0 rgba(255, 255, 255, 0.74);
         backdrop-filter: blur(16px);
+        transition:
+            transform 220ms ease,
+            box-shadow 220ms ease,
+            border-color 220ms ease,
+            background 220ms ease;
+        will-change: transform;
+    }
+
+    .tm-metric-card:hover,
+    .tm-plan-card:hover,
+    .tm-value-card:hover,
+    .tm-trust-card:hover,
+    .tm-faq-card:hover,
+    .tm-quote-card:hover {
+        transform: translateY(-4px);
+        border-color: rgba(100, 116, 139, 0.30);
+        box-shadow:
+            0 26px 64px rgba(15, 23, 42, 0.10),
+            0 8px 20px rgba(37, 99, 235, 0.045),
+            inset 0 1px 0 rgba(255, 255, 255, 0.82);
     }
 
     .tm-metric-card {
@@ -153,7 +187,19 @@ st.markdown(
             radial-gradient(circle at top right, rgba(16, 185, 129, 0.20), transparent 34%),
             radial-gradient(circle at bottom left, rgba(37, 99, 235, 0.13), transparent 38%),
             rgba(255, 255, 255, 0.93);
-        box-shadow: 0 34px 90px rgba(16, 185, 129, 0.16);
+        box-shadow:
+            0 34px 90px rgba(16, 185, 129, 0.15),
+            0 12px 32px rgba(37, 99, 235, 0.08),
+            inset 0 1px 0 rgba(255, 255, 255, 0.80);
+    }
+
+    .tm-plan-card-pro:hover {
+        transform: translateY(-6px);
+        border-color: rgba(16, 185, 129, 0.62);
+        box-shadow:
+            0 42px 110px rgba(16, 185, 129, 0.20),
+            0 16px 38px rgba(37, 99, 235, 0.11),
+            inset 0 1px 0 rgba(255, 255, 255, 0.88);
     }
 
     .tm-plan-card-pro::after {
@@ -278,7 +324,20 @@ st.markdown(
         border-radius: 28px;
         border: 1px solid rgba(148, 163, 184, 0.22);
         background: rgba(255, 255, 255, 0.80);
-        box-shadow: 0 24px 64px rgba(15, 23, 42, 0.07);
+        box-shadow:
+            0 24px 64px rgba(15, 23, 42, 0.075),
+            0 6px 18px rgba(37, 99, 235, 0.04),
+            inset 0 1px 0 rgba(255, 255, 255, 0.72);
+        transition: transform 220ms ease, box-shadow 220ms ease, border-color 220ms ease;
+    }
+
+    .tm-comparison:hover {
+        transform: translateY(-3px);
+        border-color: rgba(100, 116, 139, 0.30);
+        box-shadow:
+            0 32px 78px rgba(15, 23, 42, 0.11),
+            0 10px 24px rgba(37, 99, 235, 0.055),
+            inset 0 1px 0 rgba(255, 255, 255, 0.80);
     }
 
     .tm-feature-row {
@@ -387,8 +446,38 @@ st.markdown(
             radial-gradient(circle at top right, rgba(16, 185, 129, 0.20), transparent 34%),
             radial-gradient(circle at bottom left, rgba(37, 99, 235, 0.16), transparent 38%),
             rgba(255, 255, 255, 0.91);
-        box-shadow: 0 32px 82px rgba(16, 185, 129, 0.14);
+        box-shadow:
+            0 30px 82px rgba(16, 185, 129, 0.14),
+            0 12px 34px rgba(37, 99, 235, 0.09),
+            0 0 0 1px rgba(255, 255, 255, 0.38) inset;
         margin-top: 1rem;
+        position: relative;
+        overflow: hidden;
+        transition: transform 240ms ease, box-shadow 240ms ease, border-color 240ms ease;
+    }
+
+    .tm-cta-panel::before {
+        content: "";
+        position: absolute;
+        width: 260px;
+        height: 260px;
+        right: -120px;
+        top: -140px;
+        border-radius: 999px;
+        background: radial-gradient(circle, rgba(255, 255, 255, 0.72), rgba(16, 185, 129, 0.10) 44%, transparent 72%);
+        filter: blur(6px);
+        pointer-events: none;
+        opacity: 0.85;
+    }
+
+    .tm-cta-panel:hover {
+        transform: translateY(-4px);
+        border-color: rgba(16, 185, 129, 0.52);
+        box-shadow:
+            0 38px 96px rgba(16, 185, 129, 0.18),
+            0 16px 42px rgba(37, 99, 235, 0.12),
+            0 0 42px rgba(16, 185, 129, 0.08),
+            0 0 0 1px rgba(255, 255, 255, 0.50) inset;
     }
 
     .tm-cta-title {
@@ -418,7 +507,47 @@ st.markdown(
         border-radius: 24px;
         border: 1px solid rgba(148, 163, 184, 0.22);
         background: rgba(255, 255, 255, 0.74);
-        box-shadow: 0 18px 48px rgba(15, 23, 42, 0.06);
+        box-shadow:
+            0 18px 48px rgba(15, 23, 42, 0.065),
+            0 4px 14px rgba(37, 99, 235, 0.035),
+            inset 0 1px 0 rgba(255, 255, 255, 0.70);
+        transition: transform 220ms ease, box-shadow 220ms ease, border-color 220ms ease;
+    }
+
+    .tm-contact-panel:hover {
+        transform: translateY(-3px);
+        border-color: rgba(100, 116, 139, 0.28);
+        box-shadow:
+            0 24px 60px rgba(15, 23, 42, 0.09),
+            0 8px 20px rgba(37, 99, 235, 0.045),
+            inset 0 1px 0 rgba(255, 255, 255, 0.80);
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+        .tm-pricing-shell,
+        .tm-metric-card,
+        .tm-plan-card,
+        .tm-value-card,
+        .tm-trust-card,
+        .tm-faq-card,
+        .tm-quote-card,
+        .tm-comparison,
+        .tm-cta-panel,
+        .tm-contact-panel {
+            transition: none !important;
+        }
+
+        .tm-metric-card:hover,
+        .tm-plan-card:hover,
+        .tm-value-card:hover,
+        .tm-trust-card:hover,
+        .tm-faq-card:hover,
+        .tm-quote-card:hover,
+        .tm-comparison:hover,
+        .tm-cta-panel:hover,
+        .tm-contact-panel:hover {
+            transform: none !important;
+        }
     }
 
     @media (max-width: 720px) {
