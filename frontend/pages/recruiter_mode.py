@@ -54,6 +54,194 @@ Requirements:
 BACKEND_URL = os.getenv("BACKEND_URL", "https://api.talentmatchcv.com").rstrip("/")
 
 
+def render_recruiter_css() -> None:
+    """Apply Recruiter Workspace-specific enterprise presentation styles."""
+    st.markdown(
+        """
+        <style>
+        .tm-recruiter-shell {
+            display:flex;
+            flex-direction:column;
+            gap:2.5rem;
+            width:100%;
+        }
+        .tm-recruiter-section {
+            display:flex;
+            flex-direction:column;
+            gap:1rem;
+        }
+        .tm-recruiter-metrics {
+            display:grid;
+            grid-template-columns:repeat(4,minmax(0,1fr));
+            gap:1rem;
+            width:100%;
+        }
+        .tm-recruiter-metric {
+            position:relative;
+            overflow:hidden;
+            min-height:156px;
+            padding:1.3rem;
+            border-radius:24px;
+            border:1px solid rgba(148,163,184,.22);
+            background:rgba(255,255,255,.90);
+            box-shadow:0 18px 48px rgba(15,23,42,.06);
+            backdrop-filter:blur(14px);
+        }
+        .tm-recruiter-metric:before {
+            content:"";
+            position:absolute;
+            inset:0 0 auto 0;
+            height:4px;
+            background:linear-gradient(90deg,#2563eb,#10b981);
+        }
+        .tm-recruiter-label {
+            color:#2563eb;
+            font-size:.74rem;
+            font-weight:950;
+            text-transform:uppercase;
+            letter-spacing:.13em;
+            margin-bottom:.7rem;
+        }
+        .tm-recruiter-value {
+            color:#0f172a;
+            font-size:2rem;
+            font-weight:950;
+            letter-spacing:-.055em;
+            line-height:1;
+            margin-bottom:.55rem;
+        }
+        .tm-recruiter-note {
+            color:#64748b;
+            line-height:1.55;
+        }
+        .tm-recruiter-trust-grid {
+            display:grid;
+            grid-template-columns:repeat(4,minmax(0,1fr));
+            gap:.8rem;
+            margin-top:1rem;
+        }
+        .tm-recruiter-trust {
+            padding:.85rem 1rem;
+            border-radius:18px;
+            border:1px solid rgba(148,163,184,.22);
+            background:rgba(255,255,255,.74);
+            color:#334155;
+            font-weight:850;
+            text-align:center;
+        }
+        .tm-recruiter-input-card,
+        .tm-recruiter-status-card,
+        .tm-recruiter-summary-card,
+        .tm-recruiter-candidate-card,
+        .tm-recruiter-workspace-card {
+            border:1px solid rgba(148,163,184,.22);
+            background:rgba(255,255,255,.90);
+            box-shadow:0 18px 48px rgba(15,23,42,.06);
+            backdrop-filter:blur(14px);
+        }
+        .tm-recruiter-input-card {
+            min-height:142px;
+            padding:1.3rem;
+            border-radius:24px;
+            margin-bottom:.85rem;
+        }
+        .tm-recruiter-input-title,
+        .tm-recruiter-candidate-title,
+        .tm-recruiter-summary-title {
+            color:#0f172a;
+            font-weight:950;
+            letter-spacing:-.03em;
+        }
+        .tm-recruiter-input-title {font-size:1.15rem;margin-bottom:.5rem;}
+        .tm-recruiter-input-copy {color:#64748b;line-height:1.6;}
+        .tm-recruiter-status-card {
+            padding:1.35rem;
+            border-radius:26px;
+            background:
+                radial-gradient(circle at top right,rgba(37,99,235,.10),transparent 36%),
+                radial-gradient(circle at bottom left,rgba(16,185,129,.09),transparent 36%),
+                rgba(255,255,255,.92);
+        }
+        .tm-recruiter-summary-card {
+            padding:1.5rem;
+            border-radius:26px;
+            border-left:5px solid #2563eb;
+        }
+        .tm-recruiter-summary-title {font-size:1.2rem;margin-bottom:.55rem;}
+        .tm-recruiter-candidate-card {
+            padding:1.45rem;
+            border-radius:26px;
+            margin-bottom:1rem;
+        }
+        .tm-recruiter-candidate-head {
+            display:flex;
+            justify-content:space-between;
+            gap:1rem;
+            align-items:flex-start;
+            flex-wrap:wrap;
+        }
+        .tm-recruiter-rank {
+            color:#2563eb;
+            font-size:.75rem;
+            font-weight:950;
+            letter-spacing:.13em;
+            text-transform:uppercase;
+            margin-bottom:.4rem;
+        }
+        .tm-recruiter-candidate-title {font-size:1.2rem;}
+        .tm-recruiter-verdict {
+            display:inline-flex;
+            align-items:center;
+            padding:.48rem .75rem;
+            border-radius:999px;
+            background:rgba(16,185,129,.12);
+            color:#047857;
+            font-weight:950;
+            white-space:nowrap;
+        }
+        .tm-recruiter-workspace-card {
+            padding:1.35rem;
+            border-radius:26px;
+            background:
+                radial-gradient(circle at top right,rgba(37,99,235,.11),transparent 34%),
+                rgba(255,255,255,.92);
+        }
+        .tm-recruiter-workspace-title {
+            color:#0f172a;
+            font-size:1.25rem;
+            font-weight:950;
+            letter-spacing:-.03em;
+            margin-bottom:.5rem;
+        }
+        .tm-recruiter-workspace-copy {color:#64748b;line-height:1.6;}
+        .tm-recruiter-downloads [data-testid="stDownloadButton"] button,
+        .tm-recruiter-actions [data-testid="stButton"] button,
+        .tm-recruiter-actions [data-testid="stPageLink"] a {
+            min-height:3.2rem;
+            border-radius:16px;
+            font-weight:900;
+        }
+        @media (max-width:1100px) {
+            .tm-recruiter-metrics,
+            .tm-recruiter-trust-grid {grid-template-columns:repeat(2,minmax(0,1fr));}
+        }
+        @media (max-width:760px) {
+            .tm-recruiter-shell {gap:2rem;}
+            .tm-recruiter-metrics,
+            .tm-recruiter-trust-grid {grid-template-columns:1fr;}
+            .tm-recruiter-metric,
+            .tm-recruiter-input-card {min-height:auto;}
+            .tm-recruiter-verdict {white-space:normal;}
+        }
+        </style>
+        """,
+        unsafe_allow_html=True,
+    )
+
+
+render_recruiter_css()
+
+
 def get_positive_int_env(name: str, default: int) -> int:
     """Return a positive integer environment value or a safe default."""
     raw_value = os.getenv(name)
@@ -512,19 +700,17 @@ def render_candidate_card(item: Dict[str, Any]) -> None:
     """Render one ranked candidate with consistent recruiter intelligence sections."""
     st.markdown(
         f"""
-        <div class="tm-card" style="margin-bottom:1rem">
-            <div style="display:flex;justify-content:space-between;gap:1rem;align-items:flex-start;flex-wrap:wrap">
+        <div class="tm-recruiter-candidate-card">
+            <div class="tm-recruiter-candidate-head">
                 <div>
-                    <div class="tm-kicker">RANK #{safe_html(item["rank"])}</div>
-                    <div class="tm-card-title" style="margin-top:.35rem">
-                        {safe_html(item["filename"])}
-                    </div>
+                    <div class="tm-recruiter-rank">RANK #{safe_html(item["rank"])}</div>
+                    <div class="tm-recruiter-candidate-title">{safe_html(item["filename"])}</div>
                 </div>
-                <span class="tm-pill tm-pill-green">
+                <span class="tm-recruiter-verdict">
                     {safe_html(item["score"])}/100 · {safe_html(item["verdict"])}
                 </span>
             </div>
-            <div class="tm-muted" style="margin-top:.8rem">
+            <div class="tm-muted" style="margin-top:.8rem;line-height:1.65">
                 {safe_html(item["summary"] or "No candidate summary returned.")}
             </div>
         </div>
@@ -653,9 +839,10 @@ def render_results(result: Dict[str, Any]) -> None:
     st.markdown("## Executive recruiter summary")
     st.markdown(
         f"""
-        <div class="tm-card" style="border-left:5px solid #2563eb;padding:1.35rem 1.5rem">
+        <div class="tm-recruiter-summary-card">
             <div class="tm-kicker">HIRING PERSPECTIVE</div>
-            <div class="tm-muted" style="margin-top:.65rem;line-height:1.7">
+            <div class="tm-recruiter-summary-title">Executive decision support</div>
+            <div class="tm-muted" style="line-height:1.7">
                 {safe_html(summary)}
             </div>
         </div>
@@ -823,6 +1010,18 @@ render_page_intro(
     badge="PRO WORKSPACE",
 )
 
+st.markdown(
+    """
+    <div class="tm-recruiter-trust-grid">
+        <div class="tm-recruiter-trust">🔐 Firebase-authenticated</div>
+        <div class="tm-recruiter-trust">🧠 AI ranking intelligence</div>
+        <div class="tm-recruiter-trust">🗂 Candidate Database workflow</div>
+        <div class="tm-recruiter-trust">📥 CSV · TXT · PDF reports</div>
+    </div>
+    """,
+    unsafe_allow_html=True,
+)
+
 if not is_logged_in():
     st.warning("Please log in before using Recruiter Mode.")
     st.page_link("pages/login.py", label="🔐 Go to Login")
@@ -914,12 +1113,13 @@ can_submit = (
     and bool(job_description.strip())
 )
 
-run_clicked = st.button(
-    "🚀 Rank Candidates",
-    type="primary",
-    use_container_width=True,
-    disabled=not can_submit,
-)
+with st.container(key="recruiter-primary-action"):
+    run_clicked = st.button(
+        "🚀 Rank Candidates",
+        type="primary",
+        use_container_width=True,
+        disabled=not can_submit,
+    )
 
 if file_count > RECRUITER_MAX_CANDIDATES:
     st.error(
