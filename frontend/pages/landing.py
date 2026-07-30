@@ -26,93 +26,211 @@ def _dashboard_css() -> None:
     st.markdown(
         """
         <style>
-        .tm-dashboard-shell {display:flex;flex-direction:column;gap:1.25rem}
-        .tm-command-strip,.tm-quick-grid {
-            display:grid;grid-template-columns:repeat(4,minmax(0,1fr));
-            gap:1rem;margin:.2rem 0 .45rem 0
+        .tm-dashboard-shell {
+            display:flex;
+            flex-direction:column;
+            gap:2.5rem;
+            width:100%;
         }
-        .tm-command-card,.tm-quick-card,.tm-price-card,.tm-insight-panel {
+        .tm-dashboard-section {
+            display:flex;
+            flex-direction:column;
+            gap:1rem;
+        }
+        .tm-command-strip,
+        .tm-quick-grid,
+        .tm-capability-grid {
+            display:grid;
+            gap:1rem;
+            width:100%;
+        }
+        .tm-command-strip,
+        .tm-quick-grid {
+            grid-template-columns:repeat(4,minmax(0,1fr));
+        }
+        .tm-capability-grid {
+            grid-template-columns:repeat(3,minmax(0,1fr));
+        }
+        .tm-command-card,
+        .tm-quick-card,
+        .tm-price-card,
+        .tm-insight-panel,
+        .tm-capability-card {
             border:1px solid rgba(148,163,184,.22);
-            background:rgba(255,255,255,.86);
-            box-shadow:0 18px 48px rgba(15,23,42,.06)
+            background:rgba(255,255,255,.90);
+            box-shadow:0 18px 48px rgba(15,23,42,.06);
+            backdrop-filter:blur(14px);
         }
         .tm-command-card {
-            min-height:176px;padding:1.25rem;border-radius:24px;
-            position:relative;overflow:hidden
+            min-height:176px;
+            padding:1.3rem;
+            border-radius:24px;
+            position:relative;
+            overflow:hidden;
         }
         .tm-command-card:before {
-            content:"";position:absolute;inset:0 0 auto 0;height:4px;
-            background:linear-gradient(90deg,#2563eb,#10b981)
+            content:"";
+            position:absolute;
+            inset:0 0 auto 0;
+            height:4px;
+            background:linear-gradient(90deg,#2563eb,#10b981);
         }
         .tm-command-label {
-            color:#2563eb;font-size:.74rem;font-weight:950;text-transform:uppercase;
-            letter-spacing:.13em;margin-bottom:.7rem
+            color:#2563eb;
+            font-size:.74rem;
+            font-weight:950;
+            text-transform:uppercase;
+            letter-spacing:.13em;
+            margin-bottom:.7rem;
         }
         .tm-command-value {
-            color:#0f172a;font-size:2.05rem;font-weight:950;
-            letter-spacing:-.055em;line-height:1;margin-bottom:.55rem
+            color:#0f172a;
+            font-size:2.05rem;
+            font-weight:950;
+            letter-spacing:-.055em;
+            line-height:1;
+            margin-bottom:.55rem;
         }
-        .tm-command-note,.tm-quick-copy,.tm-insight-copy {
-            color:#64748b;line-height:1.5
+        .tm-command-note,
+        .tm-quick-copy,
+        .tm-insight-copy,
+        .tm-capability-copy {
+            color:#64748b;
+            line-height:1.58;
         }
-        .tm-quick-card {min-height:150px;padding:1.15rem;border-radius:22px}
-        .tm-quick-icon {
-            width:46px;height:46px;border-radius:16px;display:flex;
-            align-items:center;justify-content:center;background:rgba(37,99,235,.10);
-            font-size:1.3rem;margin-bottom:.8rem
+        .tm-quick-card,
+        .tm-capability-card {
+            min-height:168px;
+            padding:1.2rem;
+            border-radius:22px;
         }
-        .tm-quick-title,.tm-insight-title {
-            color:#0f172a;font-weight:950;letter-spacing:-.025em
+        .tm-quick-icon,
+        .tm-capability-icon {
+            width:48px;
+            height:48px;
+            border-radius:16px;
+            display:flex;
+            align-items:center;
+            justify-content:center;
+            background:rgba(37,99,235,.10);
+            font-size:1.3rem;
+            margin-bottom:.85rem;
         }
-        .tm-quick-title {font-size:1.05rem;margin-bottom:.35rem}
+        .tm-quick-title,
+        .tm-capability-title,
+        .tm-insight-title {
+            color:#0f172a;
+            font-weight:950;
+            letter-spacing:-.025em;
+        }
+        .tm-quick-title,
+        .tm-capability-title {
+            font-size:1.05rem;
+            margin-bottom:.35rem;
+        }
         .tm-insight-panel {
-            padding:1.35rem;border-radius:26px;
+            padding:1.55rem;
+            border-radius:26px;
             background:
                 radial-gradient(circle at 10% 10%,rgba(37,99,235,.10),transparent 32%),
                 radial-gradient(circle at 90% 90%,rgba(16,185,129,.10),transparent 32%),
-                rgba(255,255,255,.88)
+                rgba(255,255,255,.92);
         }
-        .tm-insight-title {font-size:1.18rem;margin-bottom:.5rem}
-        .tm-price-card {padding:1.4rem;border-radius:26px;min-height:100%}
+        .tm-insight-title {
+            font-size:1.22rem;
+            margin-bottom:.55rem;
+        }
+        .tm-price-grid {
+            display:grid;
+            grid-template-columns:repeat(2,minmax(0,1fr));
+            gap:1rem;
+        }
+        .tm-price-card {
+            padding:1.5rem;
+            border-radius:26px;
+            min-height:100%;
+        }
         .tm-price-card-pro {
             border-color:rgba(37,99,235,.32);
             background:
                 radial-gradient(circle at top right,rgba(37,99,235,.12),transparent 38%),
                 radial-gradient(circle at bottom left,rgba(16,185,129,.10),transparent 38%),
-                rgba(255,255,255,.95);
-            box-shadow:0 24px 64px rgba(37,99,235,.12)
+                rgba(255,255,255,.96);
+            box-shadow:0 24px 64px rgba(37,99,235,.12);
         }
         .tm-price {
-            color:#0f172a;font-size:2.2rem;font-weight:950;
-            letter-spacing:-.06em;margin:.25rem 0 .45rem 0
+            color:#0f172a;
+            font-size:2.2rem;
+            font-weight:950;
+            letter-spacing:-.06em;
+            margin:.25rem 0 .45rem 0;
         }
-        .tm-price-unit {font-size:.95rem;color:#64748b;font-weight:800;letter-spacing:0}
+        .tm-price-unit {
+            font-size:.95rem;
+            color:#64748b;
+            font-weight:800;
+            letter-spacing:0;
+        }
+        .tm-feature-list {
+            margin-top:1rem;
+            display:flex;
+            flex-direction:column;
+            gap:.45rem;
+        }
         .tm-feature-line {
-            display:flex;align-items:center;gap:.55rem;padding:.35rem 0;
-            color:#334155;font-weight:760
+            display:flex;
+            align-items:center;
+            gap:.55rem;
+            color:#334155;
+            font-weight:760;
         }
         .tm-feature-check {
-            width:22px;height:22px;border-radius:999px;background:rgba(16,185,129,.13);
-            color:#047857;display:inline-flex;align-items:center;justify-content:center;
-            font-size:.78rem;font-weight:950;flex:0 0 auto
+            width:22px;
+            height:22px;
+            border-radius:999px;
+            background:rgba(16,185,129,.13);
+            color:#047857;
+            display:inline-flex;
+            align-items:center;
+            justify-content:center;
+            font-size:.78rem;
+            font-weight:950;
+            flex:0 0 auto;
         }
         .tm-page-links [data-testid="stPageLink"] a {
-            min-height:3.15rem;border-radius:16px;
+            min-height:3.15rem;
+            border-radius:16px;
             border:1px solid rgba(148,163,184,.24);
-            background:rgba(255,255,255,.86);padding:.75rem 1rem;
-            font-weight:900;box-shadow:0 12px 28px rgba(15,23,42,.05);
-            transition:160ms ease
+            background:rgba(255,255,255,.90);
+            padding:.75rem 1rem;
+            font-weight:900;
+            box-shadow:0 12px 28px rgba(15,23,42,.05);
+            transition:160ms ease;
         }
         .tm-page-links [data-testid="stPageLink"] a:hover {
-            transform:translateY(-1px);border-color:rgba(37,99,235,.35);
-            box-shadow:0 16px 34px rgba(37,99,235,.10)
+            transform:translateY(-1px);
+            border-color:rgba(37,99,235,.35);
+            box-shadow:0 16px 34px rgba(37,99,235,.10);
+        }
+        .tm-dashboard-cta [data-testid="stPageLink"] a {
+            min-height:3.35rem;
+            border-radius:16px;
+            font-weight:950;
         }
         @media (max-width:1100px) {
-            .tm-command-strip,.tm-quick-grid {grid-template-columns:repeat(2,minmax(0,1fr))}
+            .tm-command-strip,
+            .tm-quick-grid {grid-template-columns:repeat(2,minmax(0,1fr));}
+            .tm-capability-grid {grid-template-columns:repeat(2,minmax(0,1fr));}
         }
         @media (max-width:760px) {
-            .tm-command-strip,.tm-quick-grid {grid-template-columns:1fr}
-            .tm-command-card,.tm-quick-card {min-height:auto}
+            .tm-dashboard-shell {gap:2rem;}
+            .tm-command-strip,
+            .tm-quick-grid,
+            .tm-capability-grid,
+            .tm-price-grid {grid-template-columns:1fr;}
+            .tm-command-card,
+            .tm-quick-card,
+            .tm-capability-card {min-height:auto;}
         }
         </style>
         """,
@@ -142,7 +260,7 @@ def _render_command_metrics(plan: str) -> None:
     values = (
         ("Workspace", plan, "PayPal-backed membership status"),
         ("AI tools", "6", "Analysis, ATS, Rewrite, Match, Recruiter, History"),
-        ("Pro plan", PRO_MONTHLY_PRICE, "Monthly subscription via PayPal"),
+        ("Pro plan", PRO_MONTHLY_PRICE, "Monthly subscription through PayPal"),
         ("Reports", "PDF", "Professional exports with page numbers and footer"),
     )
     cards = "".join(
@@ -151,7 +269,7 @@ def _render_command_metrics(plan: str) -> None:
             f'<div class="tm-command-label">{safe_html(label)}</div>'
             f'<div class="tm-command-value">{safe_html(value)}</div>'
             f'<div class="tm-command-note">{safe_html(note)}</div>'
-            '</div>'
+            "</div>"
         )
         for label, value, note in values
     )
@@ -172,11 +290,12 @@ def _render_quick_actions() -> None:
             f'<div class="tm-quick-icon">{safe_html(icon)}</div>'
             f'<div class="tm-quick-title">{safe_html(title)}</div>'
             f'<div class="tm-quick-copy">{safe_html(copy)}</div>'
-            '</div>'
+            "</div>"
         )
         for icon, title, copy in items
     )
     st.markdown(f'<div class="tm-quick-grid">{cards}</div>', unsafe_allow_html=True)
+
     st.markdown('<div class="tm-page-links">', unsafe_allow_html=True)
     c1, c2, c3, c4 = st.columns(4)
     with c1:
@@ -195,23 +314,25 @@ def _render_core_features() -> None:
         "Core workspace",
         "Every tool follows one consistent premium workflow from upload to export.",
     )
-    rows = (
-        (
-            ("AI CV Analysis", "Compare a CV against a real job description and receive a structured score, strengths, gaps, and practical recommendations.", "📄"),
-            ("ATS Checker", "Identify matched and missing keywords so applications align more clearly with applicant tracking systems.", "📋"),
-            ("CV Rewrite AI", "Improve headlines, summaries, and experience bullets while preserving truthful candidate information.", "✍"),
-        ),
-        (
-            ("Semantic Match", "Compare meaning and context—not only exact keyword overlap—and evaluate recruiter readiness.", "🧠"),
-            ("Recruiter Workspace", "Rank candidates, save results, manage status, favorites, notes, tags, and exports.", "👥"),
-            ("Professional Reports", "Export consistent TXT, CSV, and PDF reports for reviews, applications, and recruiter workflows.", "📥"),
-        ),
+    items = (
+        ("AI CV Analysis", "Compare a CV against a real job description and receive a structured score, strengths, gaps, and practical recommendations.", "📄"),
+        ("ATS Checker", "Identify matched and missing keywords so applications align more clearly with applicant tracking systems.", "📋"),
+        ("CV Rewrite AI", "Improve headlines, summaries, and experience bullets while preserving truthful candidate information.", "✍"),
+        ("Semantic Match", "Compare meaning and context—not only exact keyword overlap—and evaluate recruiter readiness.", "🧠"),
+        ("Recruiter Workspace", "Rank candidates, save results, manage status, favorites, notes, tags, and exports.", "👥"),
+        ("Professional Reports", "Export consistent TXT, CSV, and PDF reports for reviews, applications, and recruiter workflows.", "📥"),
     )
-    for row in rows:
-        cols = st.columns(3)
-        for col, (title, body, icon) in zip(cols, row):
-            with col:
-                render_card(title, body, icon, strong=True)
+    cards = "".join(
+        (
+            '<div class="tm-capability-card">'
+            f'<div class="tm-capability-icon">{safe_html(icon)}</div>'
+            f'<div class="tm-capability-title">{safe_html(title)}</div>'
+            f'<div class="tm-capability-copy">{safe_html(body)}</div>'
+            "</div>"
+        )
+        for title, body, icon in items
+    )
+    st.markdown(f'<div class="tm-capability-grid">{cards}</div>', unsafe_allow_html=True)
 
 
 def _render_workflow() -> None:
@@ -233,33 +354,26 @@ def _render_pricing() -> None:
         "Plans",
         "Start free, then unlock the complete TalentMatch Pro workflow with PayPal.",
     )
-    free_col, pro_col = st.columns(2)
-    with free_col:
-        st.markdown(
-            """
+    st.markdown(
+        f"""
+        <div class="tm-price-grid">
             <div class="tm-price-card">
                 <div class="tm-kicker">STARTER</div>
                 <div class="tm-card-title">Free</div>
                 <div class="tm-price">$0</div>
                 <div class="tm-muted">Explore the core workflow before upgrading.</div>
-                <div style="margin-top:1rem">
+                <div class="tm-feature-list">
                     <div class="tm-feature-line"><span class="tm-feature-check">✓</span>3 CV analyses</div>
                     <div class="tm-feature-line"><span class="tm-feature-check">✓</span>ATS Checker</div>
                     <div class="tm-feature-line"><span class="tm-feature-check">✓</span>TXT exports</div>
                 </div>
             </div>
-            """,
-            unsafe_allow_html=True,
-        )
-    with pro_col:
-        st.markdown(
-            f"""
             <div class="tm-price-card tm-price-card-pro">
                 <div class="tm-kicker">PREMIUM</div>
                 <div class="tm-card-title">Pro</div>
                 <div class="tm-price">{safe_html(PRO_MONTHLY_PRICE)}<span class="tm-price-unit">/month</span></div>
                 <div class="tm-muted">Complete premium workflow for serious job search and recruiter use.</div>
-                <div style="margin-top:1rem">
+                <div class="tm-feature-list">
                     <div class="tm-feature-line"><span class="tm-feature-check">✓</span>Unlimited analyses</div>
                     <div class="tm-feature-line"><span class="tm-feature-check">✓</span>Professional PDF reports</div>
                     <div class="tm-feature-line"><span class="tm-feature-check">✓</span>Semantic Match</div>
@@ -267,10 +381,13 @@ def _render_pricing() -> None:
                     <div class="tm-feature-line"><span class="tm-feature-check">✓</span>Candidate Database</div>
                 </div>
             </div>
-            """,
-            unsafe_allow_html=True,
-        )
-        st.page_link("pages/pricing.py", label="💳 Upgrade or manage with PayPal")
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
+    st.markdown('<div class="tm-dashboard-cta">', unsafe_allow_html=True)
+    st.page_link("pages/pricing.py", label="💳 View plans or manage PayPal subscription")
+    st.markdown("</div>", unsafe_allow_html=True)
 
 
 def _render_value_statement() -> None:
