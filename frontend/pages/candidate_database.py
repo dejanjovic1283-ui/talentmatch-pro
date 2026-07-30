@@ -1,6 +1,8 @@
+from __future__ import annotations
+
 import json
 import os
-from datetime import datetime, timezone
+from datetime import datetime
 from typing import Any, Dict, List, Optional
 
 import pandas as pd
@@ -8,31 +10,33 @@ import requests
 import streamlit as st
 
 from auth_utils import is_logged_in, is_pro_user
-
-try:
-    from components.sidebar import render_sidebar
-except Exception:
-    render_sidebar = None
+from components.sidebar import render_sidebar
+from components.ui import (
+    apply_global_styles,
+    render_action_panel,
+    render_list_cards,
+    render_page_intro,
+    render_report_panel,
+    render_score_card,
+    safe_html,
+)
 
 
 APP_NAME = "TalentMatch Pro"
 BACKEND_URL = os.getenv("BACKEND_URL", "https://api.talentmatchcv.com").rstrip("/")
 PAGE_TITLE = "Candidate Database"
+CANDIDATE_STATUSES = ["new", "shortlisted", "interview", "rejected", "hired"]
 
 
-# ------------------------------------------------------------
-# Page config
-# ------------------------------------------------------------
 st.set_page_config(
     page_title=f"{PAGE_TITLE} | {APP_NAME}",
-    page_icon="👥",
+    page_icon="🗂",
     layout="wide",
 )
+apply_global_styles()
+render_sidebar()
 
 
-# ------------------------------------------------------------
-# Helpers
-# ------------------------------------------------------------
 def get_auth_headers() -> Dict[str, str]:
     token = (
         st.session_state.get("id_token")
@@ -42,10 +46,8 @@ def get_auth_headers() -> Dict[str, str]:
     )
 
     headers = {"Accept": "application/json"}
-
     if token:
         headers["Authorization"] = f"Bearer {token}"
-
     return headers
 
 
@@ -55,74 +57,93 @@ def safe_json_loads(value: Any, fallback: Any = None) -> Any:
 
     if value is None:
         return fallback
-
     if isinstance(value, (list, dict)):
         return value
-
     if not isinstance(value, str):
         return fallback
 
     try:
         return json.loads(value)
-    except Exception:
+    except (TypeError, ValueError, json.JSONDecodeError):
         return fallback
 
 
 def api_get(path: str, params: Optional[Dict[str, Any]] = None) -> Any:
-    response = requests.get(
-        f"{BACKEND_URL}{path}",
-        headers=get_auth_headers(),
-        params=params,
-        timeout=60,
-    )
+    try:
+        response = requests.get(
+            f"{BACKEND_URL}{path}",
+            headers=get_auth_headers(),
+            params=params,
+            timeout=60,
+        )
+    except requests.RequestException as exc:
+        raise RuntimeError(f"Could not connect to Candidate Database: {exc}") from exc
 
     if response.status_code == 401:
         st.error("You must be logged in to view Candidate Database.")
         st.stop()
 
     if response.status_code >= 400:
-        raise RuntimeError(f"Backend returned {response.status_code}: {response.text[:500]}")
+        raise RuntimeError(
+            f"Backend returned {response.status_code}: {response.text[:500]}"
+        )
 
     if not response.content:
         return None
 
-    return response.json()
+    try:
+        return response.json()
+    except ValueError as exc:
+        raise RuntimeError("Backend returned invalid JSON.") from exc
 
 
 def api_put(path: str, payload: Dict[str, Any]) -> Any:
-    response = requests.put(
-        f"{BACKEND_URL}{path}",
-        headers={**get_auth_headers(), "Content-Type": "application/json"},
-        json=payload,
-        timeout=60,
-    )
+    try:
+        response = requests.put(
+            f"{BACKEND_URL}{path}",
+            headers={**get_auth_headers(), "Content-Type": "application/json"},
+            json=payload,
+            timeout=60,
+        )
+    except requests.RequestException as exc:
+        raise RuntimeError(f"Could not update candidate: {exc}") from exc
 
     if response.status_code == 401:
         st.error("You must be logged in to update candidates.")
         st.stop()
 
     if response.status_code >= 400:
-        raise RuntimeError(f"Backend returned {response.status_code}: {response.text[:500]}")
+        raise RuntimeError(
+            f"Backend returned {response.status_code}: {response.text[:500]}"
+        )
 
     if not response.content:
         return None
 
-    return response.json()
+    try:
+        return response.json()
+    except ValueError as exc:
+        raise RuntimeError("Backend returned invalid JSON.") from exc
 
 
 def api_delete(path: str) -> None:
-    response = requests.delete(
-        f"{BACKEND_URL}{path}",
-        headers=get_auth_headers(),
-        timeout=60,
-    )
+    try:
+        response = requests.delete(
+            f"{BACKEND_URL}{path}",
+            headers=get_auth_headers(),
+            timeout=60,
+        )
+    except requests.RequestException as exc:
+        raise RuntimeError(f"Could not delete candidate: {exc}") from exc
 
     if response.status_code == 401:
         st.error("You must be logged in to delete candidates.")
         st.stop()
 
     if response.status_code >= 400:
-        raise RuntimeError(f"Backend returned {response.status_code}: {response.text[:500]}")
+        raise RuntimeError(
+            f"Backend returned {response.status_code}: {response.text[:500]}"
+        )
 
 
 def normalize_candidates(payload: Any) -> List[Dict[str, Any]]:
@@ -143,97 +164,55 @@ def format_date(value: Any) -> str:
         return "—"
 
     text = str(value)
-
     try:
-        normalized = text.replace("Z", "+00:00")
-        parsed = datetime.fromisoformat(normalized)
+        parsed = datetime.fromisoformat(text.replace("Z", "+00:00"))
         return parsed.strftime("%Y-%m-%d %H:%M")
-    except Exception:
+    except (TypeError, ValueError):
         return text[:16]
 
 
 def candidate_score(candidate: Dict[str, Any]) -> int:
     for key in ("score", "combined_score", "match_score", "semantic_score"):
         value = candidate.get(key)
-        if isinstance(value, (int, float)):
-            return int(value)
-        if isinstance(value, str) and value.isdigit():
-            return int(value)
-
+        try:
+            if value is not None:
+                return max(0, min(int(float(str(value).replace("%", "").strip())), 100))
+        except (TypeError, ValueError):
+            continue
     return 0
 
 
 def candidate_rank(candidate: Dict[str, Any]) -> int:
-    value = candidate.get("rank", 0)
     try:
-        return int(value)
-    except Exception:
+        return int(candidate.get("rank", 0))
+    except (TypeError, ValueError):
         return 0
 
 
 def candidate_status(candidate: Dict[str, Any]) -> str:
-    return str(candidate.get("status") or "new")
+    return str(candidate.get("status") or "new").strip().lower()
 
 
 def candidate_tags(candidate: Dict[str, Any]) -> List[str]:
     tags = safe_json_loads(candidate.get("tags"), [])
     if isinstance(tags, list):
         return [str(tag).strip() for tag in tags if str(tag).strip()]
+    return []
 
+
+def normalize_text_list(value: Any) -> List[str]:
+    parsed = safe_json_loads(value, [])
+    if isinstance(parsed, list):
+        return [str(item).strip() for item in parsed if str(item).strip()]
+    if isinstance(parsed, dict):
+        return [json.dumps(parsed, ensure_ascii=False)]
+    if parsed:
+        return [str(parsed)]
     return []
 
 
 def list_to_text(items: Any) -> str:
-    parsed = safe_json_loads(items, [])
-
-    if isinstance(parsed, list):
-        return ", ".join(str(item) for item in parsed if str(item).strip())
-
-    if isinstance(parsed, dict):
-        return json.dumps(parsed, ensure_ascii=False)
-
-    return str(items or "")
-
-
-def render_metric_card(label: str, value: Any, helper: str) -> None:
-    st.markdown(
-        f"""
-        <div class="tm-card">
-            <div class="tm-label">{label}</div>
-            <div class="tm-number">{value}</div>
-            <div class="tm-muted">{helper}</div>
-        </div>
-        """,
-        unsafe_allow_html=True,
-    )
-
-
-def render_candidate_table(candidates: List[Dict[str, Any]]) -> None:
-    rows = []
-
-    for candidate in candidates:
-        rows.append(
-            {
-                "ID": candidate.get("id"),
-                "Candidate": candidate.get("filename", "Unknown"),
-                "Score": candidate_score(candidate),
-                "Rank": candidate_rank(candidate),
-                "Status": candidate_status(candidate),
-                "Favorite": "⭐" if candidate.get("favorite") else "",
-                "Tags": ", ".join(candidate_tags(candidate)),
-                "Created": format_date(candidate.get("created_at")),
-            }
-        )
-
-    if not rows:
-        st.info("No candidates found yet. Run Recruiter Mode first, then save candidates to this database.")
-        return
-
-    st.dataframe(
-        pd.DataFrame(rows),
-        use_container_width=True,
-        hide_index=True,
-    )
+    return ", ".join(normalize_text_list(items))
 
 
 def refresh_candidates() -> None:
@@ -244,122 +223,356 @@ def load_candidates() -> List[Dict[str, Any]]:
     if "candidate_database_items" not in st.session_state:
         payload = api_get("/recruiter/candidates")
         st.session_state["candidate_database_items"] = normalize_candidates(payload)
-
     return st.session_state["candidate_database_items"]
 
 
-# ------------------------------------------------------------
-# Styling
-# ------------------------------------------------------------
-st.markdown(
-    """
-    <style>
-        .block-container {
-            max-width: 1180px;
-            padding-top: 3.5rem;
-            padding-bottom: 5rem;
+def render_candidate_database_css() -> None:
+    st.markdown(
+        """
+        <style>
+        .tm-cdb-shell {
+            display:flex;
+            flex-direction:column;
+            gap:2.5rem;
+            width:100%;
         }
 
-        .tm-hero {
-            padding: 2.4rem 2.7rem;
-            border-radius: 32px;
-            background: linear-gradient(135deg, rgba(220, 231, 255, 0.95), rgba(213, 250, 241, 0.72));
-            border: 1px solid rgba(125, 159, 210, 0.25);
-            margin-bottom: 2rem;
+        .tm-cdb-trust-grid,
+        .tm-cdb-metric-grid {
+            display:grid;
+            gap:1rem;
+            width:100%;
         }
 
-        .tm-kicker {
-            color: #2563eb;
-            font-size: 0.82rem;
-            font-weight: 800;
-            letter-spacing: 0.28em;
-            text-transform: uppercase;
-            margin-bottom: 0.7rem;
+        .tm-cdb-trust-grid {
+            grid-template-columns:repeat(4,minmax(0,1fr));
+            margin-top:.35rem;
         }
 
-        .tm-title {
-            font-size: 3.2rem;
-            line-height: 1.05;
-            font-weight: 900;
-            color: #182238;
-            margin-bottom: 0.8rem;
+        .tm-cdb-metric-grid {
+            grid-template-columns:repeat(4,minmax(0,1fr));
         }
 
-        .tm-subtitle {
-            font-size: 1.2rem;
-            color: #657894;
-            max-width: 760px;
-            line-height: 1.55;
+        .tm-cdb-trust-card,
+        .tm-cdb-metric-card,
+        .tm-cdb-panel,
+        .tm-cdb-summary,
+        .tm-cdb-export-card {
+            border:1px solid rgba(148,163,184,.22);
+            background:rgba(255,255,255,.88);
+            box-shadow:0 18px 48px rgba(15,23,42,.06);
+            backdrop-filter:blur(14px);
         }
 
-        .tm-card {
-            padding: 1.3rem 1.45rem;
-            border-radius: 24px;
-            background: rgba(255, 255, 255, 0.55);
-            border: 1px solid rgba(126, 148, 180, 0.18);
-            min-height: 135px;
+        .tm-cdb-trust-card {
+            min-height:112px;
+            padding:1rem 1.05rem;
+            border-radius:20px;
         }
 
-        .tm-label {
-            font-size: 0.78rem;
-            color: #2563eb;
-            font-weight: 900;
-            letter-spacing: 0.22em;
-            text-transform: uppercase;
+        .tm-cdb-trust-icon {
+            width:38px;
+            height:38px;
+            border-radius:13px;
+            display:flex;
+            align-items:center;
+            justify-content:center;
+            background:rgba(37,99,235,.10);
+            font-size:1.05rem;
+            margin-bottom:.65rem;
         }
 
-        .tm-number {
-            color: #182238;
-            font-size: 2.2rem;
-            font-weight: 900;
-            margin-top: 0.45rem;
+        .tm-cdb-trust-title,
+        .tm-cdb-panel-title,
+        .tm-cdb-summary-title {
+            color:#0f172a;
+            font-weight:950;
+            letter-spacing:-.025em;
         }
 
-        .tm-muted {
-            color: #6b7f9a;
-            margin-top: 0.25rem;
+        .tm-cdb-trust-title {
+            font-size:.98rem;
+            margin-bottom:.2rem;
         }
 
-        .tm-section {
-            font-size: 1.65rem;
-            font-weight: 900;
-            color: #182238;
-            margin-top: 2rem;
-            margin-bottom: 1rem;
+        .tm-cdb-trust-copy,
+        .tm-cdb-panel-copy,
+        .tm-cdb-summary-copy {
+            color:#64748b;
+            line-height:1.55;
         }
 
-        div[data-testid="stButton"] > button,
-        div[data-testid="stDownloadButton"] > button {
-            border-radius: 18px;
-            min-height: 3rem;
-            font-weight: 700;
+        .tm-cdb-trust-copy {
+            font-size:.88rem;
         }
-    </style>
-    """,
-    unsafe_allow_html=True,
+
+        .tm-cdb-metric-card {
+            min-height:166px;
+            padding:1.25rem;
+            border-radius:24px;
+            position:relative;
+            overflow:hidden;
+        }
+
+        .tm-cdb-metric-card:before {
+            content:"";
+            position:absolute;
+            inset:0 0 auto 0;
+            height:4px;
+            background:linear-gradient(90deg,#2563eb,#10b981);
+        }
+
+        .tm-cdb-metric-label {
+            color:#2563eb;
+            font-size:.75rem;
+            font-weight:950;
+            letter-spacing:.13em;
+            text-transform:uppercase;
+            margin-bottom:.65rem;
+        }
+
+        .tm-cdb-metric-value {
+            color:#0f172a;
+            font-size:2.15rem;
+            line-height:1;
+            letter-spacing:-.055em;
+            font-weight:950;
+            margin-bottom:.55rem;
+        }
+
+        .tm-cdb-metric-note {
+            color:#64748b;
+            line-height:1.5;
+        }
+
+        .tm-cdb-panel {
+            border-radius:26px;
+            padding:1.35rem;
+        }
+
+        .tm-cdb-panel-title {
+            font-size:1.15rem;
+            margin-bottom:.45rem;
+        }
+
+        .tm-cdb-summary {
+            border-radius:26px;
+            padding:1.45rem;
+            border-left:5px solid #2563eb;
+            background:
+                radial-gradient(circle at 92% 18%,rgba(37,99,235,.10),transparent 30%),
+                rgba(255,255,255,.91);
+        }
+
+        .tm-cdb-summary-title {
+            font-size:1.2rem;
+            margin-bottom:.55rem;
+        }
+
+        .tm-cdb-status-pill {
+            display:inline-flex;
+            align-items:center;
+            justify-content:center;
+            border-radius:999px;
+            padding:.4rem .72rem;
+            font-size:.78rem;
+            font-weight:950;
+            letter-spacing:.06em;
+            text-transform:uppercase;
+            background:rgba(37,99,235,.10);
+            color:#1d4ed8;
+            border:1px solid rgba(37,99,235,.18);
+        }
+
+        .tm-cdb-keyword-wrap {
+            display:flex;
+            flex-wrap:wrap;
+            gap:.55rem;
+            margin-top:.7rem;
+        }
+
+        .tm-cdb-keyword {
+            border-radius:999px;
+            padding:.42rem .72rem;
+            font-size:.82rem;
+            font-weight:850;
+            background:rgba(37,99,235,.08);
+            color:#1e40af;
+            border:1px solid rgba(37,99,235,.14);
+        }
+
+        .tm-cdb-export-card {
+            padding:1.35rem;
+            border-radius:26px;
+            background:
+                radial-gradient(circle at top right,rgba(16,185,129,.11),transparent 36%),
+                rgba(255,255,255,.92);
+        }
+
+        .tm-cdb-table [data-testid="stDataFrame"] {
+            border:1px solid rgba(148,163,184,.22);
+            border-radius:20px;
+            overflow:hidden;
+            box-shadow:0 14px 36px rgba(15,23,42,.05);
+        }
+
+        .tm-cdb-actions [data-testid="stPageLink"] a,
+        .tm-cdb-actions div[data-testid="stButton"] > button,
+        .tm-cdb-actions div[data-testid="stDownloadButton"] > button {
+            min-height:3.2rem;
+            border-radius:16px;
+            font-weight:900;
+        }
+
+        @media (max-width:1100px) {
+            .tm-cdb-trust-grid,
+            .tm-cdb-metric-grid {
+                grid-template-columns:repeat(2,minmax(0,1fr));
+            }
+        }
+
+        @media (max-width:760px) {
+            .tm-cdb-shell {
+                gap:2rem;
+            }
+
+            .tm-cdb-trust-grid,
+            .tm-cdb-metric-grid {
+                grid-template-columns:1fr;
+            }
+
+            .tm-cdb-trust-card,
+            .tm-cdb-metric-card {
+                min-height:auto;
+            }
+        }
+        </style>
+        """,
+        unsafe_allow_html=True,
+    )
+
+
+def render_trust_bar() -> None:
+    items = (
+        ("🧠", "AI-ranked profiles", "Candidates originate from Recruiter Mode intelligence."),
+        ("🔐", "Private workspace", "Firebase-authenticated and scoped to your account."),
+        ("🏷", "Recruiter controls", "Statuses, favorites, tags, notes, and shortlist workflow."),
+        ("📤", "Portable data", "Export the current filtered view as a structured CSV file."),
+    )
+    cards = "".join(
+        (
+            '<div class="tm-cdb-trust-card">'
+            f'<div class="tm-cdb-trust-icon">{safe_html(icon)}</div>'
+            f'<div class="tm-cdb-trust-title">{safe_html(title)}</div>'
+            f'<div class="tm-cdb-trust-copy">{safe_html(copy)}</div>'
+            "</div>"
+        )
+        for icon, title, copy in items
+    )
+    st.markdown(
+        f'<div class="tm-cdb-trust-grid">{cards}</div>',
+        unsafe_allow_html=True,
+    )
+
+
+def render_metric_grid(
+    total_candidates: int,
+    favorite_count: int,
+    average_score: int,
+    high_score_count: int,
+) -> None:
+    values = (
+        ("Total candidates", total_candidates, "Profiles saved in Recruiter Workspace"),
+        ("Priority profiles", favorite_count, "Candidates marked as favorites"),
+        ("Average score", f"{average_score}%", "Average across the full database"),
+        ("Strong matches", high_score_count, "Candidates scoring 80% or higher"),
+    )
+    cards = "".join(
+        (
+            '<div class="tm-cdb-metric-card">'
+            f'<div class="tm-cdb-metric-label">{safe_html(label)}</div>'
+            f'<div class="tm-cdb-metric-value">{safe_html(value)}</div>'
+            f'<div class="tm-cdb-metric-note">{safe_html(note)}</div>'
+            "</div>"
+        )
+        for label, value, note in values
+    )
+    st.markdown(
+        f'<div class="tm-cdb-metric-grid">{cards}</div>',
+        unsafe_allow_html=True,
+    )
+
+
+def render_candidate_table(candidates: List[Dict[str, Any]]) -> None:
+    rows = [
+        {
+            "ID": candidate.get("id"),
+            "Candidate": candidate.get("filename", "Unknown"),
+            "Score": candidate_score(candidate),
+            "Rank": candidate_rank(candidate),
+            "Status": candidate_status(candidate).title(),
+            "Favorite": "⭐" if candidate.get("favorite") else "",
+            "Tags": ", ".join(candidate_tags(candidate)),
+            "Created": format_date(candidate.get("created_at")),
+        }
+        for candidate in candidates
+    ]
+
+    if not rows:
+        st.info(
+            "No candidates match the current filters. Adjust the filters or save "
+            "candidates from Recruiter Mode."
+        )
+        return
+
+    st.markdown('<div class="tm-cdb-table">', unsafe_allow_html=True)
+    st.dataframe(
+        pd.DataFrame(rows),
+        use_container_width=True,
+        hide_index=True,
+        column_config={
+            "Score": st.column_config.ProgressColumn(
+                "Score",
+                help="Combined candidate match score",
+                min_value=0,
+                max_value=100,
+                format="%d%%",
+            ),
+            "Rank": st.column_config.NumberColumn("Rank", format="%d"),
+        },
+    )
+    st.markdown("</div>", unsafe_allow_html=True)
+
+
+def render_keywords(title: str, values: List[str], empty_message: str) -> None:
+    st.markdown(f"#### {title}")
+    if not values:
+        st.caption(empty_message)
+        return
+
+    chips = "".join(
+        f'<span class="tm-cdb-keyword">{safe_html(value)}</span>'
+        for value in values
+    )
+    st.markdown(
+        f'<div class="tm-cdb-keyword-wrap">{chips}</div>',
+        unsafe_allow_html=True,
+    )
+
+
+render_candidate_database_css()
+
+render_page_intro(
+    kicker="RECRUITER WORKSPACE",
+    title="Candidate Database",
+    subtitle=(
+        "Search, review, shortlist, annotate, and export AI-ranked candidates from one "
+        "secure recruiter workspace. Candidate Database remains fully integrated with "
+        "TalentMatch Pro Recruiter Mode."
+    ),
+    icon="🗂",
+    badge="PRO RECRUITER WORKSPACE",
 )
-
-
-# ------------------------------------------------------------
-# Sidebar
-# ------------------------------------------------------------
-if render_sidebar:
-    try:
-        render_sidebar()
-    except TypeError:
-        render_sidebar()
-    except Exception:
-        st.sidebar.title(APP_NAME)
-else:
-    st.sidebar.title(APP_NAME)
-    st.sidebar.page_link("app.py", label="🏠 Dashboard")
-    st.sidebar.page_link("pages/cv_analysis.py", label="📄 CV Analysis")
-    st.sidebar.page_link("pages/ats_checker.py", label="📋 ATS Checker")
-    st.sidebar.page_link("pages/cv_rewrite.py", label="✍️ CV Rewrite")
-    st.sidebar.page_link("pages/semantic_match.py", label="🧠 Semantic Match")
-    st.sidebar.page_link("pages/recruiter_mode.py", label="👥 Recruiter Mode")
-    st.sidebar.page_link("pages/candidate_database.py", label="🗂 Candidate Database")
-
 
 if not is_logged_in():
     st.warning("Please login before using Candidate Database.")
@@ -371,24 +584,20 @@ if not is_pro_user():
     st.page_link("pages/pricing.py", label="💳 Upgrade to Pro")
     st.stop()
 
+st.markdown('<div class="tm-cdb-shell">', unsafe_allow_html=True)
+render_trust_bar()
 
-# ------------------------------------------------------------
-# Main page
-# ------------------------------------------------------------
-st.markdown(
-    """
-    <div class="tm-hero">
-        <div class="tm-kicker">Recruiter Workspace</div>
-        <div class="tm-title">Candidate Database</div>
-        <div class="tm-subtitle">
-            Save, search, review and manage candidates ranked by TalentMatch Pro Recruiter Mode.
-            This is the foundation for TalentMatch Pro v2.0 ATS-style workflows.
-        </div>
-    </div>
-    """,
-    unsafe_allow_html=True,
+render_action_panel(
+    eyebrow="CANDIDATE OPERATIONS",
+    title="Manage the hiring pipeline",
+    description=(
+        "Return to Recruiter Mode to rank new profiles, refresh this workspace to sync "
+        "saved candidates, or use filters below to focus on the strongest shortlist."
+    ),
+    icon="👥",
 )
 
+st.markdown('<div class="tm-cdb-actions">', unsafe_allow_html=True)
 workspace_left, workspace_right = st.columns([1, 1])
 with workspace_left:
     st.page_link(
@@ -397,16 +606,20 @@ with workspace_left:
         use_container_width=True,
     )
 with workspace_right:
-    if st.button("🔄 Refresh Candidate Database", use_container_width=True):
+    if st.button(
+        "🔄 Refresh Candidate Database",
+        use_container_width=True,
+        type="primary",
+    ):
         refresh_candidates()
         st.rerun()
+st.markdown("</div>", unsafe_allow_html=True)
 
 try:
     candidates = load_candidates()
 except Exception as exc:
     st.error(f"Failed to load Candidate Database: {exc}")
     st.stop()
-
 
 total_candidates = len(candidates)
 favorite_count = sum(1 for candidate in candidates if candidate.get("favorite"))
@@ -415,36 +628,68 @@ average_score = round(
     if total_candidates
     else 0
 )
-high_score_count = sum(1 for candidate in candidates if candidate_score(candidate) >= 80)
+high_score_count = sum(
+    1 for candidate in candidates if candidate_score(candidate) >= 80
+)
 
-metric_cols = st.columns(4)
-with metric_cols[0]:
-    render_metric_card("Total", total_candidates, "Saved candidates")
-with metric_cols[1]:
-    render_metric_card("Favorites", favorite_count, "Marked as priority")
-with metric_cols[2]:
-    render_metric_card("Average score", f"{average_score}%", "Across all candidates")
-with metric_cols[3]:
-    render_metric_card("Strong matches", high_score_count, "Score 80%+")
+st.markdown("## Recruiter overview")
+st.caption(
+    "A live summary of the candidate pipeline currently stored in your Recruiter Workspace."
+)
+render_metric_grid(
+    total_candidates,
+    favorite_count,
+    average_score,
+    high_score_count,
+)
 
-
-st.markdown('<div class="tm-section">Search and filters</div>', unsafe_allow_html=True)
+st.markdown("## Search and filters")
+st.caption(
+    "Search candidate evidence, narrow the score threshold, filter by workflow status, "
+    "or isolate priority profiles."
+)
+st.markdown(
+    """
+    <div class="tm-cdb-panel">
+        <div class="tm-cdb-panel-title">🔎 Shortlist controls</div>
+        <div class="tm-cdb-panel-copy">
+            Filters apply instantly to the candidate table, detail selector, and CSV export.
+        </div>
+    </div>
+    """,
+    unsafe_allow_html=True,
+)
 
 filter_cols = st.columns([2.4, 1.2, 1.2, 1.2])
 with filter_cols[0]:
-    search_query = st.text_input("Search by filename, summary, status or tags", placeholder="Search candidates...")
+    search_query = st.text_input(
+        "Search by filename, summary, status or tags",
+        placeholder="Search candidates...",
+    )
 with filter_cols[1]:
-    min_score = st.slider("Minimum score", min_value=0, max_value=100, value=0, step=5)
+    min_score = st.slider(
+        "Minimum score",
+        min_value=0,
+        max_value=100,
+        value=0,
+        step=5,
+    )
 with filter_cols[2]:
     status_filter = st.selectbox(
         "Status",
-        ["All", "new", "shortlisted", "interview", "rejected", "hired"],
+        ["All", *CANDIDATE_STATUSES],
         index=0,
     )
 with filter_cols[3]:
     sort_option = st.selectbox(
         "Sort",
-        ["Newest first", "Oldest first", "Score high to low", "Score low to high", "Rank"],
+        [
+            "Newest first",
+            "Oldest first",
+            "Score high to low",
+            "Score low to high",
+            "Rank",
+        ],
         index=0,
     )
 
@@ -456,7 +701,6 @@ with action_cols[0]:
 with action_cols[1]:
     only_favorites = st.toggle("Favorites only", value=False)
 
-
 filtered_candidates = candidates[:]
 
 if search_query.strip():
@@ -466,7 +710,7 @@ if search_query.strip():
         for candidate in filtered_candidates
         if query in str(candidate.get("filename", "")).lower()
         or query in str(candidate.get("summary", "")).lower()
-        or query in candidate_status(candidate).lower()
+        or query in candidate_status(candidate)
         or query in ", ".join(candidate_tags(candidate)).lower()
     ]
 
@@ -480,7 +724,7 @@ if status_filter != "All":
     filtered_candidates = [
         candidate
         for candidate in filtered_candidates
-        if candidate_status(candidate).lower() == status_filter.lower()
+        if candidate_status(candidate) == status_filter.lower()
     ]
 
 if only_favorites:
@@ -491,9 +735,14 @@ if only_favorites:
     ]
 
 if sort_option == "Newest first":
-    filtered_candidates.sort(key=lambda c: str(c.get("created_at", "")), reverse=True)
+    filtered_candidates.sort(
+        key=lambda candidate: str(candidate.get("created_at", "")),
+        reverse=True,
+    )
 elif sort_option == "Oldest first":
-    filtered_candidates.sort(key=lambda c: str(c.get("created_at", "")))
+    filtered_candidates.sort(
+        key=lambda candidate: str(candidate.get("created_at", ""))
+    )
 elif sort_option == "Score high to low":
     filtered_candidates.sort(key=candidate_score, reverse=True)
 elif sort_option == "Score low to high":
@@ -501,95 +750,163 @@ elif sort_option == "Score low to high":
 elif sort_option == "Rank":
     filtered_candidates.sort(key=candidate_rank)
 
-
-st.markdown('<div class="tm-section">Candidates</div>', unsafe_allow_html=True)
+st.markdown("## Candidate pipeline")
+st.caption(
+    f"Showing {len(filtered_candidates)} of {total_candidates} saved candidate(s)."
+)
 render_candidate_table(filtered_candidates)
 
-
-st.markdown('<div class="tm-section">Candidate details</div>', unsafe_allow_html=True)
+st.markdown("## Candidate intelligence")
+st.caption(
+    "Select a candidate to review ranking signals, AI evidence, recruiter notes, "
+    "and workflow status."
+)
 
 if not filtered_candidates:
-    st.info("No candidate selected.")
+    st.info("No candidate is available for detailed review.")
 else:
     candidate_options = {
-        f"#{candidate.get('id')} · {candidate.get('filename', 'Unknown')} · {candidate_score(candidate)}%": candidate
+        (
+            f"#{candidate.get('id')} · "
+            f"{candidate.get('filename', 'Unknown')} · "
+            f"{candidate_score(candidate)}%"
+        ): candidate
         for candidate in filtered_candidates
     }
 
-    selected_label = st.selectbox("Select candidate", list(candidate_options.keys()))
+    selected_label = st.selectbox(
+        "Select candidate",
+        list(candidate_options.keys()),
+    )
     selected_candidate = candidate_options[selected_label]
     selected_id = selected_candidate.get("id")
+    selected_score = candidate_score(selected_candidate)
+    selected_rank = candidate_rank(selected_candidate)
+    selected_status = candidate_status(selected_candidate)
+    selected_favorite = bool(selected_candidate.get("favorite"))
 
-    detail_cols = st.columns([1.2, 1.2, 1.2, 1.2])
+    st.markdown(
+        f"""
+        <div class="tm-cdb-summary">
+            <div style="display:flex;justify-content:space-between;gap:1rem;align-items:flex-start;flex-wrap:wrap">
+                <div>
+                    <div class="tm-cdb-summary-title">
+                        {safe_html(selected_candidate.get("filename", "Unknown candidate"))}
+                    </div>
+                    <div class="tm-cdb-summary-copy">
+                        {safe_html(selected_candidate.get("summary") or "No AI summary saved.")}
+                    </div>
+                </div>
+                <span class="tm-cdb-status-pill">{safe_html(selected_status)}</span>
+            </div>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
+
+    detail_cols = st.columns(4)
     with detail_cols[0]:
-        st.metric("Score", f"{candidate_score(selected_candidate)}%")
+        render_score_card(
+            label="MATCH SCORE",
+            value=selected_score,
+            caption="Combined recruiter score",
+            tone="blue",
+        )
     with detail_cols[1]:
-        st.metric("Rank", candidate_rank(selected_candidate))
+        render_score_card(
+            label="RANK",
+            value=selected_rank,
+            caption="Current shortlist position",
+            tone="green",
+            suffix="",
+        )
     with detail_cols[2]:
-        st.metric("Status", candidate_status(selected_candidate))
+        render_score_card(
+            label="STATUS",
+            value=selected_status.upper(),
+            caption="Recruiter workflow stage",
+            tone="purple",
+            suffix="",
+        )
     with detail_cols[3]:
-        st.metric("Favorite", "Yes" if selected_candidate.get("favorite") else "No")
+        render_score_card(
+            label="PRIORITY",
+            value="YES" if selected_favorite else "NO",
+            caption="Favorite candidate",
+            tone="amber",
+            suffix="",
+        )
 
-    st.markdown("### AI Summary")
-    st.write(selected_candidate.get("summary") or "No summary saved.")
+    matched_skills = normalize_text_list(
+        selected_candidate.get("matched_skills")
+    )
+    missing_skills = normalize_text_list(
+        selected_candidate.get("missing_skills")
+    )
+    matched_keywords = normalize_text_list(
+        selected_candidate.get("matched_keywords")
+    )
+    missing_keywords = normalize_text_list(
+        selected_candidate.get("missing_keywords")
+    )
+    recommendations = normalize_text_list(
+        selected_candidate.get("recommendations")
+    )
 
-    info_cols = st.columns(2)
-    with info_cols[0]:
-        st.markdown("### Matched skills")
-        matched_skills = safe_json_loads(selected_candidate.get("matched_skills"), [])
-        if matched_skills:
-            for item in matched_skills:
-                st.success(str(item))
-        else:
-            st.caption("No matched skills saved.")
+    evidence_left, evidence_right = st.columns(2)
+    with evidence_left:
+        st.markdown("### ✅ Matched evidence")
+        render_list_cards(
+            matched_skills,
+            kind="success",
+            empty_message="No matched skills saved.",
+        )
+        render_keywords(
+            "Matched keywords",
+            matched_keywords,
+            "No matched keywords saved.",
+        )
 
-        st.markdown("### Matched keywords")
-        matched_keywords = safe_json_loads(selected_candidate.get("matched_keywords"), [])
-        if matched_keywords:
-            st.write(", ".join(str(item) for item in matched_keywords))
-        else:
-            st.caption("No matched keywords saved.")
+    with evidence_right:
+        st.markdown("### ⚠️ Missing evidence")
+        render_list_cards(
+            missing_skills,
+            kind="warning",
+            empty_message="No missing skills saved.",
+        )
+        render_keywords(
+            "Missing keywords",
+            missing_keywords,
+            "No missing keywords saved.",
+        )
 
-    with info_cols[1]:
-        st.markdown("### Missing skills")
-        missing_skills = safe_json_loads(selected_candidate.get("missing_skills"), [])
-        if missing_skills:
-            for item in missing_skills:
-                st.warning(str(item))
-        else:
-            st.caption("No missing skills saved.")
+    st.markdown("### 🎯 Recruiter recommendations")
+    render_list_cards(
+        recommendations,
+        kind="info",
+        empty_message="No recommendations saved.",
+    )
 
-        st.markdown("### Missing keywords")
-        missing_keywords = safe_json_loads(selected_candidate.get("missing_keywords"), [])
-        if missing_keywords:
-            st.write(", ".join(str(item) for item in missing_keywords))
-        else:
-            st.caption("No missing keywords saved.")
-
-    st.markdown("### Recommendations")
-    recommendations = safe_json_loads(selected_candidate.get("recommendations"), [])
-    if recommendations:
-        for item in recommendations:
-            st.info(str(item))
-    else:
-        st.caption("No recommendations saved.")
-
-    st.divider()
-
-    st.markdown("### Manage candidate")
+    st.markdown("## Manage candidate")
+    st.caption(
+        "Update the candidate stage, priority flag, tags, and recruiter notes. "
+        "Changes are persisted through the existing Recruiter Candidate API."
+    )
 
     edit_cols = st.columns([1, 1, 2])
     with edit_cols[0]:
-        favorite_value = st.checkbox("Favorite", value=bool(selected_candidate.get("favorite")))
+        favorite_value = st.checkbox(
+            "Favorite",
+            value=selected_favorite,
+        )
     with edit_cols[1]:
+        normalized_status = (
+            selected_status if selected_status in CANDIDATE_STATUSES else "new"
+        )
         status_value = st.selectbox(
             "Candidate status",
-            ["new", "shortlisted", "interview", "rejected", "hired"],
-            index=["new", "shortlisted", "interview", "rejected", "hired"].index(
-                candidate_status(selected_candidate)
-                if candidate_status(selected_candidate) in ["new", "shortlisted", "interview", "rejected", "hired"]
-                else "new"
-            ),
+            CANDIDATE_STATUSES,
+            index=CANDIDATE_STATUSES.index(normalized_status),
         )
     with edit_cols[2]:
         tags_value = st.text_input(
@@ -601,19 +918,28 @@ else:
     notes_value = st.text_area(
         "Recruiter notes",
         value=str(selected_candidate.get("notes") or ""),
-        height=140,
+        height=150,
         placeholder="Add notes about this candidate...",
     )
 
+    st.markdown('<div class="tm-cdb-actions">', unsafe_allow_html=True)
     update_cols = st.columns([1, 1, 2])
     with update_cols[0]:
-        if st.button("💾 Save changes", use_container_width=True):
+        if st.button(
+            "💾 Save changes",
+            type="primary",
+            use_container_width=True,
+        ):
             try:
                 payload = {
                     "favorite": favorite_value,
                     "status": status_value,
                     "notes": notes_value,
-                    "tags": [tag.strip() for tag in tags_value.split(",") if tag.strip()],
+                    "tags": [
+                        tag.strip()
+                        for tag in tags_value.split(",")
+                        if tag.strip()
+                    ],
                 }
                 api_put(f"/recruiter/candidates/{selected_id}", payload)
                 st.success("Candidate updated.")
@@ -626,7 +952,11 @@ else:
         delete_confirmed = st.checkbox("Confirm delete")
 
     with update_cols[2]:
-        if st.button("🗑 Delete candidate", use_container_width=True, disabled=not delete_confirmed):
+        if st.button(
+            "🗑 Delete candidate",
+            use_container_width=True,
+            disabled=not delete_confirmed,
+        ):
             try:
                 api_delete(f"/recruiter/candidates/{selected_id}")
                 st.success("Candidate deleted.")
@@ -634,31 +964,59 @@ else:
                 st.rerun()
             except Exception as exc:
                 st.error(f"Failed to delete candidate: {exc}")
+    st.markdown("</div>", unsafe_allow_html=True)
 
+export_rows = [
+    {
+        "id": candidate.get("id"),
+        "filename": candidate.get("filename"),
+        "score": candidate_score(candidate),
+        "rank": candidate_rank(candidate),
+        "status": candidate_status(candidate),
+        "favorite": bool(candidate.get("favorite")),
+        "tags": ", ".join(candidate_tags(candidate)),
+        "summary": candidate.get("summary", ""),
+        "matched_skills": list_to_text(candidate.get("matched_skills")),
+        "missing_skills": list_to_text(candidate.get("missing_skills")),
+        "matched_keywords": list_to_text(candidate.get("matched_keywords")),
+        "missing_keywords": list_to_text(candidate.get("missing_keywords")),
+        "recommendations": list_to_text(candidate.get("recommendations")),
+        "notes": candidate.get("notes", ""),
+        "created_at": candidate.get("created_at"),
+    }
+    for candidate in filtered_candidates
+]
 
-st.markdown('<div class="tm-section">Export</div>', unsafe_allow_html=True)
+csv_data = (
+    pd.DataFrame(export_rows).to_csv(index=False).encode("utf-8")
+    if export_rows
+    else b""
+)
 
-export_rows = []
-for candidate in filtered_candidates:
-    export_rows.append(
-        {
-            "id": candidate.get("id"),
-            "filename": candidate.get("filename"),
-            "score": candidate_score(candidate),
-            "rank": candidate_rank(candidate),
-            "status": candidate_status(candidate),
-            "favorite": bool(candidate.get("favorite")),
-            "tags": ", ".join(candidate_tags(candidate)),
-            "summary": candidate.get("summary", ""),
-            "matched_skills": list_to_text(candidate.get("matched_skills")),
-            "missing_skills": list_to_text(candidate.get("missing_skills")),
-            "recommendations": list_to_text(candidate.get("recommendations")),
-            "created_at": candidate.get("created_at"),
-        }
-    )
+st.markdown("## Export center")
+render_report_panel(
+    title="Candidate Database export",
+    description=(
+        "Download the current filtered candidate view as CSV, including ranking, "
+        "workflow status, tags, evidence, recommendations, notes, and timestamps."
+    ),
+    icon="📤",
+)
 
-csv_data = pd.DataFrame(export_rows).to_csv(index=False).encode("utf-8") if export_rows else b""
+st.markdown(
+    f"""
+    <div class="tm-cdb-export-card">
+        <div class="tm-cdb-panel-title">Filtered recruiter dataset</div>
+        <div class="tm-cdb-panel-copy">
+            {len(export_rows)} candidate record(s) are ready for export. The file reflects
+            the active search, score, status, favorite, and sort selections.
+        </div>
+    </div>
+    """,
+    unsafe_allow_html=True,
+)
 
+st.markdown('<div class="tm-cdb-actions">', unsafe_allow_html=True)
 st.download_button(
     "⬇️ Export Candidate Database CSV",
     data=csv_data,
@@ -667,3 +1025,5 @@ st.download_button(
     use_container_width=True,
     disabled=not bool(export_rows),
 )
+st.markdown("</div>", unsafe_allow_html=True)
+st.markdown("</div>", unsafe_allow_html=True)
