@@ -104,6 +104,24 @@ def _dashboard_css() -> None:
             padding:1.2rem;
             border-radius:22px;
         }
+
+        .tm-quick-link {
+            display:block;
+            color:inherit !important;
+            text-decoration:none !important;
+            border-radius:22px;
+            transition:transform 160ms ease, box-shadow 160ms ease, border-color 160ms ease;
+        }
+
+        .tm-quick-link:hover {
+            transform:translateY(-2px);
+            text-decoration:none !important;
+        }
+
+        .tm-quick-link:hover .tm-quick-card {
+            border-color:rgba(37,99,235,.38);
+            box-shadow:0 22px 54px rgba(37,99,235,.12);
+        }
         .tm-quick-icon,
         .tm-capability-icon {
             width:48px;
@@ -197,21 +215,6 @@ def _dashboard_css() -> None:
             font-weight:950;
             flex:0 0 auto;
         }
-        .tm-page-links [data-testid="stPageLink"] a {
-            min-height:3.15rem;
-            border-radius:16px;
-            border:1px solid rgba(148,163,184,.24);
-            background:rgba(255,255,255,.90);
-            padding:.75rem 1rem;
-            font-weight:900;
-            box-shadow:0 12px 28px rgba(15,23,42,.05);
-            transition:160ms ease;
-        }
-        .tm-page-links [data-testid="stPageLink"] a:hover {
-            transform:translateY(-1px);
-            border-color:rgba(37,99,235,.35);
-            box-shadow:0 16px 34px rgba(37,99,235,.10);
-        }
         .tm-dashboard-cta [data-testid="stPageLink"] a {
             min-height:3.35rem;
             border-radius:16px;
@@ -279,34 +282,25 @@ def _render_command_metrics(plan: str) -> None:
 def _render_quick_actions() -> None:
     render_section_title("Quick actions", "Jump directly into the workflows you use most.")
     items = (
-        ("📄", "Analyze CV", "Run a complete AI review against a target role."),
-        ("📋", "Check ATS", "Measure keyword coverage and prioritize missing terms."),
-        ("🧠", "Semantic match", "Compare meaning, context, and recruiter readiness."),
-        ("👥", "Recruiter workspace", "Rank candidates and manage the Candidate Database."),
+        ("📄", "Analyze CV", "Run a complete AI review against a target role.", "/cv_analysis"),
+        ("📋", "Check ATS", "Measure keyword coverage and prioritize missing terms.", "/ats_checker"),
+        ("🧠", "Semantic match", "Compare meaning, context, and recruiter readiness.", "/semantic_match"),
+        ("👥", "Recruiter workspace", "Rank candidates and manage the Candidate Database.", "/recruiter_mode"),
     )
     cards = "".join(
         (
+            f'<a class="tm-quick-link" href="{safe_html(route)}" target="_self" '
+            f'aria-label="Open {safe_html(title)}">'
             '<div class="tm-quick-card">'
             f'<div class="tm-quick-icon">{safe_html(icon)}</div>'
             f'<div class="tm-quick-title">{safe_html(title)}</div>'
             f'<div class="tm-quick-copy">{safe_html(copy)}</div>'
             "</div>"
+            "</a>"
         )
-        for icon, title, copy in items
+        for icon, title, copy, route in items
     )
     st.markdown(f'<div class="tm-quick-grid">{cards}</div>', unsafe_allow_html=True)
-
-    st.markdown('<div class="tm-page-links">', unsafe_allow_html=True)
-    c1, c2, c3, c4 = st.columns(4)
-    with c1:
-        st.page_link("pages/cv_analysis.py", label="📄 Open CV Analysis")
-    with c2:
-        st.page_link("pages/ats_checker.py", label="📋 Open ATS Checker")
-    with c3:
-        st.page_link("pages/semantic_match.py", label="🧠 Open Semantic Match")
-    with c4:
-        st.page_link("pages/recruiter_mode.py", label="👥 Open Recruiter Mode")
-    st.markdown("</div>", unsafe_allow_html=True)
 
 
 def _render_core_features() -> None:

@@ -3,6 +3,7 @@ from __future__ import annotations
 import os
 from datetime import datetime, timezone
 from typing import Any
+from textwrap import dedent
 
 import requests
 import streamlit as st
@@ -67,6 +68,11 @@ def status_dot(status: str) -> str:
     if status.lower() == "degraded":
         return "🟡"
     return "🔴"
+
+
+def render_html(markup: str) -> None:
+    """Render normalized HTML without Markdown code-block leakage."""
+    st.markdown(dedent(markup).strip(), unsafe_allow_html=True)
 
 
 def render_account_css() -> None:
@@ -397,15 +403,15 @@ def render_account_css() -> None:
             min-height:118px;
         }
 
-        .tm-account-actions [data-testid="stButton"] button,
-        .tm-account-actions [data-testid="stDownloadButton"] button,
-        .tm-account-actions [data-testid="stPageLink"] a {
+        [data-testid="stButton"] button,
+        [data-testid="stDownloadButton"] button,
+        [data-testid="stPageLink"] a {
             min-height:3.1rem;
             border-radius:16px;
             font-weight:900;
         }
 
-        .tm-account-actions [data-testid="stPageLink"] a {
+        [data-testid="stPageLink"] a {
             border:1px solid rgba(148,163,184,.24);
             background:rgba(255,255,255,.88);
             box-shadow:0 12px 28px rgba(15,23,42,.05);
@@ -431,12 +437,11 @@ def render_account_css() -> None:
         }
         </style>
         """,
-        unsafe_allow_html=True,
     )
 
 
 def render_section_heading(kicker: str, title: str, copy: str) -> None:
-    st.markdown(
+    render_html(
         f"""
         <div class="tm-section-heading">
             <div>
@@ -445,15 +450,14 @@ def render_section_heading(kicker: str, title: str, copy: str) -> None:
                 <div class="tm-section-copy">{safe_html(copy)}</div>
             </div>
         </div>
-        """,
-        unsafe_allow_html=True,
+        """
     )
 
 
 def render_premium_hero(display_name: str, initials: str, plan_name: str, pro_enabled: bool) -> None:
     member_label = "PRO Member" if pro_enabled else "Free Member"
     badge_label = "PRO" if pro_enabled else "FREE"
-    st.markdown(
+    render_html(
         f"""
         <div class="tm-account-hero">
             <div class="tm-account-hero-grid">
@@ -476,19 +480,18 @@ def render_premium_hero(display_name: str, initials: str, plan_name: str, pro_en
                 </div>
             </div>
         </div>
-        """,
-        unsafe_allow_html=True,
+        """
     )
 
 
 def render_kpi_card(label: str, value: str, note: str, icon: str) -> str:
-    return f"""
+    return dedent(f"""
         <div class="tm-premium-card tm-kpi-card">
             <div class="tm-card-label">{safe_html(icon)} {safe_html(label)}</div>
             <div class="tm-card-value">{safe_html(value)}</div>
             <div class="tm-card-note">{safe_html(note)}</div>
         </div>
-    """
+    """).strip()
 
 
 def render_membership_card(
@@ -500,7 +503,7 @@ def render_membership_card(
     monthly_limit: int,
     usage_percent: int,
 ) -> str:
-    return f"""
+    return dedent(f"""
         <div class="tm-membership-card">
             <div class="tm-membership-title">💎 {safe_html(plan_name)} Member</div>
             <div class="tm-membership-plan">{safe_html(plan_name)} Plan</div>
@@ -509,7 +512,7 @@ def render_membership_card(
             <div class="tm-membership-row"><span>Renewal date</span><span>{safe_html(renewal_date)}</span></div>
             <div class="tm-membership-row"><span>Monthly usage</span><span>{total_usage}/{monthly_limit} • {usage_percent}%</span></div>
         </div>
-    """
+    """).strip()
 
 
 def render_usage_card(
@@ -527,7 +530,7 @@ def render_usage_card(
         """
         for label, value in usage.items()
     )
-    return f"""
+    return dedent(f"""
         <div class="tm-premium-card">
             <div class="tm-card-label">📊 Monthly usage</div>
             <div class="tm-card-value">{total_usage} / {monthly_limit}</div>
@@ -537,7 +540,7 @@ def render_usage_card(
             </div>
             <div style="margin-top:.9rem">{usage_rows}</div>
         </div>
-    """
+    """).strip()
 
 
 def render_profile_card(email: str, user_id: str, registered_at: str) -> str:
@@ -555,14 +558,14 @@ def render_profile_card(email: str, user_id: str, registered_at: str) -> str:
         """
         for label, value in rows
     )
-    return f"""
+    return dedent(f"""
         <div class="tm-premium-card">
             <div class="tm-card-label">👤 Profile details</div>
             <div class="tm-card-value" style="font-size:1.35rem">Account identity</div>
             <div class="tm-card-note">Firebase-authenticated TalentMatch Pro profile.</div>
             <div style="margin-top:.9rem">{body}</div>
         </div>
-    """
+    """).strip()
 
 
 def render_system_card(backend_status: str, backend_icon: str, today: str) -> str:
@@ -584,7 +587,7 @@ def render_system_card(backend_status: str, backend_icon: str, today: str) -> st
         """
         for label, value, icon in rows
     )
-    return f"""
+    return dedent(f"""
         <div class="tm-premium-card">
             <div class="tm-card-label">{safe_html(status_dot(backend_status))} {safe_html(status_headline)}</div>
             <div class="tm-card-value" style="font-size:1.35rem">System status</div>
@@ -592,7 +595,7 @@ def render_system_card(backend_status: str, backend_icon: str, today: str) -> st
             <div class="tm-status-pill">{safe_html(backend_icon)} Backend {safe_html(backend_status)}</div>
             <div style="margin-top:.65rem">{body}</div>
         </div>
-    """
+    """).strip()
 
 
 def render_security_card(is_signed_in: bool) -> str:
@@ -611,14 +614,14 @@ def render_security_card(is_signed_in: bool) -> str:
         """
         for label, value, icon in rows
     )
-    return f"""
+    return dedent(f"""
         <div class="tm-premium-card">
             <div class="tm-card-label">🔒 Security center</div>
             <div class="tm-card-value" style="font-size:1.35rem">Protected account</div>
             <div class="tm-card-note">Authentication, session, transport, and billing safeguards.</div>
             <div style="margin-top:.9rem">{body}</div>
         </div>
-    """
+    """).strip()
 
 
 def build_profile_export(
@@ -697,8 +700,6 @@ renewal_date = str(
 )
 today = datetime.now(timezone.utc).strftime("%Y-%m-%d")
 
-st.markdown('<div class="tm-account-shell">', unsafe_allow_html=True)
-
 render_premium_hero(display_name, initials, plan_name, pro_enabled)
 
 render_section_heading(
@@ -714,14 +715,14 @@ kpi_cards = "".join(
         render_kpi_card("Recruiter Rankings", str(usage.get("Recruiter Mode", 0)), "Candidate ranking workflows.", "🏆"),
     ]
 )
-st.markdown(f'<div class="tm-account-grid">{kpi_cards}</div>', unsafe_allow_html=True)
+render_html(f'<div class="tm-account-grid">{kpi_cards}</div>')
 
 render_section_heading(
     "Membership",
     "Subscription and profile",
     "Manage your plan status and review the identity linked to this workspace.",
 )
-st.markdown(
+render_html(
     f"""
     <div class="tm-panel-grid">
         {render_membership_card(
@@ -734,8 +735,7 @@ st.markdown(
         )}
         {render_profile_card(email, user_id, registered_at)}
     </div>
-    """,
-    unsafe_allow_html=True,
+    """
 )
 
 if is_logged_in() and pro_enabled:
@@ -750,14 +750,13 @@ render_section_heading(
     "Usage and system health",
     "Track monthly activity and confirm the current operational state of the platform.",
 )
-st.markdown(
+render_html(
     f"""
     <div class="tm-panel-grid">
         {render_usage_card(usage, total_usage, monthly_limit, usage_percent)}
         {render_system_card(backend_status, backend_icon, today)}
     </div>
-    """,
-    unsafe_allow_html=True,
+    """
 )
 
 render_section_heading(
@@ -765,7 +764,7 @@ render_section_heading(
     "Security center",
     "Review authentication, session, HTTPS, and PayPal billing safeguards.",
 )
-st.markdown(render_security_card(is_logged_in()), unsafe_allow_html=True)
+render_html(render_security_card(is_logged_in()))
 
 profile_export = build_profile_export(
     display_name=display_name,
@@ -784,44 +783,40 @@ render_section_heading(
     "Account actions",
     "Refresh profile data, manage PayPal billing, export your profile, or securely end the session.",
 )
-st.markdown('<div class="tm-account-actions">', unsafe_allow_html=True)
 action_cols = st.columns(4)
 
 with action_cols[0]:
-    st.markdown(
+    render_html(
         """
         <div class="tm-action-card">
             <div class="tm-card-label">🔄 Refresh</div>
             <div class="tm-card-note">Sync the latest Firebase and backend profile data.</div>
         </div>
         """,
-        unsafe_allow_html=True,
     )
     if st.button("🔄 Refresh Profile", use_container_width=True):
         refresh_profile()
         st.success("Profile refreshed.")
 
 with action_cols[1]:
-    st.markdown(
+    render_html(
         """
         <div class="tm-action-card">
             <div class="tm-card-label">💳 Billing</div>
             <div class="tm-card-note">Open PayPal pricing and subscription controls.</div>
         </div>
         """,
-        unsafe_allow_html=True,
     )
     st.page_link("pages/pricing.py", label="💳 Manage Subscription")
 
 with action_cols[2]:
-    st.markdown(
+    render_html(
         """
         <div class="tm-action-card">
             <div class="tm-card-label">📄 Export</div>
             <div class="tm-card-note">Download a portable account profile snapshot.</div>
         </div>
         """,
-        unsafe_allow_html=True,
     )
     st.download_button(
         "📄 Download Profile",
@@ -847,6 +842,3 @@ with action_cols[3]:
             st.rerun()
     else:
         st.page_link("pages/login.py", label="🔐 Login")
-
-st.markdown("</div>", unsafe_allow_html=True)
-st.markdown("</div>", unsafe_allow_html=True)
