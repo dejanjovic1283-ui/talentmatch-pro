@@ -2,8 +2,6 @@ from __future__ import annotations
 
 import os
 from datetime import datetime, timezone
-from typing import Any
-from textwrap import dedent
 
 import requests
 import streamlit as st
@@ -15,7 +13,6 @@ from components.ui import (
     get_display_name,
     get_initials,
     get_user_email,
-    safe_html,
 )
 
 
@@ -42,10 +39,10 @@ def check_backend_status() -> tuple[str, str]:
     try:
         response = requests.get(f"{BACKEND_URL}/healthz", timeout=6)
         if response.status_code == 200:
-            return "Online", "✅"
-        return "Degraded", "⚠️"
+            return "Online", "🟢"
+        return "Degraded", "🟡"
     except requests.RequestException:
-        return "Offline", "❌"
+        return "Offline", "🔴"
 
 
 def get_usage_summary() -> dict[str, int]:
@@ -62,566 +59,55 @@ def usage_limit_for_plan(pro_enabled: bool) -> int:
     return 50 if pro_enabled else 3
 
 
-def status_dot(status: str) -> str:
-    if status.lower() == "online":
-        return "🟢"
-    if status.lower() == "degraded":
-        return "🟡"
-    return "🔴"
-
-
-def render_html(markup: str) -> None:
-    """Render normalized HTML without Markdown code-block leakage."""
-    st.markdown(dedent(markup).strip(), unsafe_allow_html=True)
-
-
 def render_account_css() -> None:
     st.markdown(
         """
         <style>
-        .tm-account-shell {
-            display:flex;
-            flex-direction:column;
-            gap:2.5rem;
-            width:100%;
+        div[data-testid="stVerticalBlockBorderWrapper"] {
+            border-radius: 24px;
+            border-color: rgba(148, 163, 184, 0.24);
+            background: rgba(255, 255, 255, 0.78);
+            box-shadow: 0 16px 44px rgba(15, 23, 42, 0.06);
         }
 
-        .tm-account-section {
-            display:flex;
-            flex-direction:column;
-            gap:1rem;
-            width:100%;
+        div[data-testid="stMetric"] {
+            padding: 0.35rem 0;
         }
 
-        .tm-account-hero {
-            position:relative;
-            overflow:hidden;
-            border-radius:34px;
-            padding:2.35rem;
-            border:1px solid rgba(148,163,184,.24);
-            background:
-                radial-gradient(circle at 8% 0%,rgba(37,99,235,.20),transparent 34%),
-                radial-gradient(circle at 96% 18%,rgba(16,185,129,.18),transparent 36%),
-                linear-gradient(135deg,rgba(255,255,255,.94),rgba(248,250,252,.98));
-            box-shadow:0 26px 80px rgba(15,23,42,.10);
+        div[data-testid="stMetricValue"] {
+            font-weight: 900;
+            letter-spacing: -0.04em;
         }
 
-        .tm-account-hero::after {
-            content:"";
-            position:absolute;
-            width:280px;
-            height:280px;
-            right:-110px;
-            bottom:-150px;
-            border-radius:999px;
-            background:radial-gradient(circle,rgba(124,58,237,.16),transparent 68%);
-            pointer-events:none;
+        div[data-testid="stPageLink"] a,
+        div[data-testid="stButton"] button,
+        div[data-testid="stDownloadButton"] button {
+            min-height: 3rem;
+            border-radius: 16px;
+            font-weight: 800;
         }
 
-        .tm-account-hero-grid {
-            display:grid;
-            grid-template-columns:minmax(0,1fr) 190px;
-            gap:2rem;
-            align-items:center;
-            position:relative;
-            z-index:1;
-        }
-
-        .tm-welcome-eyebrow {
-            color:#2563eb;
-            font-weight:950;
-            letter-spacing:.14em;
-            text-transform:uppercase;
-            font-size:.78rem;
-            margin-bottom:.55rem;
-        }
-
-        .tm-welcome-title {
-            color:#0f172a;
-            font-size:clamp(2.35rem,5vw,3.45rem);
-            line-height:1.02;
-            letter-spacing:-.065em;
-            font-weight:950;
-            margin-bottom:.75rem;
-        }
-
-        .tm-welcome-subtitle {
-            color:#64748b;
-            font-size:1.08rem;
-            line-height:1.62;
-            max-width:790px;
-        }
-
-        .tm-hero-chip-row {
-            display:flex;
-            flex-wrap:wrap;
-            gap:.65rem;
-            margin-top:1.15rem;
-        }
-
-        .tm-hero-chip {
-            display:inline-flex;
-            align-items:center;
-            gap:.42rem;
-            padding:.48rem .72rem;
-            border-radius:999px;
-            border:1px solid rgba(148,163,184,.24);
-            background:rgba(255,255,255,.76);
-            color:#334155;
-            font-size:.82rem;
-            font-weight:850;
-            box-shadow:0 8px 22px rgba(15,23,42,.05);
-        }
-
-        .tm-avatar-wrap {
-            position:relative;
-            display:flex;
-            align-items:center;
-            justify-content:center;
-        }
-
-        .tm-avatar-premium {
-            width:146px;
-            height:146px;
-            border-radius:999px;
-            display:flex;
-            align-items:center;
-            justify-content:center;
-            color:white;
-            font-size:2.75rem;
-            font-weight:950;
-            background:linear-gradient(135deg,#2563eb 0%,#7c3aed 48%,#10b981 100%);
-            box-shadow:0 24px 58px rgba(37,99,235,.30);
-            border:6px solid rgba(255,255,255,.86);
-        }
-
-        .tm-pro-badge {
-            position:absolute;
-            bottom:8px;
-            right:12px;
-            padding:.4rem .72rem;
-            border-radius:999px;
-            color:white;
-            font-size:.78rem;
-            font-weight:950;
-            background:linear-gradient(135deg,#0f172a,#2563eb);
-            border:2px solid white;
-            box-shadow:0 14px 28px rgba(15,23,42,.18);
-        }
-
-        .tm-section-heading {
-            display:flex;
-            align-items:flex-end;
-            justify-content:space-between;
-            gap:1rem;
-            margin-bottom:.15rem;
-        }
-
-        .tm-section-kicker {
-            color:#2563eb;
-            font-size:.74rem;
-            font-weight:950;
-            text-transform:uppercase;
-            letter-spacing:.13em;
-            margin-bottom:.22rem;
-        }
-
-        .tm-section-title {
-            color:#0f172a;
-            font-size:1.55rem;
-            line-height:1.15;
-            font-weight:950;
-            letter-spacing:-.035em;
-        }
-
-        .tm-section-copy {
-            color:#64748b;
-            line-height:1.55;
-            max-width:680px;
-            margin-top:.35rem;
-        }
-
-        .tm-account-grid {
-            display:grid;
-            grid-template-columns:repeat(4,minmax(0,1fr));
-            gap:1rem;
-            width:100%;
-        }
-
-        .tm-panel-grid {
-            display:grid;
-            grid-template-columns:repeat(2,minmax(0,1fr));
-            gap:1rem;
-            width:100%;
-        }
-
-        .tm-premium-card,
-        .tm-membership-card,
-        .tm-action-card {
-            min-height:100%;
-            border-radius:26px;
-            border:1px solid rgba(148,163,184,.24);
-            box-shadow:0 18px 48px rgba(15,23,42,.06);
-        }
-
-        .tm-premium-card {
-            padding:1.3rem;
-            background:rgba(255,255,255,.88);
-            backdrop-filter:blur(14px);
-        }
-
-        .tm-kpi-card {
-            position:relative;
-            overflow:hidden;
-            min-height:166px;
-        }
-
-        .tm-kpi-card::before {
-            content:"";
-            position:absolute;
-            inset:0 0 auto 0;
-            height:4px;
-            background:linear-gradient(90deg,#2563eb,#10b981);
-        }
-
-        .tm-card-label {
-            color:#64748b;
-            font-size:.76rem;
-            font-weight:900;
-            letter-spacing:.10em;
-            text-transform:uppercase;
-            margin-bottom:.42rem;
-        }
-
-        .tm-card-value {
-            color:#0f172a;
-            font-size:1.95rem;
-            letter-spacing:-.05em;
-            line-height:1.05;
-            font-weight:950;
-        }
-
-        .tm-card-note {
-            margin-top:.45rem;
-            color:#64748b;
-            font-size:.92rem;
-            line-height:1.48;
-        }
-
-        .tm-membership-card {
-            padding:1.55rem;
-            color:white;
-            background:
-                radial-gradient(circle at top right,rgba(16,185,129,.34),transparent 35%),
-                radial-gradient(circle at bottom left,rgba(124,58,237,.28),transparent 40%),
-                linear-gradient(135deg,#0f172a 0%,#1d4ed8 100%);
-            box-shadow:0 24px 64px rgba(29,78,216,.22);
-        }
-
-        .tm-membership-title {
-            font-size:.82rem;
-            letter-spacing:.13em;
-            font-weight:950;
-            text-transform:uppercase;
-            opacity:.84;
-            margin-bottom:.55rem;
-        }
-
-        .tm-membership-plan {
-            font-size:2.35rem;
-            line-height:1;
-            letter-spacing:-.055em;
-            font-weight:950;
-            margin-bottom:1.1rem;
-        }
-
-        .tm-membership-row {
-            display:flex;
-            justify-content:space-between;
-            gap:1rem;
-            padding:.62rem 0;
-            border-top:1px solid rgba(255,255,255,.18);
-            font-size:.94rem;
-        }
-
-        .tm-membership-row span:first-child {opacity:.76}
-        .tm-membership-row span:last-child {font-weight:850;text-align:right}
-
-        .tm-progress-track {
-            height:14px;
-            border-radius:999px;
-            background:rgba(148,163,184,.18);
-            overflow:hidden;
-            border:1px solid rgba(148,163,184,.20);
-            margin-top:.95rem;
-        }
-
-        .tm-progress-fill {
-            height:100%;
-            border-radius:999px;
-            background:linear-gradient(90deg,#2563eb,#10b981);
-        }
-
-        .tm-check-row {
-            display:flex;
-            align-items:center;
-            justify-content:space-between;
-            gap:.8rem;
-            padding:.7rem 0;
-            border-top:1px solid rgba(148,163,184,.16);
-        }
-
-        .tm-check-left {
-            color:#0f172a;
-            font-weight:850;
-            min-width:0;
-        }
-
-        .tm-check-right {
-            color:#64748b;
-            font-size:.9rem;
-            text-align:right;
-            overflow-wrap:anywhere;
-        }
-
-        .tm-status-pill {
-            display:inline-flex;
-            align-items:center;
-            gap:.4rem;
-            padding:.34rem .62rem;
-            border-radius:999px;
-            background:rgba(16,185,129,.11);
-            color:#047857;
-            font-weight:900;
-            font-size:.8rem;
-            margin-top:.75rem;
-        }
-
-        .tm-action-card {
-            padding:1.05rem;
-            background:rgba(255,255,255,.84);
-            min-height:118px;
-        }
-
-        [data-testid="stButton"] button,
-        [data-testid="stDownloadButton"] button,
-        [data-testid="stPageLink"] a {
-            min-height:3.1rem;
-            border-radius:16px;
-            font-weight:900;
-        }
-
-        [data-testid="stPageLink"] a {
-            border:1px solid rgba(148,163,184,.24);
-            background:rgba(255,255,255,.88);
-            box-shadow:0 12px 28px rgba(15,23,42,.05);
-            padding:.7rem .9rem;
-        }
-
-        @media (max-width:1100px) {
-            .tm-account-grid {grid-template-columns:repeat(2,minmax(0,1fr))}
-        }
-
-        @media (max-width:900px) {
-            .tm-account-hero-grid {grid-template-columns:1fr}
-            .tm-avatar-wrap {justify-content:flex-start}
-            .tm-panel-grid {grid-template-columns:1fr}
-        }
-
-        @media (max-width:760px) {
-            .tm-account-shell {gap:2rem}
-            .tm-account-hero {padding:1.5rem}
-            .tm-account-grid {grid-template-columns:1fr}
-            .tm-section-heading {align-items:flex-start;flex-direction:column}
-            .tm-avatar-premium {width:118px;height:118px;font-size:2.2rem}
+        .stProgress > div > div > div > div {
+            border-radius: 999px;
         }
         </style>
         """,
+        unsafe_allow_html=True,
     )
 
 
-def render_section_heading(kicker: str, title: str, copy: str) -> None:
-    render_html(
-        f"""
-        <div class="tm-section-heading">
-            <div>
-                <div class="tm-section-kicker">{safe_html(kicker)}</div>
-                <div class="tm-section-title">{safe_html(title)}</div>
-                <div class="tm-section-copy">{safe_html(copy)}</div>
-            </div>
-        </div>
-        """
-    )
+def section_heading(kicker: str, title: str, description: str) -> None:
+    st.caption(kicker.upper())
+    st.subheader(title)
+    st.caption(description)
 
 
-def render_premium_hero(display_name: str, initials: str, plan_name: str, pro_enabled: bool) -> None:
-    member_label = "PRO Member" if pro_enabled else "Free Member"
-    badge_label = "PRO" if pro_enabled else "FREE"
-    render_html(
-        f"""
-        <div class="tm-account-hero">
-            <div class="tm-account-hero-grid">
-                <div>
-                    <div class="tm-welcome-eyebrow">Account workspace</div>
-                    <div class="tm-welcome-title">Welcome back,<br>{safe_html(display_name)}</div>
-                    <div class="tm-welcome-subtitle">
-                        TalentMatch Pro • {safe_html(member_label)} • Manage your profile, usage,
-                        PayPal subscription, security, and service status from one premium workspace.
-                    </div>
-                    <div class="tm-hero-chip-row">
-                        <span class="tm-hero-chip">🔐 Firebase protected</span>
-                        <span class="tm-hero-chip">💳 PayPal billing</span>
-                        <span class="tm-hero-chip">📄 Export ready</span>
-                    </div>
-                </div>
-                <div class="tm-avatar-wrap">
-                    <div class="tm-avatar-premium">{safe_html(initials)}</div>
-                    <div class="tm-pro-badge">{safe_html(badge_label)}</div>
-                </div>
-            </div>
-        </div>
-        """
-    )
-
-
-def render_kpi_card(label: str, value: str, note: str, icon: str) -> str:
-    return dedent(f"""
-        <div class="tm-premium-card tm-kpi-card">
-            <div class="tm-card-label">{safe_html(icon)} {safe_html(label)}</div>
-            <div class="tm-card-value">{safe_html(value)}</div>
-            <div class="tm-card-note">{safe_html(note)}</div>
-        </div>
-    """).strip()
-
-
-def render_membership_card(
-    *,
-    plan_name: str,
-    access_status: str,
-    renewal_date: str,
-    total_usage: int,
-    monthly_limit: int,
-    usage_percent: int,
-) -> str:
-    return dedent(f"""
-        <div class="tm-membership-card">
-            <div class="tm-membership-title">💎 {safe_html(plan_name)} Member</div>
-            <div class="tm-membership-plan">{safe_html(plan_name)} Plan</div>
-            <div class="tm-membership-row"><span>Billing provider</span><span>PayPal</span></div>
-            <div class="tm-membership-row"><span>Access status</span><span>{safe_html(access_status.title())}</span></div>
-            <div class="tm-membership-row"><span>Renewal date</span><span>{safe_html(renewal_date)}</span></div>
-            <div class="tm-membership-row"><span>Monthly usage</span><span>{total_usage}/{monthly_limit} • {usage_percent}%</span></div>
-        </div>
-    """).strip()
-
-
-def render_usage_card(
-    usage: dict[str, int],
-    total_usage: int,
-    monthly_limit: int,
-    usage_percent: int,
-) -> str:
-    usage_rows = "".join(
-        f"""
-        <div class="tm-check-row">
-            <div class="tm-check-left">{safe_html(label)}</div>
-            <div class="tm-check-right">{int(value)}</div>
-        </div>
-        """
-        for label, value in usage.items()
-    )
-    return dedent(f"""
-        <div class="tm-premium-card">
-            <div class="tm-card-label">📊 Monthly usage</div>
-            <div class="tm-card-value">{total_usage} / {monthly_limit}</div>
-            <div class="tm-card-note">{usage_percent}% of your monthly workspace allowance used.</div>
-            <div class="tm-progress-track">
-                <div class="tm-progress-fill" style="width:{usage_percent}%"></div>
-            </div>
-            <div style="margin-top:.9rem">{usage_rows}</div>
-        </div>
-    """).strip()
-
-
-def render_profile_card(email: str, user_id: str, registered_at: str) -> str:
-    rows = [
-        ("User email", email or "Not signed in"),
-        ("User ID", user_id or "Not available"),
-        ("Registered", registered_at),
-    ]
-    body = "".join(
-        f"""
-        <div class="tm-check-row">
-            <div class="tm-check-left">{safe_html(label)}</div>
-            <div class="tm-check-right">{safe_html(value)}</div>
-        </div>
-        """
-        for label, value in rows
-    )
-    return dedent(f"""
-        <div class="tm-premium-card">
-            <div class="tm-card-label">👤 Profile details</div>
-            <div class="tm-card-value" style="font-size:1.35rem">Account identity</div>
-            <div class="tm-card-note">Firebase-authenticated TalentMatch Pro profile.</div>
-            <div style="margin-top:.9rem">{body}</div>
-        </div>
-    """).strip()
-
-
-def render_system_card(backend_status: str, backend_icon: str, today: str) -> str:
-    status_headline = "System Healthy" if backend_status == "Online" else "System Attention"
-    rows = [
-        ("Frontend", "Online", "🟢"),
-        ("Backend", backend_status, backend_icon),
-        ("Database", "Connected", "🟢" if backend_status == "Online" else "🟡"),
-        ("OpenAI", "Ready", "🟢" if backend_status == "Online" else "🟡"),
-        ("App version", APP_VERSION, "🚀"),
-        ("Date", today, "📅"),
-    ]
-    body = "".join(
-        f"""
-        <div class="tm-check-row">
-            <div class="tm-check-left">{safe_html(icon)} {safe_html(label)}</div>
-            <div class="tm-check-right">{safe_html(value)}</div>
-        </div>
-        """
-        for label, value, icon in rows
-    )
-    return dedent(f"""
-        <div class="tm-premium-card">
-            <div class="tm-card-label">{safe_html(status_dot(backend_status))} {safe_html(status_headline)}</div>
-            <div class="tm-card-value" style="font-size:1.35rem">System status</div>
-            <div class="tm-card-note">Live operational snapshot for TalentMatch Pro.</div>
-            <div class="tm-status-pill">{safe_html(backend_icon)} Backend {safe_html(backend_status)}</div>
-            <div style="margin-top:.65rem">{body}</div>
-        </div>
-    """).strip()
-
-
-def render_security_card(is_signed_in: bool) -> str:
-    rows = [
-        ("Firebase Authentication", "Verified" if is_signed_in else "Login required", "✅" if is_signed_in else "🔐"),
-        ("Secure JWT Session", "Active" if is_signed_in else "Inactive", "✅" if is_signed_in else "⚪"),
-        ("HTTPS", "Enabled", "✅"),
-        ("PayPal Billing", "Ready", "✅"),
-    ]
-    body = "".join(
-        f"""
-        <div class="tm-check-row">
-            <div class="tm-check-left">{safe_html(icon)} {safe_html(label)}</div>
-            <div class="tm-check-right">{safe_html(value)}</div>
-        </div>
-        """
-        for label, value, icon in rows
-    )
-    return dedent(f"""
-        <div class="tm-premium-card">
-            <div class="tm-card-label">🔒 Security center</div>
-            <div class="tm-card-value" style="font-size:1.35rem">Protected account</div>
-            <div class="tm-card-note">Authentication, session, transport, and billing safeguards.</div>
-            <div style="margin-top:.9rem">{body}</div>
-        </div>
-    """).strip()
+def labeled_value(label: str, value: str) -> None:
+    left, right = st.columns([1.15, 1.85])
+    with left:
+        st.markdown(f"**{label}**")
+    with right:
+        st.write(value)
 
 
 def build_profile_export(
@@ -700,71 +186,119 @@ renewal_date = str(
 )
 today = datetime.now(timezone.utc).strftime("%Y-%m-%d")
 
-render_premium_hero(display_name, initials, plan_name, pro_enabled)
+with st.container(border=True):
+    hero_left, hero_right = st.columns([4, 1])
+    with hero_left:
+        st.caption("ACCOUNT WORKSPACE")
+        st.title(f"👋 Welcome back, {display_name}")
+        st.write(
+            f"TalentMatch Pro • {plan_name.upper()} Member • Manage your profile, usage, "
+            "subscription, security, and account status from one workspace."
+        )
+        chip_cols = st.columns(3)
+        chip_cols[0].info("🔐 Firebase identity")
+        chip_cols[1].info("💳 PayPal billing")
+        chip_cols[2].info("📄 Profile export")
+    with hero_right:
+        st.metric("Profile", initials)
+        st.metric("Plan", plan_name.upper())
 
-render_section_heading(
+st.write("")
+section_heading(
     "Workspace intelligence",
     "Account overview",
     "A concise view of your activity across the core TalentMatch Pro workflows.",
 )
-kpi_cards = "".join(
-    [
-        render_kpi_card("Total Reports", str(total_usage), "All activity tracked in this workspace.", "📄"),
-        render_kpi_card("ATS Checks", str(usage.get("ATS Checker", 0)), "Keyword coverage reports.", "🎯"),
-        render_kpi_card("Semantic Matches", str(usage.get("Semantic Match", 0)), "AI relevance comparisons.", "🧠"),
-        render_kpi_card("Recruiter Rankings", str(usage.get("Recruiter Mode", 0)), "Candidate ranking workflows.", "🏆"),
-    ]
+overview_cols = st.columns(4)
+overview_data = (
+    ("Total reports", total_usage, "All tracked activity"),
+    ("ATS checks", usage.get("ATS Checker", 0), "Keyword coverage reports"),
+    ("Semantic matches", usage.get("Semantic Match", 0), "AI relevance comparisons"),
+    ("Recruiter rankings", usage.get("Recruiter Mode", 0), "Candidate ranking workflows"),
 )
-render_html(f'<div class="tm-account-grid">{kpi_cards}</div>')
+for column, (label, value, helper) in zip(overview_cols, overview_data):
+    with column:
+        with st.container(border=True):
+            st.metric(label, value)
+            st.caption(helper)
 
-render_section_heading(
+st.write("")
+section_heading(
     "Membership",
     "Subscription and profile",
     "Manage your plan status and review the identity linked to this workspace.",
 )
-render_html(
-    f"""
-    <div class="tm-panel-grid">
-        {render_membership_card(
-            plan_name=plan_name,
-            access_status=access_status,
-            renewal_date=renewal_date,
-            total_usage=total_usage,
-            monthly_limit=monthly_limit,
-            usage_percent=usage_percent,
-        )}
-        {render_profile_card(email, user_id, registered_at)}
-    </div>
-    """
-)
+membership_col, profile_col = st.columns(2)
+
+with membership_col:
+    with st.container(border=True):
+        st.caption("💎 MEMBERSHIP")
+        st.header(f"{plan_name} Plan")
+        labeled_value("Billing", "PayPal")
+        labeled_value("Status", access_status)
+        labeled_value("Renewal", renewal_date)
+        labeled_value("Monthly usage", f"{total_usage}/{monthly_limit} • {usage_percent}%")
+        st.progress(usage_percent / 100)
+
+with profile_col:
+    with st.container(border=True):
+        st.caption("👤 PROFILE DETAILS")
+        st.header("Account identity")
+        st.caption("Firebase-authenticated TalentMatch Pro profile.")
+        labeled_value("User email", email or "Not signed in")
+        labeled_value("User ID", user_id or "Not available")
+        labeled_value("Registered", registered_at)
 
 if is_logged_in() and pro_enabled:
     st.success("💎 Pro plan is enabled for your account.")
 elif is_logged_in():
-    st.page_link("pages/pricing.py", label="🚀 Upgrade to Pro", icon="💳")
+    st.page_link("pages/pricing.py", label="🚀 Upgrade to Pro", icon="💳", use_container_width=True)
 else:
-    st.page_link("pages/login.py", label="🔐 Login", icon="🔐")
+    st.page_link("pages/login.py", label="🔐 Login", icon="🔐", use_container_width=True)
 
-render_section_heading(
+st.write("")
+section_heading(
     "Operations",
     "Usage and system health",
     "Track monthly activity and confirm the current operational state of the platform.",
 )
-render_html(
-    f"""
-    <div class="tm-panel-grid">
-        {render_usage_card(usage, total_usage, monthly_limit, usage_percent)}
-        {render_system_card(backend_status, backend_icon, today)}
-    </div>
-    """
-)
+usage_col, system_col = st.columns(2)
 
-render_section_heading(
+with usage_col:
+    with st.container(border=True):
+        st.caption("📊 MONTHLY USAGE")
+        st.header(f"{total_usage} / {monthly_limit}")
+        st.caption(f"{usage_percent}% of your monthly workspace allowance used.")
+        st.progress(usage_percent / 100)
+        for label, value in usage.items():
+            labeled_value(label, str(value))
+
+with system_col:
+    with st.container(border=True):
+        st.caption(f"{backend_icon} SYSTEM STATUS")
+        st.header("System health")
+        st.caption("Live operational snapshot for TalentMatch Pro.")
+        labeled_value("Frontend", "Online")
+        labeled_value("Backend", backend_status)
+        labeled_value("Database", "Connected" if backend_status == "Online" else "Check backend")
+        labeled_value("OpenAI", "Ready" if backend_status == "Online" else "Check backend")
+        labeled_value("App version", APP_VERSION)
+        labeled_value("Date", today)
+
+st.write("")
+section_heading(
     "Protection",
     "Security center",
     "Review authentication, session, HTTPS, and PayPal billing safeguards.",
 )
-render_html(render_security_card(is_logged_in()))
+with st.container(border=True):
+    st.caption("🔒 SECURITY CENTER")
+    st.header("Protected account")
+    st.caption("Authentication, session, transport, and billing safeguards.")
+    labeled_value("Firebase Authentication", "Verified" if is_logged_in() else "Login required")
+    labeled_value("Secure JWT Session", "Active" if is_logged_in() else "Inactive")
+    labeled_value("HTTPS", "Enabled")
+    labeled_value("PayPal Billing", "Ready")
 
 profile_export = build_profile_export(
     display_name=display_name,
@@ -778,7 +312,8 @@ profile_export = build_profile_export(
     backend_status=backend_status,
 )
 
-render_section_heading(
+st.write("")
+section_heading(
     "Controls",
     "Account actions",
     "Refresh profile data, manage PayPal billing, export your profile, or securely end the session.",
@@ -786,59 +321,42 @@ render_section_heading(
 action_cols = st.columns(4)
 
 with action_cols[0]:
-    render_html(
-        """
-        <div class="tm-action-card">
-            <div class="tm-card-label">🔄 Refresh</div>
-            <div class="tm-card-note">Sync the latest Firebase and backend profile data.</div>
-        </div>
-        """,
-    )
-    if st.button("🔄 Refresh Profile", use_container_width=True):
-        refresh_profile()
-        st.success("Profile refreshed.")
+    with st.container(border=True):
+        st.caption("🔄 REFRESH")
+        st.write("Sync the latest Firebase and backend profile data.")
+        if st.button("🔄 Refresh Profile", use_container_width=True):
+            refresh_profile()
+            st.success("Profile refreshed.")
 
 with action_cols[1]:
-    render_html(
-        """
-        <div class="tm-action-card">
-            <div class="tm-card-label">💳 Billing</div>
-            <div class="tm-card-note">Open PayPal pricing and subscription controls.</div>
-        </div>
-        """,
-    )
-    st.page_link("pages/pricing.py", label="💳 Manage Subscription")
+    with st.container(border=True):
+        st.caption("💳 BILLING")
+        st.write("Open PayPal pricing and subscription controls.")
+        st.page_link(
+            "pages/pricing.py",
+            label="💳 Manage Subscription",
+            use_container_width=True,
+        )
 
 with action_cols[2]:
-    render_html(
-        """
-        <div class="tm-action-card">
-            <div class="tm-card-label">📄 Export</div>
-            <div class="tm-card-note">Download a portable account profile snapshot.</div>
-        </div>
-        """,
-    )
-    st.download_button(
-        "📄 Download Profile",
-        data=profile_export.encode("utf-8"),
-        file_name="talentmatch_account_profile.txt",
-        mime="text/plain",
-        use_container_width=True,
-    )
+    with st.container(border=True):
+        st.caption("📄 EXPORT")
+        st.write("Download a portable account profile snapshot.")
+        st.download_button(
+            "📄 Download Profile",
+            data=profile_export.encode("utf-8"),
+            file_name="talentmatch_account_profile.txt",
+            mime="text/plain",
+            use_container_width=True,
+        )
 
 with action_cols[3]:
-    st.markdown(
-        """
-        <div class="tm-action-card">
-            <div class="tm-card-label">🚪 Session</div>
-            <div class="tm-card-note">Securely sign out from this device.</div>
-        </div>
-        """,
-        unsafe_allow_html=True,
-    )
-    if is_logged_in():
-        if st.button("🚪 Logout", use_container_width=True):
-            clear_auth()
-            st.rerun()
-    else:
-        st.page_link("pages/login.py", label="🔐 Login")
+    with st.container(border=True):
+        st.caption("🚪 SESSION")
+        st.write("Securely sign out from this device.")
+        if is_logged_in():
+            if st.button("🚪 Logout", use_container_width=True):
+                clear_auth()
+                st.rerun()
+        else:
+            st.page_link("pages/login.py", label="🔐 Login", use_container_width=True)

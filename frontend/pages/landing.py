@@ -98,30 +98,6 @@ def _dashboard_css() -> None:
             color:#64748b;
             line-height:1.58;
         }
-        .tm-quick-card,
-        .tm-capability-card {
-            min-height:168px;
-            padding:1.2rem;
-            border-radius:22px;
-        }
-
-        .tm-quick-link {
-            display:block;
-            color:inherit !important;
-            text-decoration:none !important;
-            border-radius:22px;
-            transition:transform 160ms ease, box-shadow 160ms ease, border-color 160ms ease;
-        }
-
-        .tm-quick-link:hover {
-            transform:translateY(-2px);
-            text-decoration:none !important;
-        }
-
-        .tm-quick-link:hover .tm-quick-card {
-            border-color:rgba(37,99,235,.38);
-            box-shadow:0 22px 54px rgba(37,99,235,.12);
-        }
         .tm-quick-icon,
         .tm-capability-icon {
             width:48px;
@@ -281,26 +257,21 @@ def _render_command_metrics(plan: str) -> None:
 
 def _render_quick_actions() -> None:
     render_section_title("Quick actions", "Jump directly into the workflows you use most.")
-    items = (
-        ("📄", "Analyze CV", "Run a complete AI review against a target role.", "/cv_analysis"),
-        ("📋", "Check ATS", "Measure keyword coverage and prioritize missing terms.", "/ats_checker"),
-        ("🧠", "Semantic match", "Compare meaning, context, and recruiter readiness.", "/semantic_match"),
-        ("👥", "Recruiter workspace", "Rank candidates and manage the Candidate Database.", "/recruiter_mode"),
+
+    actions = (
+        ("📄", "Analyze CV", "Run a complete AI review against a target role.", "pages/cv_analysis.py", "Open CV Analysis"),
+        ("📋", "Check ATS", "Measure keyword coverage and prioritize missing terms.", "pages/ats_checker.py", "Open ATS Checker"),
+        ("🧠", "Semantic match", "Compare meaning, context, and recruiter readiness.", "pages/semantic_match.py", "Open Semantic Match"),
+        ("👥", "Recruiter workspace", "Rank candidates and manage the Candidate Database.", "pages/recruiter_mode.py", "Open Recruiter Mode"),
     )
-    cards = "".join(
-        (
-            f'<a class="tm-quick-link" href="{safe_html(route)}" target="_self" '
-            f'aria-label="Open {safe_html(title)}">'
-            '<div class="tm-quick-card">'
-            f'<div class="tm-quick-icon">{safe_html(icon)}</div>'
-            f'<div class="tm-quick-title">{safe_html(title)}</div>'
-            f'<div class="tm-quick-copy">{safe_html(copy)}</div>'
-            "</div>"
-            "</a>"
-        )
-        for icon, title, copy, route in items
-    )
-    st.markdown(f'<div class="tm-quick-grid">{cards}</div>', unsafe_allow_html=True)
+
+    columns = st.columns(4)
+    for column, (icon, title, copy, page, label) in zip(columns, actions):
+        with column:
+            with st.container(border=True):
+                st.markdown(f"### {icon} {title}")
+                st.caption(copy)
+                st.page_link(page, label=label, use_container_width=True)
 
 
 def _render_core_features() -> None:
