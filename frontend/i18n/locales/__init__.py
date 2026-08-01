@@ -1,0 +1,19 @@
+from .de import TRANSLATIONS as DE_TRANSLATIONS
+from .en import TRANSLATIONS as EN_TRANSLATIONS
+from .es import TRANSLATIONS as ES_TRANSLATIONS
+from .fr import TRANSLATIONS as FR_TRANSLATIONS
+from .it import TRANSLATIONS as IT_TRANSLATIONS
+from .sr_cyrl import TRANSLATIONS as SR_CYRL_TRANSLATIONS
+from .sr_latn import TRANSLATIONS as SR_LATN_TRANSLATIONS
+
+CATALOGS = {
+    "en": EN_TRANSLATIONS,
+    "sr_latn": SR_LATN_TRANSLATIONS,
+    "sr_cyrl": SR_CYRL_TRANSLATIONS,
+    "de": DE_TRANSLATIONS,
+    "fr": FR_TRANSLATIONS,
+    "es": ES_TRANSLATIONS,
+    "it": IT_TRANSLATIONS,
+}
+
+__all__ = ["CATALOGS"]
