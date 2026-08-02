@@ -1,435 +1,191 @@
 from __future__ import annotations
 
 from datetime import datetime, timezone
+from typing import Final
 
 import streamlit as st
 
 from auth_utils import clear_auth, is_logged_in, is_pro_user, refresh_profile
+from components.language_selector import render_language_selector
 from components.ui import get_display_name, get_initials, safe_html
+from i18n import get_locale, t
 
 
-APP_VERSION = "v2.0"
+APP_VERSION: Final[str] = "v3.0 FINAL"
+THEME_KEY: Final[str] = "tm_theme"
+THEMES: Final[tuple[str, ...]] = ("system", "light", "dark")
+
+COPY: Final[dict[str, dict[str, str]]] = {
+    "en": {"welcome":"Welcome back","guest":"Guest","premium":"Premium Member","starter":"Starter Workspace","create":"Create account","signin":"Sign in","sync":"Sync","workspace":"Workspace","pro_tools":"Pro tools","recruiter":"Recruiter Workspace","account":"Account","company":"Company","refresh":"Refresh profile","health":"System health","ready":"Ready","live":"Live","quick":"Quick actions","analyze":"Analyze CV","ats":"Check ATS","rewrite":"Rewrite CV","appearance":"Appearance","theme":"Theme","system":"System","light":"Light","dark":"Dark","owner":"Founder & Owner","original":"Original SaaS Product","tagline":"AI Career Intelligence Platform"},
+    "sr_latn": {"welcome":"Dobro došli","guest":"Gost","premium":"Premium član","starter":"Početni radni prostor","create":"Kreirajte nalog","signin":"Prijavite se","sync":"Sinhronizacija","workspace":"Radni prostor","pro_tools":"Pro alati","recruiter":"Regruterski radni prostor","account":"Nalog","company":"Kompanija","refresh":"Osveži profil","health":"Status sistema","ready":"Spremno","live":"Aktivno","quick":"Brze akcije","analyze":"Analiziraj CV","ats":"Proveri ATS","rewrite":"Prepravi CV","appearance":"Izgled","theme":"Tema","system":"Sistemska","light":"Svetla","dark":"Tamna","owner":"Osnivač i vlasnik","original":"Originalni SaaS proizvod","tagline":"AI platforma za karijeru"},
+    "sr_cyrl": {"welcome":"Добро дошли","guest":"Гост","premium":"Премијум члан","starter":"Почетни радни простор","create":"Креирајте налог","signin":"Пријавите се","sync":"Синхронизација","workspace":"Радни простор","pro_tools":"Про алати","recruiter":"Регрутерски радни простор","account":"Налог","company":"Компанија","refresh":"Освежи профил","health":"Статус система","ready":"Спремно","live":"Активно","quick":"Брзе акције","analyze":"Анализирај CV","ats":"Провери ATS","rewrite":"Преради CV","appearance":"Изглед","theme":"Тема","system":"Системска","light":"Светла","dark":"Тамна","owner":"Оснивач и власник","original":"Оригинални SaaS производ","tagline":"AI платформа за каријеру"},
+    "de": {"welcome":"Willkommen zurück","guest":"Gast","premium":"Premium-Mitglied","starter":"Starter-Arbeitsbereich","create":"Konto erstellen","signin":"Anmelden","sync":"Synchronisierung","workspace":"Arbeitsbereich","pro_tools":"Pro-Werkzeuge","recruiter":"Recruiter-Arbeitsbereich","account":"Konto","company":"Unternehmen","refresh":"Profil aktualisieren","health":"Systemstatus","ready":"Bereit","live":"Live","quick":"Schnellaktionen","analyze":"Lebenslauf analysieren","ats":"ATS prüfen","rewrite":"Lebenslauf überarbeiten","appearance":"Darstellung","theme":"Design","system":"System","light":"Hell","dark":"Dunkel","owner":"Gründer & Inhaber","original":"Originales SaaS-Produkt","tagline":"KI-Plattform für Karriereintelligenz"},
+    "fr": {"welcome":"Bon retour","guest":"Invité","premium":"Membre Premium","starter":"Espace de démarrage","create":"Créer un compte","signin":"Se connecter","sync":"Synchronisation","workspace":"Espace de travail","pro_tools":"Outils Pro","recruiter":"Espace recruteur","account":"Compte","company":"Entreprise","refresh":"Actualiser le profil","health":"État du système","ready":"Prêt","live":"Actif","quick":"Actions rapides","analyze":"Analyser le CV","ats":"Vérifier l’ATS","rewrite":"Réécrire le CV","appearance":"Apparence","theme":"Thème","system":"Système","light":"Clair","dark":"Sombre","owner":"Fondateur et propriétaire","original":"Produit SaaS original","tagline":"Plateforme d’intelligence de carrière par IA"},
+    "es": {"welcome":"Bienvenido de nuevo","guest":"Invitado","premium":"Miembro Premium","starter":"Espacio inicial","create":"Crear cuenta","signin":"Iniciar sesión","sync":"Sincronización","workspace":"Espacio de trabajo","pro_tools":"Herramientas Pro","recruiter":"Espacio de reclutamiento","account":"Cuenta","company":"Empresa","refresh":"Actualizar perfil","health":"Estado del sistema","ready":"Listo","live":"Activo","quick":"Acciones rápidas","analyze":"Analizar CV","ats":"Comprobar ATS","rewrite":"Reescribir CV","appearance":"Apariencia","theme":"Tema","system":"Sistema","light":"Claro","dark":"Oscuro","owner":"Fundador y propietario","original":"Producto SaaS original","tagline":"Plataforma de inteligencia profesional con IA"},
+    "it": {"welcome":"Bentornato","guest":"Ospite","premium":"Membro Premium","starter":"Area iniziale","create":"Crea account","signin":"Accedi","sync":"Sincronizzazione","workspace":"Area di lavoro","pro_tools":"Strumenti Pro","recruiter":"Area recruiter","account":"Account","company":"Azienda","refresh":"Aggiorna profilo","health":"Stato del sistema","ready":"Pronto","live":"Attivo","quick":"Azioni rapide","analyze":"Analizza CV","ats":"Controlla ATS","rewrite":"Riscrivi CV","appearance":"Aspetto","theme":"Tema","system":"Sistema","light":"Chiaro","dark":"Scuro","owner":"Fondatore e proprietario","original":"Prodotto SaaS originale","tagline":"Piattaforma di intelligence professionale con IA"},
+}
 
 
-def _sidebar_css() -> None:
-    st.markdown(
-        """
-        <style>
-        section[data-testid="stSidebar"] {
-            background:
-                radial-gradient(circle at top left, rgba(37, 99, 235, 0.24), transparent 32%),
-                radial-gradient(circle at bottom right, rgba(16, 185, 129, 0.18), transparent 34%),
-                linear-gradient(180deg, #0f172a 0%, #111827 48%, #020617 100%);
-            border-right: 1px solid rgba(148, 163, 184, 0.20);
-        }
-
-        section[data-testid="stSidebar"] * {
-            color: #e5e7eb;
-        }
-
-        section[data-testid="stSidebar"] hr {
-            border-color: rgba(148, 163, 184, 0.25);
-            margin: 0.95rem 0;
-        }
-
-        section[data-testid="stSidebar"] [data-testid="stMarkdownContainer"] p {
-            color: #cbd5e1;
-        }
-
-        section[data-testid="stSidebar"] a {
-            border-radius: 15px;
-            padding: 0.24rem 0.45rem;
-            font-weight: 800;
-            border: 1px solid transparent;
-            transition: all 0.16s ease;
-        }
-
-        section[data-testid="stSidebar"] a:hover {
-            background: rgba(37, 99, 235, 0.18);
-            border-color: rgba(96, 165, 250, 0.20);
-            transform: translateX(2px);
-        }
-
-        section[data-testid="stSidebar"] .stButton > button {
-            border-radius: 15px !important;
-            font-weight: 900 !important;
-            border: 1px solid rgba(148, 163, 184, 0.24) !important;
-            background: rgba(15, 23, 42, 0.66) !important;
-            color: #f8fafc !important;
-            transition: all 0.16s ease !important;
-        }
-
-        section[data-testid="stSidebar"] .stButton > button:hover {
-            border-color: rgba(96, 165, 250, 0.42) !important;
-            background: rgba(37, 99, 235, 0.20) !important;
-            transform: translateY(-1px);
-        }
-
-        .tm-side-brand {
-            padding: 1.08rem 0.95rem 1rem 0.95rem;
-            border: 1px solid rgba(148, 163, 184, 0.23);
-            border-radius: 26px;
-            background:
-                radial-gradient(circle at top left, rgba(37, 99, 235, 0.28), transparent 42%),
-                radial-gradient(circle at bottom right, rgba(16, 185, 129, 0.18), transparent 44%),
-                rgba(15, 23, 42, 0.88);
-            box-shadow: 0 20px 52px rgba(0, 0, 0, 0.28);
-            margin: 0.35rem 0 1rem 0;
-        }
-
-        .tm-side-logo-row {
-            display: flex;
-            align-items: center;
-            gap: 0.78rem;
-            margin-bottom: 0.65rem;
-        }
-
-        .tm-side-logo {
-            width: 54px;
-            height: 54px;
-            border-radius: 19px;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            font-size: 1.75rem;
-            background: linear-gradient(135deg, #2563eb, #10b981);
-            box-shadow: 0 16px 36px rgba(37, 99, 235, 0.35);
-            border: 1px solid rgba(255, 255, 255, 0.18);
-        }
-
-        .tm-side-title {
-            font-size: 1.27rem;
-            font-weight: 950;
-            letter-spacing: -0.035em;
-            color: #f8fafc !important;
-            line-height: 1.08;
-        }
-
-        .tm-side-subtitle {
-            color: #94a3b8 !important;
-            font-size: 0.82rem;
-            line-height: 1.42;
-        }
-
-        .tm-side-user {
-            padding: 1rem;
-            border-radius: 24px;
-            background:
-                linear-gradient(135deg, rgba(37, 99, 235, 0.25), rgba(16, 185, 129, 0.16)),
-                rgba(15, 23, 42, 0.70);
-            border: 1px solid rgba(148, 163, 184, 0.25);
-            margin: 0.35rem 0 1rem 0;
-            box-shadow: 0 18px 44px rgba(0, 0, 0, 0.18);
-        }
-
-        .tm-side-user-top {
-            display: flex;
-            align-items: center;
-            gap: 0.78rem;
-        }
-
-        .tm-side-avatar-wrap {
-            position: relative;
-            width: 58px;
-            min-width: 58px;
-            height: 58px;
-        }
-
-        .tm-side-avatar {
-            width: 58px;
-            height: 58px;
-            border-radius: 21px;
-            background: linear-gradient(135deg, #60a5fa, #34d399);
-            color: white !important;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            font-weight: 950;
-            font-size: 1.06rem;
-            box-shadow: 0 16px 34px rgba(16, 185, 129, 0.25);
-            border: 1px solid rgba(255, 255, 255, 0.24);
-        }
-
-        .tm-side-avatar-badge {
-            position: absolute;
-            right: -9px;
-            bottom: -6px;
-            padding: 0.12rem 0.36rem;
-            border-radius: 999px;
-            background: linear-gradient(135deg, #fbbf24, #f97316);
-            color: #111827 !important;
-            font-size: 0.58rem;
-            font-weight: 950;
-            border: 2px solid #0f172a;
-            letter-spacing: 0.04em;
-        }
-
-        .tm-side-welcome-small {
-            color: #93c5fd !important;
-            font-size: 0.72rem;
-            font-weight: 950;
-            text-transform: uppercase;
-            letter-spacing: 0.08em;
-            margin-bottom: 0.15rem;
-        }
-
-        .tm-side-welcome {
-            font-weight: 950;
-            color: #f8fafc !important;
-            line-height: 1.16;
-            font-size: 0.98rem;
-            word-break: break-word;
-        }
-
-        .tm-side-plan-row {
-            margin-top: 0.78rem;
-            display: flex;
-            align-items: center;
-            justify-content: space-between;
-            gap: 0.6rem;
-        }
-
-        .tm-side-plan {
-            display: inline-block;
-            padding: 0.22rem 0.62rem;
-            border-radius: 999px;
-            background: rgba(255, 255, 255, 0.12);
-            color: #bfdbfe !important;
-            font-size: 0.72rem;
-            font-weight: 950;
-            letter-spacing: 0.035em;
-            white-space: nowrap;
-        }
-
-        .tm-side-sync {
-            color: #94a3b8 !important;
-            font-size: 0.72rem;
-            font-weight: 750;
-            white-space: nowrap;
-        }
-
-        .tm-side-section {
-            color: #94a3b8 !important;
-            font-size: 0.70rem;
-            font-weight: 950;
-            letter-spacing: 0.115em;
-            text-transform: uppercase;
-            margin: 1.05rem 0 0.40rem 0;
-        }
-
-        .tm-side-mini-card {
-            margin-top: 0.95rem;
-            padding: 0.92rem;
-            border-radius: 20px;
-            background: rgba(15, 23, 42, 0.66);
-            border: 1px solid rgba(148, 163, 184, 0.18);
-            box-shadow: 0 14px 34px rgba(0, 0, 0, 0.16);
-        }
-
-        .tm-side-mini-title {
-            color: #f8fafc !important;
-            font-size: 0.88rem;
-            font-weight: 950;
-            margin-bottom: 0.5rem;
-        }
-
-        .tm-side-status-row {
-            display: flex;
-            align-items: center;
-            justify-content: space-between;
-            gap: 0.6rem;
-            padding: 0.18rem 0;
-            color: #cbd5e1 !important;
-            font-size: 0.76rem;
-            font-weight: 760;
-        }
-
-        .tm-side-dot {
-            display: inline-block;
-            width: 0.55rem;
-            height: 0.55rem;
-            border-radius: 999px;
-            background: #22c55e;
-            box-shadow: 0 0 0 4px rgba(34, 197, 94, 0.12);
-            margin-right: 0.35rem;
-        }
-
-        .tm-side-footer {
-            margin-top: 0.9rem;
-            padding: 0.9rem;
-            border-radius: 20px;
-            background:
-                radial-gradient(circle at top left, rgba(37, 99, 235, 0.16), transparent 44%),
-                rgba(15, 23, 42, 0.64);
-            border: 1px solid rgba(148, 163, 184, 0.18);
-            color: #94a3b8 !important;
-            font-size: 0.76rem;
-            line-height: 1.42;
-        }
-
-        .tm-side-footer b {
-            color: #f8fafc !important;
-        }
-        </style>
-        """,
-        unsafe_allow_html=True,
-    )
+def c(key: str) -> str:
+    locale = get_locale()
+    return COPY.get(locale, COPY["en"]).get(key, COPY["en"].get(key, key))
 
 
-def _render_brand() -> None:
-    st.markdown(
-        """
-        <div class="tm-side-brand">
-            <div class="tm-side-logo-row">
-                <div class="tm-side-logo">🎯</div>
-                <div>
-                    <div class="tm-side-title">TalentMatch Pro</div>
-                    <div class="tm-side-subtitle">AI Resume Intelligence</div>
-                </div>
-            </div>
-            <div class="tm-side-subtitle">
-                ATS optimization • semantic matching • recruiter reports
-            </div>
-        </div>
-        """,
-        unsafe_allow_html=True,
-    )
-
-
-def _render_user_panel() -> None:
-    if is_logged_in():
-        name = get_display_name()
-        initials = get_initials(name)
-        plan = "PRO" if is_pro_user() else "FREE"
-        membership = "Premium Member" if is_pro_user() else "Starter Workspace"
-        badge = "PRO" if is_pro_user() else "FREE"
-        sync_label = datetime.now(timezone.utc).strftime("%H:%M UTC")
-    else:
-        name = "Guest"
-        initials = "TM"
-        plan = "SIGN IN"
-        membership = "Create account"
-        badge = "TM"
-        sync_label = "Not signed in"
-
-    st.markdown(
-        f"""
-        <div class="tm-side-user">
-            <div class="tm-side-user-top">
-                <div class="tm-side-avatar-wrap">
-                    <div class="tm-side-avatar">{safe_html(initials)}</div>
-                    <div class="tm-side-avatar-badge">{safe_html(badge)}</div>
-                </div>
-                <div>
-                    <div class="tm-side-welcome-small">Welcome back</div>
-                    <div class="tm-side-welcome">{safe_html(name)}</div>
-                    <div class="tm-side-subtitle">{safe_html(membership)}</div>
-                </div>
-            </div>
-            <div class="tm-side-plan-row">
-                <span class="tm-side-plan">{safe_html(plan)} ACCOUNT</span>
-                <span class="tm-side-sync">Sync: {safe_html(sync_label)}</span>
-            </div>
-        </div>
-        """,
-        unsafe_allow_html=True,
-    )
+def _css() -> None:
+    st.markdown("""
+    <style>
+    section[data-testid="stSidebar"]{background:radial-gradient(circle at top left,rgba(37,99,235,.24),transparent 32%),radial-gradient(circle at bottom right,rgba(16,185,129,.18),transparent 34%),linear-gradient(180deg,#0f172a,#111827 48%,#020617);border-right:1px solid rgba(148,163,184,.2)}
+    section[data-testid="stSidebar"] *{color:#e5e7eb}
+    section[data-testid="stSidebar"] a{border-radius:15px;padding:.24rem .45rem;font-weight:800;border:1px solid transparent;transition:.16s ease}
+    section[data-testid="stSidebar"] a:hover{background:rgba(37,99,235,.18);border-color:rgba(96,165,250,.2);transform:translateX(2px)}
+    section[data-testid="stSidebar"] .stButton>button{border-radius:15px!important;font-weight:900!important;border:1px solid rgba(148,163,184,.24)!important;background:rgba(15,23,42,.66)!important;color:#f8fafc!important}
+    section[data-testid="stSidebar"] div[data-baseweb="select"]>div{background:rgba(15,23,42,.72)!important;border-color:rgba(148,163,184,.28)!important;border-radius:15px!important}
+    .tm-side-card{padding:1rem;border-radius:24px;border:1px solid rgba(148,163,184,.22);background:rgba(15,23,42,.72);box-shadow:0 18px 44px rgba(0,0,0,.2);margin:.35rem 0 1rem}
+    .tm-side-brand{background:radial-gradient(circle at top left,rgba(37,99,235,.28),transparent 42%),radial-gradient(circle at bottom right,rgba(16,185,129,.18),transparent 44%),rgba(15,23,42,.88)}
+    .tm-side-row{display:flex;align-items:center;gap:.78rem}.tm-side-logo{width:54px;height:54px;border-radius:19px;display:flex;align-items:center;justify-content:center;font-size:1.75rem;background:linear-gradient(135deg,#2563eb,#10b981)}
+    .tm-side-title{font-size:1.27rem;font-weight:950;color:#f8fafc!important}.tm-side-muted{color:#94a3b8!important;font-size:.8rem;line-height:1.42}
+    .tm-side-avatar{width:58px;height:58px;border-radius:21px;background:linear-gradient(135deg,#60a5fa,#34d399);display:flex;align-items:center;justify-content:center;font-weight:950}
+    .tm-side-kicker{color:#93c5fd!important;font-size:.7rem;font-weight:950;text-transform:uppercase;letter-spacing:.08em}.tm-side-name{font-weight:950;color:#f8fafc!important}
+    .tm-side-section{color:#94a3b8!important;font-size:.7rem;font-weight:950;letter-spacing:.115em;text-transform:uppercase;margin:1.05rem 0 .4rem}
+    .tm-side-health{display:flex;justify-content:space-between;padding:.18rem 0;font-size:.76rem}.tm-side-dot{display:inline-block;width:.55rem;height:.55rem;border-radius:50%;background:#22c55e;margin-right:.35rem;box-shadow:0 0 0 4px rgba(34,197,94,.12)}
+    .tm-owner{margin-top:.65rem;padding:.7rem;border-radius:15px;border:1px solid rgba(251,191,36,.28);background:rgba(251,191,36,.07);color:#fde68a!important;font-size:.7rem;font-weight:850}
+    </style>
+    """, unsafe_allow_html=True)
 
 
 def _section(title: str) -> None:
+    st.markdown(f'<div class="tm-side-section">{safe_html(title)}</div>', unsafe_allow_html=True)
+
+
+def _brand() -> None:
     st.markdown(
-        f'<div class="tm-side-section">{safe_html(title)}</div>',
+        '<div class="tm-side-card tm-side-brand"><div class="tm-side-row">'
+        '<div class="tm-side-logo">🎯</div><div>'
+        '<div class="tm-side-title">TalentMatch Pro™</div>'
+        f'<div class="tm-side-muted">{safe_html(c("tagline"))}</div>'
+        '</div></div></div>',
         unsafe_allow_html=True,
     )
 
 
-def _render_navigation() -> None:
-    _section("Workspace")
-    st.page_link("app.py", label="🏠 Dashboard")
-    st.page_link("pages/cv_analysis.py", label="📄 CV Analysis")
-    st.page_link("pages/ats_checker.py", label="📋 ATS Checker")
-    st.page_link("pages/cv_rewrite.py", label="✍ CV Rewrite")
-
-    _section("Pro tools")
-    if is_pro_user():
-        st.page_link("pages/semantic_match.py", label="🧠 Semantic Match")
-    else:
-        st.page_link("pages/pricing.py", label="🧠 Semantic Match 🔒")
-
-    _section("Recruiter Workspace")
-    if is_pro_user():
-        st.page_link("pages/recruiter_mode.py", label="👥 Recruiter Mode")
-        st.page_link("pages/candidate_database.py", label="🗂 Candidate Database")
-    else:
-        st.page_link("pages/pricing.py", label="👥 Recruiter Mode 🔒")
-        st.page_link("pages/pricing.py", label="🗂 Candidate Database 🔒")
-
-    _section("Account")
-    st.page_link("pages/history.py", label="📜 History")
-    st.page_link("pages/pricing.py", label="💳 Pricing")
-    st.page_link("pages/account.py", label="⚙ Account")
-
-    _section("Company")
-    st.page_link("pages/about.py", label="ℹ About Us")
-    st.page_link("pages/contact.py", label="📬 Contact Us")
-    st.page_link("pages/terms.py", label="📃 Terms")
-    st.page_link("pages/privacy.py", label="🔒 Privacy")
-    st.page_link("pages/refund.py", label="💸 Refund")
+def _user() -> None:
+    logged = is_logged_in()
+    name = get_display_name() if logged else c("guest")
+    initials = get_initials(name) if logged else "TM"
+    membership = c("premium") if logged and is_pro_user() else (c("starter") if logged else c("create"))
+    plan = "PRO" if logged and is_pro_user() else ("FREE" if logged else c("signin").upper())
+    sync = datetime.now(timezone.utc).strftime("%H:%M UTC") if logged else "—"
+    st.markdown(
+        '<div class="tm-side-card"><div class="tm-side-row">'
+        f'<div class="tm-side-avatar">{safe_html(initials)}</div><div>'
+        f'<div class="tm-side-kicker">{safe_html(c("welcome"))}</div>'
+        f'<div class="tm-side-name">{safe_html(name)}</div>'
+        f'<div class="tm-side-muted">{safe_html(membership)}</div>'
+        '</div></div>'
+        f'<div class="tm-side-muted" style="margin-top:.7rem">{safe_html(plan)} • {safe_html(c("sync"))}: {safe_html(sync)}</div>'
+        '</div>',
+        unsafe_allow_html=True,
+    )
 
 
-def _render_auth_actions() -> None:
+def _preferences() -> None:
+    _section(f"🌍 {t('language.title', default='Language')}")
+    render_language_selector(compact=True, key="tm_sidebar_language")
+    _section(f"🎨 {c('appearance')}")
+    current = st.session_state.get(THEME_KEY, "system")
+    selected = st.selectbox(c("theme"), THEMES, index=THEMES.index(current if current in THEMES else "system"), format_func=lambda x: c(x), key="tm_sidebar_theme", label_visibility="collapsed")
+    st.session_state[THEME_KEY] = selected
+    if selected == "dark":
+        st.markdown("<style>.stApp{background:linear-gradient(180deg,#020617,#0f172a)!important;color:#e2e8f0}</style>", unsafe_allow_html=True)
+    elif selected == "light":
+        st.markdown("<style>.stApp{background:linear-gradient(180deg,#f8fafc,#eef2ff)!important}</style>", unsafe_allow_html=True)
+
+
+def _nav() -> None:
+    _section(c("workspace"))
+    st.page_link("app.py", label=f"🏠 {t('navigation.dashboard')}")
+    st.page_link("pages/cv_analysis.py", label=f"📄 {t('navigation.cv_analysis')}")
+    st.page_link("pages/ats_checker.py", label=f"📋 {t('navigation.ats_checker')}")
+    st.page_link("pages/cv_rewrite.py", label=f"✍ {t('navigation.cv_rewrite')}")
+
+    _section(c("pro_tools"))
+    target = "pages/semantic_match.py" if is_pro_user() else "pages/pricing.py"
+    lock = "" if is_pro_user() else " 🔒"
+    st.page_link(target, label=f"🧠 {t('navigation.semantic_match')}{lock}")
+
+    _section(c("recruiter"))
+    recruiter_target = "pages/recruiter_mode.py" if is_pro_user() else "pages/pricing.py"
+    database_target = "pages/candidate_database.py" if is_pro_user() else "pages/pricing.py"
+    st.page_link(recruiter_target, label=f"👥 {t('navigation.recruiter_mode')}{lock}")
+    st.page_link(database_target, label=f"🗂 {t('navigation.candidate_database')}{lock}")
+
+    _section(c("account"))
+    st.page_link("pages/history.py", label=f"📜 {t('navigation.history')}")
+    st.page_link("pages/pricing.py", label=f"💳 {t('navigation.pricing')}")
+    st.page_link("pages/account.py", label=f"⚙ {t('navigation.account')}")
+
+    _section(c("company"))
+    st.page_link("pages/about.py", label=f"ℹ {t('navigation.about')}")
+    st.page_link("pages/contact.py", label=f"📬 {t('navigation.contact')}")
+    st.page_link("pages/terms.py", label=f"📃 {t('navigation.terms')}")
+    st.page_link("pages/privacy.py", label=f"🔒 {t('navigation.privacy')}")
+    st.page_link("pages/refund.py", label=f"💸 {t('navigation.refund')}")
+
+
+def _quick_actions() -> None:
+    _section(f"⚡ {c('quick')}")
+    left, right = st.columns(2)
+    with left:
+        st.page_link("pages/cv_analysis.py", label=f"📄 {c('analyze')}", use_container_width=True)
+        st.page_link("pages/cv_rewrite.py", label=f"✍ {c('rewrite')}", use_container_width=True)
+    with right:
+        st.page_link("pages/ats_checker.py", label=f"📋 {c('ats')}", use_container_width=True)
+        target = "pages/recruiter_mode.py" if is_pro_user() else "pages/pricing.py"
+        st.page_link(target, label=f"👥 {t('navigation.recruiter_mode')}", use_container_width=True)
+
+
+def _auth() -> None:
     st.divider()
-
     if is_logged_in():
-        if st.button("🔄 Refresh profile", use_container_width=True):
+        if st.button(f"🔄 {c('refresh')}", use_container_width=True):
             refresh_profile()
             st.rerun()
-
-        if st.button("🚪 Logout", use_container_width=True):
+        if st.button(f"🚪 {t('navigation.logout')}", use_container_width=True):
             clear_auth()
             st.rerun()
     else:
-        st.page_link("pages/login.py", label="🔐 Login")
-        st.page_link("pages/register.py", label="📝 Register")
+        st.page_link("pages/login.py", label=f"🔐 {t('navigation.login')}")
+        st.page_link("pages/register.py", label=f"📝 {t('navigation.register')}")
 
 
-def _render_system_health() -> None:
+def _health_and_footer() -> None:
+    ready, live = safe_html(c("ready")), safe_html(c("live"))
     st.markdown(
-        """
-        <div class="tm-side-mini-card">
-            <div class="tm-side-mini-title">🟢 System Health</div>
-            <div class="tm-side-status-row"><span><span class="tm-side-dot"></span>Backend</span><span>Online</span></div>
-            <div class="tm-side-status-row"><span><span class="tm-side-dot"></span>Frontend</span><span>Online</span></div>
-            <div class="tm-side-status-row"><span><span class="tm-side-dot"></span>Firebase</span><span>Ready</span></div>
-            <div class="tm-side-status-row"><span><span class="tm-side-dot"></span>PayPal</span><span>Live</span></div>
-            <div class="tm-side-status-row"><span><span class="tm-side-dot"></span>OpenAI</span><span>Ready</span></div>
-        </div>
-        """,
-        unsafe_allow_html=True,
-    )
-
-
-def _render_footer() -> None:
-    year = datetime.now(timezone.utc).year
-    st.markdown(
-        f"""
-        <div class="tm-side-footer">
-            <b>TalentMatch Pro {safe_html(APP_VERSION)}</b><br>
-            Production polish • PayPal billing • PDF reports<br>
-            Powered by OpenAI<br>
-            © {safe_html(year)}
-        </div>
-        """,
+        '<div class="tm-side-card">'
+        f'<div class="tm-side-title" style="font-size:.9rem">🟢 {safe_html(c("health"))}</div>'
+        f'<div class="tm-side-health"><span><span class="tm-side-dot"></span>Backend</span><span>{ready}</span></div>'
+        f'<div class="tm-side-health"><span><span class="tm-side-dot"></span>Frontend</span><span>{ready}</span></div>'
+        f'<div class="tm-side-health"><span><span class="tm-side-dot"></span>Firebase</span><span>{ready}</span></div>'
+        f'<div class="tm-side-health"><span><span class="tm-side-dot"></span>PayPal</span><span>{live}</span></div>'
+        f'<div class="tm-side-health"><span><span class="tm-side-dot"></span>OpenAI</span><span>{ready}</span></div>'
+        '</div>'
+        '<div class="tm-side-card tm-side-muted">'
+        f'<b style="color:#f8fafc">TalentMatch Pro™ {APP_VERSION}</b><br>{safe_html(c("original"))}<br>'
+        'PayPal • OpenAI • PDF • Recruiter Workspace'
+        f'<div class="tm-owner">{safe_html(c("owner"))}<br><b>Dejan Jović</b><br>TMP-V3-FINAL-2026</div>'
+        '</div>',
         unsafe_allow_html=True,
     )
 
 
 def render_sidebar() -> None:
+    """Render the TalentMatch Pro v3 enterprise sidebar."""
     with st.sidebar:
-        _sidebar_css()
-        _render_brand()
-        _render_user_panel()
-        _render_navigation()
-        _render_auth_actions()
-        _render_system_health()
-        _render_footer()
+        _css()
+        _brand()
+        _user()
+        _preferences()
+        _quick_actions()
+        _nav()
+        _auth()
+        _health_and_footer()
