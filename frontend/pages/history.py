@@ -38,7 +38,7 @@ render_page_intro(
         "from one production-grade workspace."
     ),
     icon="📜",
-    badge="PROFI-EXTRA",
+    badge="PRO REPORTS",
 )
 
 
@@ -349,16 +349,13 @@ def score_color(score: Any) -> str:
 
 
 def score_status(score: Any) -> str:
+    """Return the same score category labels used by History analytics."""
     numeric_score = score_number(score)
-    if numeric_score >= 85:
-        return "Excellent"
     if numeric_score >= 75:
         return "Strong"
-    if numeric_score >= 60:
+    if numeric_score >= 50:
         return "Competitive"
-    if numeric_score >= 40:
-        return "Needs work"
-    return "Low"
+    return "Needs work"
 
 
 def get_cv_filename(item: dict[str, Any]) -> str:

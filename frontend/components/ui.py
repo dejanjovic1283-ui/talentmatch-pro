@@ -133,6 +133,108 @@ def _safe_percent(value: int | float) -> int:
     return max(0, min(100, numeric))
 
 
+
+THEME_SESSION_KEY = "tm_theme"
+SUPPORTED_THEMES = {"system", "light", "dark"}
+
+
+def _normalize_theme(theme: str | None = None) -> str:
+    """Return one supported theme name."""
+    value = str(theme or st.session_state.get(THEME_SESSION_KEY, "system")).strip().lower()
+    return value if value in SUPPORTED_THEMES else "system"
+
+
+def _light_theme_css() -> str:
+    return """
+    :root{color-scheme:light;--tm-control-bg:rgba(255,255,255,.92);--tm-control-text:#0f172a;--tm-control-border:rgba(148,163,184,.34)}
+    [data-testid="stMain"] div[data-testid="stPageLink"] a{background:var(--tm-control-bg)!important;border:1px solid var(--tm-control-border)!important;color:var(--tm-control-text)!important}
+    [data-testid="stMain"] div[data-testid="stPageLink"] a *{color:inherit!important;-webkit-text-fill-color:currentColor!important}
+    """
+
+
+def _dark_theme_css() -> str:
+    return """
+    :root{
+        color-scheme:dark;
+        --tm-navy:#f8fafc;--tm-navy-2:#e2e8f0;--tm-slate:#cbd5e1;--tm-muted:#94a3b8;
+        --tm-blue:#60a5fa;--tm-blue-dark:#93c5fd;--tm-green:#34d399;--tm-green-dark:#6ee7b7;
+        --tm-purple:#c4b5fd;--tm-amber:#fbbf24;--tm-red:#f87171;
+        --tm-card:rgba(15,23,42,.84);--tm-card-strong:rgba(15,23,42,.95);
+        --tm-border:rgba(148,163,184,.27);--tm-border-strong:rgba(96,165,250,.54);
+        --tm-shadow:0 20px 48px rgba(0,0,0,.30),0 5px 16px rgba(37,99,235,.10);
+        --tm-shadow-lg:0 34px 86px rgba(0,0,0,.42),0 12px 32px rgba(37,99,235,.14);
+        --tm-blue-soft:rgba(96,165,250,.15);--tm-green-soft:rgba(52,211,153,.14);
+        --tm-purple-soft:rgba(196,181,253,.14);--tm-amber-soft:rgba(251,191,36,.14);--tm-red-soft:rgba(248,113,113,.14);
+        --tm-control-bg:rgba(15,23,42,.94);--tm-control-text:#f8fafc;--tm-control-border:rgba(148,163,184,.38)
+    }
+    .stApp{background:radial-gradient(circle at top left,rgba(37,99,235,.18),transparent 31%),radial-gradient(circle at top right,rgba(124,58,237,.13),transparent 29%),radial-gradient(circle at bottom right,rgba(16,185,129,.12),transparent 31%),linear-gradient(180deg,#020617,#0f172a)!important;color:#e2e8f0!important}
+    header[data-testid="stHeader"]{background:rgba(2,6,23,.72)!important}
+    [data-testid="stMain"] h1,[data-testid="stMain"] h2,[data-testid="stMain"] h3,[data-testid="stMain"] h4,[data-testid="stMain"] h5,[data-testid="stMain"] h6,
+    [data-testid="stMain"] label,[data-testid="stMain"] .tm-title,[data-testid="stMain"] .tm-card-title,[data-testid="stMain"] .tm-value,
+    [data-testid="stMain"] .tm-section-title,[data-testid="stMain"] .tm-stat-value,[data-testid="stMain"] .tm-score-value,
+    [data-testid="stMain"] .tm-pricing-heading,[data-testid="stMain"] .tm-pricing-plan-name,[data-testid="stMain"] .tm-pricing-price,
+    [data-testid="stMain"] .tm-pricing-metric-value,[data-testid="stMain"] .tm-pricing-feature-name,[data-testid="stMain"] .tm-pricing-roi-number{color:#f8fafc!important;-webkit-text-fill-color:#f8fafc!important}
+    [data-testid="stMain"] p,[data-testid="stMain"] .tm-subtitle,[data-testid="stMain"] .tm-muted,[data-testid="stMain"] .tm-small,
+    [data-testid="stMain"] .tm-section-subtitle,[data-testid="stMain"] .tm-stat-label,[data-testid="stMain"] .tm-score-caption,
+    [data-testid="stMain"] .tm-pricing-copy,[data-testid="stMain"] .tm-pricing-heading-copy,[data-testid="stMain"] .tm-pricing-price-note,
+    [data-testid="stMain"] .tm-pricing-description,[data-testid="stMain"] .tm-pricing-roi-label{color:#cbd5e1!important;-webkit-text-fill-color:#cbd5e1!important}
+    [data-testid="stMain"] .tm-kicker,[data-testid="stMain"] .tm-score-label,[data-testid="stMain"] .tm-pricing-label{color:#60a5fa!important;-webkit-text-fill-color:#60a5fa!important}
+    [data-testid="stMain"] .tm-hero{border-color:rgba(148,163,184,.28)!important;background:radial-gradient(circle at 7% 9%,rgba(37,99,235,.27),transparent 32%),radial-gradient(circle at 92% 13%,rgba(124,58,237,.20),transparent 30%),radial-gradient(circle at 87% 92%,rgba(16,185,129,.20),transparent 35%),linear-gradient(135deg,rgba(15,23,42,.96),rgba(17,24,39,.94))!important;box-shadow:var(--tm-shadow-lg),inset 0 1px 0 rgba(255,255,255,.055)!important}
+    [data-testid="stMain"] .tm-hero:before{background-image:linear-gradient(rgba(255,255,255,.045) 1px,transparent 1px),linear-gradient(90deg,rgba(255,255,255,.045) 1px,transparent 1px)!important}
+    [data-testid="stMain"] .tm-card,[data-testid="stMain"] .tm-panel,[data-testid="stMain"] .tm-score-card,[data-testid="stMain"] .tm-stat-card,
+    [data-testid="stMain"] .tm-alert,[data-testid="stMain"] .tm-empty,[data-testid="stMain"] .tm-report-panel,[data-testid="stMain"] div[data-testid="stMetric"],
+    [data-testid="stMain"] div[data-testid="stVerticalBlockBorderWrapper"],[data-testid="stMain"] div[data-testid="stExpander"],
+    [data-testid="stMain"] div[data-testid="stDataFrame"],[data-testid="stMain"] div[data-testid="stTable"]{background:rgba(15,23,42,.84)!important;border-color:rgba(148,163,184,.26)!important;color:#e2e8f0!important;box-shadow:var(--tm-shadow)!important}
+    [data-testid="stMain"] .tm-card-strong,[data-testid="stMain"] .tm-panel-strong,[data-testid="stMain"] .tm-action-panel{background:radial-gradient(circle at top right,rgba(37,99,235,.16),transparent 35%),radial-gradient(circle at bottom left,rgba(16,185,129,.12),transparent 37%),rgba(15,23,42,.94)!important}
+    [data-testid="stMain"] .tm-list-card{background:rgba(15,23,42,.78)!important;border-color:rgba(148,163,184,.25)!important;color:#e2e8f0!important}
+    [data-testid="stMain"] .tm-list-card-success{background:rgba(16,185,129,.12)!important;color:#a7f3d0!important}
+    [data-testid="stMain"] .tm-list-card-warning{background:rgba(245,158,11,.13)!important;color:#fde68a!important}
+    [data-testid="stMain"] .tm-list-card-info{background:rgba(37,99,235,.14)!important;color:#bfdbfe!important}
+    [data-testid="stMain"] .tm-check-row,[data-testid="stMain"] .tm-pricing-feature{color:#e2e8f0!important}
+    [data-testid="stMain"] .tm-pricing-metric,[data-testid="stMain"] .tm-pricing-plan,[data-testid="stMain"] .tm-pricing-value,
+    [data-testid="stMain"] .tm-pricing-workflow,[data-testid="stMain"] .tm-pricing-trust,[data-testid="stMain"] .tm-pricing-faq,
+    [data-testid="stMain"] .tm-pricing-contact,[data-testid="stMain"] .tm-pricing-comparison,[data-testid="stMain"] .tm-pricing-roi{background:radial-gradient(circle at top right,rgba(37,99,235,.12),transparent 35%),rgba(15,23,42,.90)!important;border-color:rgba(148,163,184,.27)!important;color:#e2e8f0!important}
+    [data-testid="stMain"] .tm-pricing-plan-pro{background:radial-gradient(circle at 92% 8%,rgba(16,185,129,.21),transparent 33%),radial-gradient(circle at 8% 92%,rgba(37,99,235,.18),transparent 37%),rgba(15,23,42,.94)!important;border-color:rgba(52,211,153,.48)!important}
+    [data-testid="stMain"] .tm-pricing-feature{background:rgba(30,41,59,.78)!important;border-color:rgba(148,163,184,.22)!important}
+    [data-testid="stMain"] .tm-pricing-feature-pro{background:rgba(6,78,59,.30)!important;border-color:rgba(52,211,153,.27)!important;color:#a7f3d0!important}
+    [data-testid="stMain"] .tm-pricing-feature-row{color:#cbd5e1!important;border-color:rgba(148,163,184,.20)!important}
+    [data-testid="stMain"] .tm-pricing-feature-row:nth-child(even){background:rgba(30,41,59,.55)!important}
+    [data-testid="stMain"] div[data-testid="stPageLink"] a{min-height:3rem;background:var(--tm-control-bg)!important;border:1px solid var(--tm-control-border)!important;color:var(--tm-control-text)!important;box-shadow:0 12px 30px rgba(0,0,0,.20)!important}
+    [data-testid="stMain"] div[data-testid="stPageLink"] a:hover{background:rgba(30,41,59,.98)!important;border-color:rgba(96,165,250,.60)!important;box-shadow:0 18px 38px rgba(37,99,235,.20)!important}
+    [data-testid="stMain"] div[data-testid="stPageLink"] a *{color:#f8fafc!important;-webkit-text-fill-color:#f8fafc!important;opacity:1!important}
+    [data-testid="stMain"] .stButton>button,[data-testid="stMain"] .stLinkButton>a,[data-testid="stMain"] div[data-testid="stDownloadButton"] button,
+    [data-testid="stMain"] div[data-testid="stFormSubmitButton"] button{background:rgba(15,23,42,.92)!important;border-color:rgba(148,163,184,.36)!important;color:#f8fafc!important}
+    [data-testid="stMain"] .stButton>button *,[data-testid="stMain"] .stLinkButton>a *,[data-testid="stMain"] div[data-testid="stDownloadButton"] button *,
+    [data-testid="stMain"] div[data-testid="stFormSubmitButton"] button *{color:inherit!important;-webkit-text-fill-color:currentColor!important}
+    [data-testid="stMain"] input,[data-testid="stMain"] textarea,[data-testid="stMain"] div[data-baseweb="select"]>div,
+    [data-testid="stMain"] div[data-baseweb="select"] div[role="combobox"]{background:rgba(15,23,42,.92)!important;border-color:rgba(148,163,184,.38)!important;color:#f8fafc!important;-webkit-text-fill-color:#f8fafc!important}
+    [data-testid="stMain"] div[data-baseweb="select"] span,[data-testid="stMain"] div[data-baseweb="select"] input{color:#f8fafc!important;-webkit-text-fill-color:#f8fafc!important}
+    [data-testid="stMain"] div[data-testid="stFileUploader"]{background:radial-gradient(circle at top left,rgba(37,99,235,.15),transparent 40%),rgba(15,23,42,.80)!important;border-color:rgba(96,165,250,.38)!important}
+    [data-testid="stMain"] .stTabs [data-baseweb="tab-list"]{background:rgba(15,23,42,.82)!important;border-color:rgba(148,163,184,.26)!important}
+    [data-testid="stMain"] .stTabs [data-baseweb="tab"]{color:#cbd5e1!important}
+    [data-testid="stMain"] .stTabs [aria-selected="true"]{background:rgba(96,165,250,.16)!important;color:#bfdbfe!important}
+    div[data-baseweb="popover"]{color-scheme:dark}
+    div[data-baseweb="popover"] ul[role="listbox"],div[data-baseweb="popover"] [role="listbox"]{background:#111827!important;border:1px solid rgba(148,163,184,.32)!important}
+    div[data-baseweb="popover"] li[role="option"],div[data-baseweb="popover"] [role="option"]{background:#111827!important;color:#f8fafc!important}
+    div[data-baseweb="popover"] li[role="option"]:hover,div[data-baseweb="popover"] [role="option"]:hover,div[data-baseweb="popover"] [aria-selected="true"]{background:#1e3a8a!important;color:#fff!important}
+    """
+
+
+def apply_theme_overrides(theme: str | None = None) -> None:
+    """Apply accessible Light, Dark, or system-driven theme overrides."""
+    selected = _normalize_theme(theme)
+    light_css = _light_theme_css()
+    dark_css = _dark_theme_css()
+    if selected == "dark":
+        css = dark_css
+    elif selected == "light":
+        css = light_css
+    else:
+        css = f"{light_css}\\n@media (prefers-color-scheme: dark) {{{dark_css}}}"
+    st.markdown(f"<style>{css}</style>", unsafe_allow_html=True)
+
+
+
 # -----------------------------------------------------------------------------
 # Global design system
 # -----------------------------------------------------------------------------
@@ -893,6 +995,7 @@ def apply_global_styles() -> None:
         """,
         unsafe_allow_html=True,
     )
+    apply_theme_overrides()
 
 
 # -----------------------------------------------------------------------------

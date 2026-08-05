@@ -645,10 +645,16 @@ def _dashboard_css() -> None:
     tokens = (
         "--tm-surface:rgba(15,23,42,.88);--tm-text:#f8fafc;--tm-muted:#cbd5e1;"
         "--tm-border:rgba(148,163,184,.22);--tm-shadow:0 24px 64px rgba(0,0,0,.30);"
+        "--tm-workspace-badge-bg:rgba(251,191,36,.12);--tm-workspace-badge-text:#fde68a;"
+        "--tm-workspace-badge-border:rgba(251,191,36,.58);"
+        "--tm-workspace-badge-shadow:0 10px 26px rgba(0,0,0,.18);"
         if theme == "dark"
         else
         "--tm-surface:rgba(255,255,255,.92);--tm-text:#0f172a;--tm-muted:#64748b;"
         "--tm-border:rgba(148,163,184,.24);--tm-shadow:0 22px 60px rgba(15,23,42,.09);"
+        "--tm-workspace-badge-bg:#0f172a;--tm-workspace-badge-text:#ffffff;"
+        "--tm-workspace-badge-border:#0f172a;"
+        "--tm-workspace-badge-shadow:0 10px 26px rgba(15,23,42,.20);"
     )
     st.markdown(
         f"""
@@ -679,6 +685,7 @@ def _dashboard_css() -> None:
         .tm-final{{padding:2rem;border-radius:30px;background:radial-gradient(circle at 12% 18%,rgba(37,99,235,.28),transparent 36%),radial-gradient(circle at 88% 82%,rgba(16,185,129,.22),transparent 36%),linear-gradient(135deg,#0f172a,#111827);color:white}}
         .tm-final .tm-title{{color:white;font-size:clamp(1.65rem,3vw,2.45rem)}}.tm-final .tm-copy{{color:#cbd5e1;max-width:780px}}
         .tm-pill-row{{display:flex;flex-wrap:wrap;gap:.65rem;margin-top:1rem}}.tm-pill{{padding:.42rem .75rem;border-radius:999px;border:1px solid rgba(251,191,36,.35);background:rgba(251,191,36,.10);color:#fde68a;font-size:.72rem;font-weight:900}}
+        .tm-hero .tm-pill.tm-pill-dark{{background:var(--tm-workspace-badge-bg)!important;color:var(--tm-workspace-badge-text)!important;border:1px solid var(--tm-workspace-badge-border)!important;box-shadow:var(--tm-workspace-badge-shadow)!important;text-shadow:none!important;opacity:1!important}}
         .tm-trust{{padding:.85rem 1rem;border-radius:18px;border:1px solid var(--tm-border);background:var(--tm-surface);color:var(--tm-muted);font-weight:820;text-align:center}}
         .tm-spacer{{height:2.45rem}}
         div[data-testid="stPageLink"] a{{min-height:3.25rem;border-radius:16px;font-weight:900;transition:transform .18s ease,box-shadow .18s ease}}

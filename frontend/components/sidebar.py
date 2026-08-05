@@ -7,7 +7,7 @@ import streamlit as st
 
 from auth_utils import clear_auth, is_logged_in, is_pro_user, refresh_profile
 from components.language_selector import render_language_selector
-from components.ui import get_display_name, get_initials, safe_html
+from components.ui import apply_theme_overrides, get_display_name, get_initials, safe_html
 from i18n import get_locale, t
 
 
@@ -39,7 +39,21 @@ def _css() -> None:
     section[data-testid="stSidebar"] a{border-radius:15px;padding:.24rem .45rem;font-weight:800;border:1px solid transparent;transition:.16s ease}
     section[data-testid="stSidebar"] a:hover{background:rgba(37,99,235,.18);border-color:rgba(96,165,250,.2);transform:translateX(2px)}
     section[data-testid="stSidebar"] .stButton>button{border-radius:15px!important;font-weight:900!important;border:1px solid rgba(148,163,184,.24)!important;background:rgba(15,23,42,.66)!important;color:#f8fafc!important}
-    section[data-testid="stSidebar"] div[data-baseweb="select"]>div{background:rgba(15,23,42,.72)!important;border-color:rgba(148,163,184,.28)!important;border-radius:15px!important}
+    section[data-testid="stSidebar"] div[data-baseweb="select"]>div,
+    section[data-testid="stSidebar"] div[data-baseweb="select"] div[role="combobox"],
+    section[data-testid="stSidebar"] .react-aria-ComboBox>div[role="group"]{background:#111827!important;border:1px solid rgba(148,163,184,.34)!important;border-radius:15px!important;color:#f8fafc!important;opacity:1!important}
+    section[data-testid="stSidebar"] div[data-baseweb="select"] span,
+    section[data-testid="stSidebar"] div[data-baseweb="select"] input,
+    section[data-testid="stSidebar"] div[data-baseweb="select"] div[role="combobox"],
+    section[data-testid="stSidebar"] .react-aria-ComboBox input[role="combobox"]{background:transparent!important;color:#f8fafc!important;-webkit-text-fill-color:#f8fafc!important;caret-color:#f8fafc!important;opacity:1!important}
+    section[data-testid="stSidebar"] .react-aria-ComboBox input[role="combobox"]::placeholder{color:#94a3b8!important;-webkit-text-fill-color:#94a3b8!important;opacity:1!important}
+    section[data-testid="stSidebar"] div[data-baseweb="select"] svg,
+    section[data-testid="stSidebar"] .react-aria-ComboBox button[aria-label="Open"],
+    section[data-testid="stSidebar"] .react-aria-ComboBox button[aria-label="Open"] svg{background:transparent!important;border:0!important;box-shadow:none!important;fill:#cbd5e1!important;color:#cbd5e1!important;opacity:1!important}
+    section[data-testid="stSidebar"] div[data-baseweb="select"]>div:hover,
+    section[data-testid="stSidebar"] .react-aria-ComboBox>div[role="group"]:hover{border-color:rgba(96,165,250,.58)!important}
+    section[data-testid="stSidebar"] div[data-baseweb="select"]>div:focus-within,
+    section[data-testid="stSidebar"] .react-aria-ComboBox>div[role="group"]:focus-within{border-color:#60a5fa!important;box-shadow:0 0 0 3px rgba(96,165,250,.18)!important}
     .tm-side-card{padding:1rem;border-radius:24px;border:1px solid rgba(148,163,184,.22);background:rgba(15,23,42,.72);box-shadow:0 18px 44px rgba(0,0,0,.2);margin:.35rem 0 1rem}
     .tm-side-brand{background:radial-gradient(circle at top left,rgba(37,99,235,.28),transparent 42%),radial-gradient(circle at bottom right,rgba(16,185,129,.18),transparent 44%),rgba(15,23,42,.88)}
     .tm-side-row{display:flex;align-items:center;gap:.78rem}.tm-side-logo{width:54px;height:54px;border-radius:19px;display:flex;align-items:center;justify-content:center;font-size:1.75rem;background:linear-gradient(135deg,#2563eb,#10b981)}
@@ -88,17 +102,34 @@ def _user() -> None:
     )
 
 
+def _sync_theme_selection() -> None:
+    """Synchronize the widget theme before the next full Streamlit rerun."""
+    selected = str(st.session_state.get("tm_sidebar_theme", "system")).strip().lower()
+    st.session_state[THEME_KEY] = selected if selected in THEMES else "system"
+
+
 def _preferences() -> None:
     _section(f"🌍 {t('language.title', default='Language')}")
     render_language_selector(compact=True, key="tm_sidebar_language")
     _section(f"🎨 {c('appearance')}")
-    current = st.session_state.get(THEME_KEY, "system")
-    selected = st.selectbox(c("theme"), THEMES, index=THEMES.index(current if current in THEMES else "system"), format_func=lambda x: c(x), key="tm_sidebar_theme", label_visibility="collapsed")
+
+    current = str(st.session_state.get(THEME_KEY, "system")).strip().lower()
+    if current not in THEMES:
+        current = "system"
+
+    if "tm_sidebar_theme" not in st.session_state:
+        st.session_state["tm_sidebar_theme"] = current
+
+    selected = st.selectbox(
+        c("theme"),
+        THEMES,
+        format_func=lambda value: c(value),
+        key="tm_sidebar_theme",
+        on_change=_sync_theme_selection,
+        label_visibility="collapsed",
+    )
     st.session_state[THEME_KEY] = selected
-    if selected == "dark":
-        st.markdown("<style>.stApp{background:linear-gradient(180deg,#020617,#0f172a)!important;color:#e2e8f0}</style>", unsafe_allow_html=True)
-    elif selected == "light":
-        st.markdown("<style>.stApp{background:linear-gradient(180deg,#f8fafc,#eef2ff)!important}</style>", unsafe_allow_html=True)
+    apply_theme_overrides(selected)
 
 
 def _nav() -> None:

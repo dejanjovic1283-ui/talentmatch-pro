@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import os
 from datetime import datetime, timezone
+from textwrap import dedent
 from typing import Any
 
 import requests
@@ -22,8 +23,119 @@ st.set_page_config(page_title="Account • TalentMatch Pro", page_icon="⚙", la
 apply_global_styles()
 render_sidebar()
 
-APP_VERSION = "v1.0"
+APP_VERSION = "v3.0 FINAL"
 BACKEND_URL = os.getenv("BACKEND_URL", "https://api.talentmatchcv.com").rstrip("/")
+
+
+def _html(value: str) -> str:
+    """Return compact HTML that Streamlit will not interpret as a code block."""
+    return "\n".join(
+        line.strip()
+        for line in dedent(str(value or "")).splitlines()
+        if line.strip()
+    )
+
+
+def _account_dark_css() -> str:
+    """Return Account-page overrides for the accessible dark theme."""
+    return """
+    [data-testid="stMain"] .tm-account-hero {
+        border-color:rgba(148,163,184,.28)!important;
+        background:
+            radial-gradient(circle at 8% 0%,rgba(37,99,235,.28),transparent 35%),
+            radial-gradient(circle at 96% 18%,rgba(16,185,129,.22),transparent 37%),
+            linear-gradient(135deg,rgba(15,23,42,.97),rgba(17,24,39,.95))!important;
+        box-shadow:0 30px 86px rgba(0,0,0,.38)!important;
+    }
+
+    [data-testid="stMain"] .tm-account-hero::after {
+        background:radial-gradient(circle,rgba(124,58,237,.25),transparent 68%)!important;
+    }
+
+    [data-testid="stMain"] .tm-welcome-eyebrow,
+    [data-testid="stMain"] .tm-section-kicker {
+        color:#60a5fa!important;
+        -webkit-text-fill-color:#60a5fa!important;
+    }
+
+    [data-testid="stMain"] .tm-welcome-title,
+    [data-testid="stMain"] .tm-section-title,
+    [data-testid="stMain"] .tm-card-value,
+    [data-testid="stMain"] .tm-check-left {
+        color:#f8fafc!important;
+        -webkit-text-fill-color:#f8fafc!important;
+    }
+
+    [data-testid="stMain"] .tm-welcome-subtitle,
+    [data-testid="stMain"] .tm-section-copy,
+    [data-testid="stMain"] .tm-card-note,
+    [data-testid="stMain"] .tm-check-right {
+        color:#cbd5e1!important;
+        -webkit-text-fill-color:#cbd5e1!important;
+    }
+
+    [data-testid="stMain"] .tm-hero-chip,
+    [data-testid="stMain"] .tm-premium-card,
+    [data-testid="stMain"] .tm-action-card {
+        color:#e2e8f0!important;
+        background:rgba(15,23,42,.86)!important;
+        border-color:rgba(148,163,184,.27)!important;
+        box-shadow:0 20px 52px rgba(0,0,0,.28)!important;
+    }
+
+    [data-testid="stMain"] .tm-card-label {
+        color:#93c5fd!important;
+        -webkit-text-fill-color:#93c5fd!important;
+    }
+
+    [data-testid="stMain"] .tm-check-row {
+        border-color:rgba(148,163,184,.20)!important;
+    }
+
+    [data-testid="stMain"] .tm-progress-track {
+        background:rgba(148,163,184,.20)!important;
+        border-color:rgba(148,163,184,.24)!important;
+    }
+
+    [data-testid="stMain"] .tm-status-pill {
+        color:#a7f3d0!important;
+        background:rgba(16,185,129,.15)!important;
+        border:1px solid rgba(52,211,153,.24)!important;
+    }
+
+    [data-testid="stMain"] .tm-avatar-premium {
+        border-color:rgba(255,255,255,.18)!important;
+        box-shadow:0 28px 68px rgba(37,99,235,.32)!important;
+    }
+
+    [data-testid="stMain"] .tm-pro-badge {
+        border-color:rgba(255,255,255,.72)!important;
+        background:linear-gradient(135deg,#111827,#2563eb)!important;
+    }
+
+    [data-testid="stMain"] .tm-membership-card {
+        border-color:rgba(96,165,250,.34)!important;
+        box-shadow:0 28px 72px rgba(29,78,216,.26)!important;
+    }
+    """
+
+
+def render_account_theme_overrides() -> None:
+    """Apply Account-specific Light, Dark, or system-driven theme styles."""
+    selected = str(st.session_state.get("tm_theme", "system")).strip().lower()
+    if selected not in {"system", "light", "dark"}:
+        selected = "system"
+
+    dark_css = _account_dark_css()
+    if selected == "dark":
+        css = dark_css
+    elif selected == "system":
+        css = f"@media (prefers-color-scheme: dark) {{{dark_css}}}"
+    else:
+        css = ""
+
+    if css:
+        st.markdown(f"<style>{css}</style>", unsafe_allow_html=True)
 
 
 def get_user_id() -> str:
@@ -90,6 +202,7 @@ def render_account_css() -> None:
         .tm-account-hero {
             position:relative;
             overflow:hidden;
+            margin-top:3.75rem;
             border-radius:34px;
             padding:2.35rem;
             border:1px solid rgba(148,163,184,.24);
@@ -397,15 +510,32 @@ def render_account_css() -> None:
             min-height:118px;
         }
 
-        .tm-account-actions [data-testid="stButton"] button,
-        .tm-account-actions [data-testid="stDownloadButton"] button,
-        .tm-account-actions [data-testid="stPageLink"] a {
+        .st-key-tm_account_actions [data-testid="stHorizontalBlock"] {
+            gap:1rem;
+            align-items:stretch;
+            margin-bottom:1rem;
+        }
+
+        .st-key-tm_account_actions [data-testid="stColumn"] {
+            min-width:0;
+        }
+
+        .st-key-tm_account_actions [data-testid="stButton"],
+        .st-key-tm_account_actions [data-testid="stDownloadButton"],
+        .st-key-tm_account_actions [data-testid="stPageLink"] {
+            width:100%;
+        }
+
+        .st-key-tm_account_actions [data-testid="stButton"] button,
+        .st-key-tm_account_actions [data-testid="stDownloadButton"] button,
+        .st-key-tm_account_actions [data-testid="stPageLink"] a {
+            width:100%;
             min-height:3.1rem;
             border-radius:16px;
             font-weight:900;
         }
 
-        .tm-account-actions [data-testid="stPageLink"] a {
+        .st-key-tm_account_actions [data-testid="stPageLink"] a {
             border:1px solid rgba(148,163,184,.24);
             background:rgba(255,255,255,.88);
             box-shadow:0 12px 28px rgba(15,23,42,.05);
@@ -424,7 +554,7 @@ def render_account_css() -> None:
 
         @media (max-width:760px) {
             .tm-account-shell {gap:2rem}
-            .tm-account-hero {padding:1.5rem}
+            .tm-account-hero {padding:1.5rem;margin-top:3rem}
             .tm-account-grid {grid-template-columns:1fr}
             .tm-section-heading {align-items:flex-start;flex-direction:column}
             .tm-avatar-premium {width:118px;height:118px;font-size:2.2rem}
@@ -433,11 +563,13 @@ def render_account_css() -> None:
         """,
         unsafe_allow_html=True,
     )
+    render_account_theme_overrides()
 
 
 def render_section_heading(kicker: str, title: str, copy: str) -> None:
     st.markdown(
-        f"""
+        _html(
+            f"""
         <div class="tm-section-heading">
             <div>
                 <div class="tm-section-kicker">{safe_html(kicker)}</div>
@@ -445,7 +577,8 @@ def render_section_heading(kicker: str, title: str, copy: str) -> None:
                 <div class="tm-section-copy">{safe_html(copy)}</div>
             </div>
         </div>
-        """,
+        """
+        ),
         unsafe_allow_html=True,
     )
 
@@ -454,7 +587,8 @@ def render_premium_hero(display_name: str, initials: str, plan_name: str, pro_en
     member_label = "PRO Member" if pro_enabled else "Free Member"
     badge_label = "PRO" if pro_enabled else "FREE"
     st.markdown(
-        f"""
+        _html(
+            f"""
         <div class="tm-account-hero">
             <div class="tm-account-hero-grid">
                 <div>
@@ -476,7 +610,8 @@ def render_premium_hero(display_name: str, initials: str, plan_name: str, pro_en
                 </div>
             </div>
         </div>
-        """,
+        """
+        ),
         unsafe_allow_html=True,
     )
 
@@ -697,8 +832,6 @@ renewal_date = str(
 )
 today = datetime.now(timezone.utc).strftime("%Y-%m-%d")
 
-st.markdown('<div class="tm-account-shell">', unsafe_allow_html=True)
-
 render_premium_hero(display_name, initials, plan_name, pro_enabled)
 
 render_section_heading(
@@ -714,7 +847,7 @@ kpi_cards = "".join(
         render_kpi_card("Recruiter Rankings", str(usage.get("Recruiter Mode", 0)), "Candidate ranking workflows.", "🏆"),
     ]
 )
-st.markdown(f'<div class="tm-account-grid">{kpi_cards}</div>', unsafe_allow_html=True)
+st.markdown(_html(f'<div class="tm-account-grid">{kpi_cards}</div>'), unsafe_allow_html=True)
 
 render_section_heading(
     "Membership",
@@ -722,7 +855,8 @@ render_section_heading(
     "Manage your plan status and review the identity linked to this workspace.",
 )
 st.markdown(
-    f"""
+    _html(
+        f"""
     <div class="tm-panel-grid">
         {render_membership_card(
             plan_name=plan_name,
@@ -734,7 +868,8 @@ st.markdown(
         )}
         {render_profile_card(email, user_id, registered_at)}
     </div>
-    """,
+    """
+    ),
     unsafe_allow_html=True,
 )
 
@@ -743,7 +878,7 @@ if is_logged_in() and pro_enabled:
 elif is_logged_in():
     st.page_link("pages/pricing.py", label="🚀 Upgrade to Pro", icon="💳")
 else:
-    st.page_link("pages/login.py", label="🔐 Login", icon="🔐")
+    st.page_link("pages/login.py", label="Login", icon="🔐")
 
 render_section_heading(
     "Operations",
@@ -751,12 +886,14 @@ render_section_heading(
     "Track monthly activity and confirm the current operational state of the platform.",
 )
 st.markdown(
-    f"""
+    _html(
+        f"""
     <div class="tm-panel-grid">
         {render_usage_card(usage, total_usage, monthly_limit, usage_percent)}
         {render_system_card(backend_status, backend_icon, today)}
     </div>
-    """,
+    """
+    ),
     unsafe_allow_html=True,
 )
 
@@ -765,7 +902,7 @@ render_section_heading(
     "Security center",
     "Review authentication, session, HTTPS, and PayPal billing safeguards.",
 )
-st.markdown(render_security_card(is_logged_in()), unsafe_allow_html=True)
+st.markdown(_html(render_security_card(is_logged_in())), unsafe_allow_html=True)
 
 profile_export = build_profile_export(
     display_name=display_name,
@@ -784,69 +921,95 @@ render_section_heading(
     "Account actions",
     "Refresh profile data, manage PayPal billing, export your profile, or securely end the session.",
 )
-st.markdown('<div class="tm-account-actions">', unsafe_allow_html=True)
-action_cols = st.columns(4)
-
-with action_cols[0]:
-    st.markdown(
-        """
-        <div class="tm-action-card">
-            <div class="tm-card-label">🔄 Refresh</div>
-            <div class="tm-card-note">Sync the latest Firebase and backend profile data.</div>
-        </div>
-        """,
-        unsafe_allow_html=True,
+with st.container(key="tm_account_actions", border=False, width="stretch"):
+    first_action_row = st.columns(
+        2,
+        gap="medium",
+        vertical_alignment="top",
+        width="stretch",
     )
-    if st.button("🔄 Refresh Profile", use_container_width=True):
-        refresh_profile()
-        st.success("Profile refreshed.")
-
-with action_cols[1]:
-    st.markdown(
-        """
-        <div class="tm-action-card">
-            <div class="tm-card-label">💳 Billing</div>
-            <div class="tm-card-note">Open PayPal pricing and subscription controls.</div>
-        </div>
-        """,
-        unsafe_allow_html=True,
+    second_action_row = st.columns(
+        2,
+        gap="medium",
+        vertical_alignment="top",
+        width="stretch",
     )
-    st.page_link("pages/pricing.py", label="💳 Manage Subscription")
+    action_cols = (*first_action_row, *second_action_row)
 
-with action_cols[2]:
-    st.markdown(
-        """
-        <div class="tm-action-card">
-            <div class="tm-card-label">📄 Export</div>
-            <div class="tm-card-note">Download a portable account profile snapshot.</div>
-        </div>
-        """,
-        unsafe_allow_html=True,
-    )
-    st.download_button(
-        "📄 Download Profile",
-        data=profile_export.encode("utf-8"),
-        file_name="talentmatch_account_profile.txt",
-        mime="text/plain",
-        use_container_width=True,
-    )
+    with action_cols[0]:
+        st.markdown(
+            _html(
+                """
+            <div class="tm-action-card">
+                <div class="tm-card-label">🔄 Refresh</div>
+                <div class="tm-card-note">Sync the latest Firebase and backend profile data.</div>
+            </div>
+            """
+            ),
+            unsafe_allow_html=True,
+        )
+        if st.button("🔄 Refresh Profile", key="tm_account_refresh", width="stretch"):
+            refresh_profile()
+            st.success("Profile refreshed.")
 
-with action_cols[3]:
-    st.markdown(
-        """
-        <div class="tm-action-card">
-            <div class="tm-card-label">🚪 Session</div>
-            <div class="tm-card-note">Securely sign out from this device.</div>
-        </div>
-        """,
-        unsafe_allow_html=True,
-    )
-    if is_logged_in():
-        if st.button("🚪 Logout", use_container_width=True):
-            clear_auth()
-            st.rerun()
-    else:
-        st.page_link("pages/login.py", label="🔐 Login")
+    with action_cols[1]:
+        st.markdown(
+            _html(
+                """
+            <div class="tm-action-card">
+                <div class="tm-card-label">💳 Billing</div>
+                <div class="tm-card-note">Open PayPal pricing and subscription controls.</div>
+            </div>
+            """
+            ),
+            unsafe_allow_html=True,
+        )
+        st.page_link(
+            "pages/pricing.py",
+            label="💳 Manage Subscription",
+            width="stretch",
+        )
 
-st.markdown("</div>", unsafe_allow_html=True)
-st.markdown("</div>", unsafe_allow_html=True)
+    with action_cols[2]:
+        st.markdown(
+            _html(
+                """
+            <div class="tm-action-card">
+                <div class="tm-card-label">📄 Export</div>
+                <div class="tm-card-note">Download a portable account profile snapshot.</div>
+            </div>
+            """
+            ),
+            unsafe_allow_html=True,
+        )
+        st.download_button(
+            "📄 Download Profile",
+            data=profile_export.encode("utf-8"),
+            file_name="talentmatch_account_profile.txt",
+            mime="text/plain",
+            key="tm_account_download",
+            width="stretch",
+        )
+
+    with action_cols[3]:
+        st.markdown(
+            _html(
+                """
+            <div class="tm-action-card">
+                <div class="tm-card-label">🚪 Session</div>
+                <div class="tm-card-note">Securely sign out from this device.</div>
+            </div>
+            """
+            ),
+            unsafe_allow_html=True,
+        )
+        if is_logged_in():
+            if st.button("🚪 Logout", key="tm_account_logout", width="stretch"):
+                clear_auth()
+                st.rerun()
+        else:
+            st.page_link(
+                "pages/login.py",
+                label="🔐 Login",
+                width="stretch",
+            )
