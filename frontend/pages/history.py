@@ -1305,8 +1305,38 @@ def render_history_css() -> None:
         .st-key-history_toolbar input {
             border-radius: 18px !important;
             border-color: rgba(148,163,184,.24) !important;
-            background: rgba(248,250,252,.88) !important;
+            background: rgba(248,250,252,.96) !important;
+            color: #0f172a !important;
+            -webkit-text-fill-color: #0f172a !important;
+            caret-color: #2563eb !important;
             transition: border-color .18s ease, box-shadow .18s ease, transform .18s ease;
+        }
+
+        .st-key-history_toolbar label,
+        .st-key-history_toolbar label p,
+        .st-key-history_toolbar [data-testid="stWidgetLabel"],
+        .st-key-history_toolbar [data-testid="stWidgetLabel"] p {
+            color: #334155 !important;
+            -webkit-text-fill-color: #334155 !important;
+            opacity: 1 !important;
+        }
+
+        .st-key-history_toolbar [data-baseweb="select"] span,
+        .st-key-history_toolbar [data-baseweb="select"] div {
+            color: #0f172a !important;
+            -webkit-text-fill-color: #0f172a !important;
+            opacity: 1 !important;
+        }
+
+        .st-key-history_toolbar [data-baseweb="select"] svg {
+            color: #334155 !important;
+            fill: #334155 !important;
+        }
+
+        .st-key-history_toolbar input::placeholder {
+            color: #64748b !important;
+            -webkit-text-fill-color: #64748b !important;
+            opacity: 1 !important;
         }
 
         .st-key-history_toolbar [data-baseweb="select"] > div:focus-within,
@@ -1342,6 +1372,25 @@ def render_history_css() -> None:
 
         [class*="st-key-history_report_"] [data-testid="stExpander"] summary {
             font-weight: 800;
+        }
+
+        [class*="st-key-history_report_"] [data-testid="stExpander"] summary,
+        .st-key-history_retention [data-testid="stExpander"] summary {
+            background: rgba(248,250,252,.97) !important;
+            color: #0f172a !important;
+        }
+
+        [class*="st-key-history_report_"] [data-testid="stExpander"] summary *,
+        .st-key-history_retention [data-testid="stExpander"] summary * {
+            color: #0f172a !important;
+            -webkit-text-fill-color: #0f172a !important;
+            opacity: 1 !important;
+        }
+
+        [class*="st-key-history_report_"] [data-testid="stExpander"] summary svg,
+        .st-key-history_retention [data-testid="stExpander"] summary svg {
+            color: #334155 !important;
+            fill: currentColor !important;
         }
 
         [class*="st-key-history_report_"] button,
