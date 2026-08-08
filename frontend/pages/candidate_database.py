@@ -258,9 +258,9 @@ def render_candidate_database_css() -> None:
         .tm-cdb-panel,
         .tm-cdb-summary,
         .tm-cdb-export-card {
-            border:1px solid rgba(148,163,184,.22);
-            background:rgba(255,255,255,.88);
-            box-shadow:0 18px 48px rgba(15,23,42,.06);
+            border:1px solid var(--tm-border);
+            background:var(--tm-card-strong);
+            box-shadow:var(--tm-shadow);
             backdrop-filter:blur(14px);
         }
 
@@ -277,7 +277,7 @@ def render_candidate_database_css() -> None:
             display:flex;
             align-items:center;
             justify-content:center;
-            background:rgba(37,99,235,.10);
+            background:var(--tm-blue-soft);
             font-size:1.05rem;
             margin-bottom:.65rem;
         }
@@ -285,7 +285,7 @@ def render_candidate_database_css() -> None:
         .tm-cdb-trust-title,
         .tm-cdb-panel-title,
         .tm-cdb-summary-title {
-            color:#0f172a;
+            color:var(--tm-navy);
             font-weight:950;
             letter-spacing:-.025em;
         }
@@ -298,7 +298,7 @@ def render_candidate_database_css() -> None:
         .tm-cdb-trust-copy,
         .tm-cdb-panel-copy,
         .tm-cdb-summary-copy {
-            color:#64748b;
+            color:var(--tm-slate);
             line-height:1.55;
         }
 
@@ -319,11 +319,11 @@ def render_candidate_database_css() -> None:
             position:absolute;
             inset:0 0 auto 0;
             height:4px;
-            background:linear-gradient(90deg,#2563eb,#10b981);
+            background:linear-gradient(90deg,var(--tm-blue),var(--tm-green));
         }
 
         .tm-cdb-metric-label {
-            color:#2563eb;
+            color:var(--tm-blue);
             font-size:.75rem;
             font-weight:950;
             letter-spacing:.13em;
@@ -332,7 +332,7 @@ def render_candidate_database_css() -> None:
         }
 
         .tm-cdb-metric-value {
-            color:#0f172a;
+            color:var(--tm-navy);
             font-size:2.15rem;
             line-height:1;
             letter-spacing:-.055em;
@@ -341,7 +341,7 @@ def render_candidate_database_css() -> None:
         }
 
         .tm-cdb-metric-note {
-            color:#64748b;
+            color:var(--tm-slate);
             line-height:1.5;
         }
 
@@ -358,10 +358,10 @@ def render_candidate_database_css() -> None:
         .tm-cdb-summary {
             border-radius:26px;
             padding:1.45rem;
-            border-left:5px solid #2563eb;
+            border-left:5px solid var(--tm-blue);
             background:
-                radial-gradient(circle at 92% 18%,rgba(37,99,235,.10),transparent 30%),
-                rgba(255,255,255,.91);
+                radial-gradient(circle at 92% 18%,var(--tm-blue-soft),transparent 30%),
+                var(--tm-card-strong);
         }
 
         .tm-cdb-summary-title {
@@ -379,9 +379,9 @@ def render_candidate_database_css() -> None:
             font-weight:950;
             letter-spacing:.06em;
             text-transform:uppercase;
-            background:rgba(37,99,235,.10);
-            color:#1d4ed8;
-            border:1px solid rgba(37,99,235,.18);
+            background:var(--tm-blue-soft);
+            color:var(--tm-blue-dark);
+            border:1px solid var(--tm-border-strong);
         }
 
         .tm-cdb-keyword-wrap {
@@ -396,24 +396,131 @@ def render_candidate_database_css() -> None:
             padding:.42rem .72rem;
             font-size:.82rem;
             font-weight:850;
-            background:rgba(37,99,235,.08);
-            color:#1e40af;
-            border:1px solid rgba(37,99,235,.14);
+            background:var(--tm-blue-soft);
+            color:var(--tm-blue-dark);
+            border:1px solid var(--tm-border-strong);
         }
 
         .tm-cdb-export-card {
             padding:1.35rem;
             border-radius:26px;
             background:
-                radial-gradient(circle at top right,rgba(16,185,129,.11),transparent 36%),
-                rgba(255,255,255,.92);
+                radial-gradient(circle at top right,var(--tm-green-soft),transparent 36%),
+                var(--tm-card-strong);
         }
 
-        .tm-cdb-table [data-testid="stDataFrame"] {
-            border:1px solid rgba(148,163,184,.22);
+        .tm-cdb-table {
+            width:100%;
+        }
+
+        .tm-cdb-table-shell {
+            width:100%;
+            border:1px solid var(--tm-border);
             border-radius:20px;
+            background:var(--tm-card-strong);
+            box-shadow:var(--tm-shadow);
             overflow:hidden;
-            box-shadow:0 14px 36px rgba(15,23,42,.05);
+        }
+
+        .tm-cdb-table-scroll {
+            width:100%;
+            max-height:560px;
+            overflow:auto;
+        }
+
+        .tm-cdb-table table {
+            width:100%;
+            min-width:980px;
+            border-collapse:collapse;
+            table-layout:auto;
+        }
+
+        .tm-cdb-table thead th {
+            position:sticky;
+            top:0;
+            z-index:2;
+            padding:.85rem .8rem;
+            border-bottom:1px solid var(--tm-border);
+            background:var(--tm-card-strong);
+            color:var(--tm-muted);
+            font-size:.78rem;
+            font-weight:900;
+            letter-spacing:.04em;
+            text-align:left;
+            white-space:nowrap;
+        }
+
+        .tm-cdb-table tbody td {
+            padding:.78rem .8rem;
+            border-bottom:1px solid var(--tm-border);
+            color:var(--tm-navy-2);
+            font-size:.88rem;
+            vertical-align:middle;
+        }
+
+        .tm-cdb-table tbody tr:last-child td {
+            border-bottom:0;
+        }
+
+        .tm-cdb-table tbody tr {
+            transition:background .16s ease;
+        }
+
+        .tm-cdb-table tbody tr:hover {
+            background:var(--tm-blue-soft);
+        }
+
+        .tm-cdb-table .tm-cdb-cell-id,
+        .tm-cdb-table .tm-cdb-cell-rank,
+        .tm-cdb-table .tm-cdb-cell-favorite {
+            text-align:center;
+            white-space:nowrap;
+        }
+
+        .tm-cdb-table .tm-cdb-cell-candidate {
+            min-width:250px;
+            font-weight:800;
+            color:var(--tm-navy);
+        }
+
+        .tm-cdb-table .tm-cdb-cell-status,
+        .tm-cdb-table .tm-cdb-cell-created {
+            white-space:nowrap;
+        }
+
+        .tm-cdb-table .tm-cdb-cell-tags {
+            min-width:170px;
+            color:var(--tm-slate);
+        }
+
+        .tm-cdb-score-wrap {
+            display:flex;
+            align-items:center;
+            gap:.65rem;
+            min-width:160px;
+        }
+
+        .tm-cdb-score-track {
+            flex:1 1 auto;
+            min-width:92px;
+            height:7px;
+            border-radius:999px;
+            background:var(--tm-blue-soft);
+            overflow:hidden;
+        }
+
+        .tm-cdb-score-fill {
+            display:block;
+            height:100%;
+            border-radius:inherit;
+            background:linear-gradient(90deg,var(--tm-blue),var(--tm-green));
+        }
+
+        .tm-cdb-score-value {
+            min-width:38px;
+            color:var(--tm-navy);
+            font-weight:850;
+            text-align:right;
         }
 
         .tm-cdb-actions [data-testid="stPageLink"] a,
@@ -444,6 +551,10 @@ def render_candidate_database_css() -> None:
             .tm-cdb-trust-card,
             .tm-cdb-metric-card {
                 min-height:auto;
+            }
+
+            .tm-cdb-table-scroll {
+                max-height:460px;
             }
         }
         </style>
@@ -525,24 +636,51 @@ def render_candidate_table(candidates: List[Dict[str, Any]]) -> None:
         )
         return
 
-    st.markdown('<div class="tm-cdb-table">', unsafe_allow_html=True)
-    st.dataframe(
-        pd.DataFrame(rows),
-        use_container_width=True,
-        hide_index=True,
-        column_config={
-            "Score": st.column_config.ProgressColumn(
-                "Score",
-                help="Combined candidate match score",
-                min_value=0,
-                max_value=100,
-                format="%d%%",
-            ),
-            "Rank": st.column_config.NumberColumn("Rank", format="%d"),
-        },
-    )
-    st.markdown("</div>", unsafe_allow_html=True)
+    body_rows: List[str] = []
+    for row in rows:
+        score = max(0, min(int(row["Score"]), 100))
+        body_rows.append(
+            "<tr>"
+            f'<td class="tm-cdb-cell-id">{safe_html(row["ID"])}</td>'
+            f'<td class="tm-cdb-cell-candidate">{safe_html(row["Candidate"])}</td>'
+            "<td>"
+            f'<div class="tm-cdb-score-wrap" aria-label="Match score {score}%">'
+            '<div class="tm-cdb-score-track" aria-hidden="true">'
+            f'<span class="tm-cdb-score-fill" style="width:{score}%"></span>'
+            "</div>"
+            f'<span class="tm-cdb-score-value">{score}%</span>'
+            "</div>"
+            "</td>"
+            f'<td class="tm-cdb-cell-rank">{safe_html(row["Rank"])}</td>'
+            f'<td class="tm-cdb-cell-status">{safe_html(row["Status"])}</td>'
+            f'<td class="tm-cdb-cell-favorite">{safe_html(row["Favorite"])}</td>'
+            f'<td class="tm-cdb-cell-tags">{safe_html(row["Tags"])}</td>'
+            f'<td class="tm-cdb-cell-created">{safe_html(row["Created"])}</td>'
+            "</tr>"
+        )
 
+    table_html = (
+        '<div class="tm-cdb-table">'
+        '<div class="tm-cdb-table-shell">'
+        '<div class="tm-cdb-table-scroll">'
+        '<table aria-label="Candidate pipeline">'
+        "<thead><tr>"
+        '<th scope="col">ID</th>'
+        '<th scope="col">Candidate</th>'
+        '<th scope="col">Score</th>'
+        '<th scope="col">Rank</th>'
+        '<th scope="col">Status</th>'
+        '<th scope="col">Favorite</th>'
+        '<th scope="col">Tags</th>'
+        '<th scope="col">Created</th>'
+        "</tr></thead>"
+        f'<tbody>{"".join(body_rows)}</tbody>'
+        "</table>"
+        "</div>"
+        "</div>"
+        "</div>"
+    )
+    st.markdown(table_html, unsafe_allow_html=True)
 
 def render_keywords(title: str, values: List[str], empty_message: str) -> None:
     st.markdown(f"#### {title}")
