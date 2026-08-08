@@ -1193,7 +1193,55 @@ if not is_pro_user():
         icon="🔒",
         eyebrow="PRO FEATURE",
     )
-    st.page_link("pages/pricing.py", label="💳 Upgrade to Pro")
+
+    st.markdown(
+        """
+        <style>
+        .st-key-semantic_upgrade_cta div[data-testid="stPageLink"] a {
+            min-height: 3.15rem !important;
+            border: 1px solid transparent !important;
+            border-radius: 16px !important;
+            background: linear-gradient(135deg, #2563eb, #1d4ed8) !important;
+            color: #ffffff !important;
+            font-weight: 900 !important;
+            box-shadow: 0 16px 34px rgba(37, 99, 235, 0.28) !important;
+            transition:
+                transform 0.18s ease,
+                box-shadow 0.18s ease,
+                background 0.18s ease !important;
+        }
+
+        .st-key-semantic_upgrade_cta div[data-testid="stPageLink"] a:hover {
+            transform: translateY(-2px);
+            background: linear-gradient(135deg, #1d4ed8, #1e40af) !important;
+            border-color: rgba(147, 197, 253, 0.70) !important;
+            box-shadow: 0 20px 42px rgba(37, 99, 235, 0.34) !important;
+        }
+
+        .st-key-semantic_upgrade_cta div[data-testid="stPageLink"] a *,
+        .st-key-semantic_upgrade_cta div[data-testid="stPageLink"] a:hover * {
+            color: #ffffff !important;
+            -webkit-text-fill-color: #ffffff !important;
+            opacity: 1 !important;
+        }
+
+        @media (prefers-reduced-motion: reduce) {
+            .st-key-semantic_upgrade_cta div[data-testid="stPageLink"] a {
+                transition: none !important;
+                transform: none !important;
+            }
+        }
+        </style>
+        """,
+        unsafe_allow_html=True,
+    )
+
+    with st.container(border=False, key="semantic_upgrade_cta"):
+        st.page_link(
+            "pages/pricing.py",
+            label="💳 Upgrade to Pro",
+            use_container_width=True,
+        )
     st.stop()
 
 render_section_title(
