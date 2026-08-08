@@ -82,9 +82,9 @@ def render_recruiter_css() -> None:
             min-height:156px;
             padding:1.3rem;
             border-radius:24px;
-            border:1px solid rgba(148,163,184,.22);
-            background:rgba(255,255,255,.90);
-            box-shadow:0 18px 48px rgba(15,23,42,.06);
+            border:1px solid var(--tm-border);
+            background:var(--tm-card-strong);
+            box-shadow:var(--tm-shadow);
             backdrop-filter:blur(14px);
         }
         .tm-recruiter-metric:before {
@@ -95,7 +95,7 @@ def render_recruiter_css() -> None:
             background:linear-gradient(90deg,#2563eb,#10b981);
         }
         .tm-recruiter-label {
-            color:#2563eb;
+            color:var(--tm-blue);
             font-size:.74rem;
             font-weight:950;
             text-transform:uppercase;
@@ -103,7 +103,7 @@ def render_recruiter_css() -> None:
             margin-bottom:.7rem;
         }
         .tm-recruiter-value {
-            color:#0f172a;
+            color:var(--tm-navy);
             font-size:2rem;
             font-weight:950;
             letter-spacing:-.055em;
@@ -111,7 +111,7 @@ def render_recruiter_css() -> None:
             margin-bottom:.55rem;
         }
         .tm-recruiter-note {
-            color:#64748b;
+            color:var(--tm-slate);
             line-height:1.55;
         }
         .tm-recruiter-trust-grid {
@@ -123,9 +123,9 @@ def render_recruiter_css() -> None:
         .tm-recruiter-trust {
             padding:.85rem 1rem;
             border-radius:18px;
-            border:1px solid rgba(148,163,184,.22);
-            background:rgba(255,255,255,.74);
-            color:#334155;
+            border:1px solid var(--tm-border);
+            background:var(--tm-card);
+            color:var(--tm-navy);
             font-weight:850;
             text-align:center;
         }
@@ -134,9 +134,9 @@ def render_recruiter_css() -> None:
         .tm-recruiter-summary-card,
         .tm-recruiter-candidate-card,
         .tm-recruiter-workspace-card {
-            border:1px solid rgba(148,163,184,.22);
-            background:rgba(255,255,255,.90);
-            box-shadow:0 18px 48px rgba(15,23,42,.06);
+            border:1px solid var(--tm-border);
+            background:var(--tm-card-strong);
+            box-shadow:var(--tm-shadow);
             backdrop-filter:blur(14px);
         }
         .tm-recruiter-input-card {
@@ -148,19 +148,19 @@ def render_recruiter_css() -> None:
         .tm-recruiter-input-title,
         .tm-recruiter-candidate-title,
         .tm-recruiter-summary-title {
-            color:#0f172a;
+            color:var(--tm-navy);
             font-weight:950;
             letter-spacing:-.03em;
         }
         .tm-recruiter-input-title {font-size:1.15rem;margin-bottom:.5rem;}
-        .tm-recruiter-input-copy {color:#64748b;line-height:1.6;}
+        .tm-recruiter-input-copy {color:var(--tm-slate);line-height:1.6;}
         .tm-recruiter-status-card {
             padding:1.35rem;
             border-radius:26px;
             background:
                 radial-gradient(circle at top right,rgba(37,99,235,.10),transparent 36%),
                 radial-gradient(circle at bottom left,rgba(16,185,129,.09),transparent 36%),
-                rgba(255,255,255,.92);
+                var(--tm-card-strong);
         }
         .tm-recruiter-summary-card {
             padding:1.5rem;
@@ -181,7 +181,7 @@ def render_recruiter_css() -> None:
             flex-wrap:wrap;
         }
         .tm-recruiter-rank {
-            color:#2563eb;
+            color:var(--tm-blue);
             font-size:.75rem;
             font-weight:950;
             letter-spacing:.13em;
@@ -195,7 +195,7 @@ def render_recruiter_css() -> None:
             padding:.48rem .75rem;
             border-radius:999px;
             background:rgba(16,185,129,.12);
-            color:#047857;
+            color:var(--tm-green-dark);
             font-weight:950;
             white-space:nowrap;
         }
@@ -204,22 +204,37 @@ def render_recruiter_css() -> None:
             border-radius:26px;
             background:
                 radial-gradient(circle at top right,rgba(37,99,235,.11),transparent 34%),
-                rgba(255,255,255,.92);
+                var(--tm-card-strong);
         }
         .tm-recruiter-workspace-title {
-            color:#0f172a;
+            color:var(--tm-navy);
             font-size:1.25rem;
             font-weight:950;
             letter-spacing:-.03em;
             margin-bottom:.5rem;
         }
-        .tm-recruiter-workspace-copy {color:#64748b;line-height:1.6;}
+        .tm-recruiter-workspace-copy {color:var(--tm-slate);line-height:1.6;}
         .tm-recruiter-downloads [data-testid="stDownloadButton"] button,
         .tm-recruiter-actions [data-testid="stButton"] button,
         .tm-recruiter-actions [data-testid="stPageLink"] a {
             min-height:3.2rem;
             border-radius:16px;
             font-weight:900;
+        }
+
+        [data-testid="stMain"] div[data-testid="stExpander"] {
+            border-color:var(--tm-border) !important;
+            background:var(--tm-card) !important;
+            color:var(--tm-navy) !important;
+        }
+        [data-testid="stMain"] div[data-testid="stExpander"] summary {
+            background:var(--tm-card-strong) !important;
+            color:var(--tm-navy) !important;
+        }
+        [data-testid="stMain"] div[data-testid="stExpander"] summary *,
+        [data-testid="stMain"] div[data-testid="stExpander"] [data-testid="stExpanderDetails"] * {
+            color:inherit !important;
+            -webkit-text-fill-color:currentColor !important;
         }
         @media (max-width:1100px) {
             .tm-recruiter-metrics,
