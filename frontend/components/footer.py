@@ -15,13 +15,13 @@ def render_footer() -> None:
             .tmp-footer {{
                 margin-top: 2.5rem;
                 padding: 1.5rem 0 0.5rem 0;
-                color: rgba(49, 51, 63, 0.72);
+                color: var(--tm-slate, #64748b);
                 font-size: 0.92rem;
                 line-height: 1.6;
             }}
             .tmp-footer-title {{
                 font-weight: 800;
-                color: rgba(49, 51, 63, 0.92);
+                color: var(--tm-navy, #0f172a);
                 font-size: 1.02rem;
                 margin-bottom: 0.25rem;
             }}
@@ -34,15 +34,17 @@ def render_footer() -> None:
             .tmp-footer-small {{
                 margin-top: 1.25rem;
                 padding-top: 0.9rem;
-                border-top: 1px solid rgba(49, 51, 63, 0.12);
+                border-top: 1px solid var(--tm-border, rgba(148, 163, 184, 0.24));
                 font-size: 0.84rem;
-                color: rgba(49, 51, 63, 0.58);
+                color: var(--tm-muted, #94a3b8);
             }}
             .tmp-footer a {{
                 color: inherit;
                 text-decoration: none;
+                transition: color 160ms ease;
             }}
             .tmp-footer a:hover {{
+                color: var(--tm-blue, #2563eb);
                 text-decoration: underline;
             }}
             @media (max-width: 900px) {{

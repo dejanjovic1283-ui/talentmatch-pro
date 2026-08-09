@@ -77,7 +77,7 @@ st.markdown(
         border-radius: 999px;
         top: -260px;
         right: -120px;
-        background: rgba(37, 99, 235, 0.10);
+        background: var(--tm-blue-soft, rgba(37, 99, 235, 0.10));
         filter: blur(10px);
         pointer-events: none;
     }
@@ -88,9 +88,9 @@ st.markdown(
     .tm-trust-card,
     .tm-faq-card,
     .tm-quote-card {
-        border: 1px solid rgba(148, 163, 184, 0.22);
-        background: rgba(255, 255, 255, 0.80);
-        box-shadow: 0 22px 60px rgba(15, 23, 42, 0.07);
+        border: 1px solid var(--tm-border, rgba(148, 163, 184, 0.22));
+        background: var(--tm-card, rgba(255, 255, 255, 0.80));
+        box-shadow: var(--tm-shadow, 0 22px 60px rgba(15, 23, 42, 0.07));
         backdrop-filter: blur(16px);
     }
 
@@ -101,7 +101,7 @@ st.markdown(
     }
 
     .tm-metric-label {
-        color: #2563eb;
+        color: var(--tm-blue, #2563eb);
         font-size: 0.72rem;
         font-weight: 950;
         letter-spacing: 0.11em;
@@ -110,7 +110,7 @@ st.markdown(
     }
 
     .tm-metric-value {
-        color: #0f172a;
+        color: var(--tm-navy, #0f172a);
         font-size: 1.55rem;
         line-height: 1.1;
         font-weight: 950;
@@ -119,14 +119,14 @@ st.markdown(
     }
 
     .tm-muted-copy {
-        color: #64748b;
+        color: var(--tm-slate, #64748b);
         line-height: 1.55;
         font-size: 0.94rem;
     }
 
     .tm-section-heading {
         margin: 2.6rem 0 1rem 0;
-        color: #0f172a;
+        color: var(--tm-navy, #0f172a);
         font-size: clamp(1.65rem, 2vw, 2.15rem);
         font-weight: 950;
         letter-spacing: -0.045em;
@@ -135,7 +135,7 @@ st.markdown(
     .tm-section-copy {
         margin: -0.55rem 0 1.2rem 0;
         max-width: 760px;
-        color: #64748b;
+        color: var(--tm-slate, #64748b);
         line-height: 1.65;
     }
 
@@ -148,12 +148,12 @@ st.markdown(
     }
 
     .tm-plan-card-pro {
-        border-color: rgba(16, 185, 129, 0.46);
+        border-color: var(--tm-green, #10b981);
         background:
             radial-gradient(circle at top right, rgba(16, 185, 129, 0.20), transparent 34%),
             radial-gradient(circle at bottom left, rgba(37, 99, 235, 0.13), transparent 38%),
-            rgba(255, 255, 255, 0.93);
-        box-shadow: 0 34px 90px rgba(16, 185, 129, 0.16);
+            var(--tm-card-strong, rgba(255, 255, 255, 0.93));
+        box-shadow: var(--tm-shadow-lg, 0 34px 90px rgba(16, 185, 129, 0.16));
     }
 
     .tm-plan-card-pro::after {
@@ -162,7 +162,7 @@ st.markdown(
         inset: 0;
         border-radius: inherit;
         pointer-events: none;
-        box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.72);
+        box-shadow: inset 0 1px 0 var(--tm-border, rgba(148, 163, 184, 0.24));
     }
 
     .tm-ribbon {
@@ -171,9 +171,9 @@ st.markdown(
         gap: 0.35rem;
         padding: 0.40rem 0.78rem;
         border-radius: 999px;
-        background: rgba(16, 185, 129, 0.14);
-        color: #047857;
-        border: 1px solid rgba(16, 185, 129, 0.24);
+        background: var(--tm-green-soft, rgba(16, 185, 129, 0.14));
+        color: var(--tm-green-dark, #047857);
+        border: 1px solid var(--tm-border, rgba(16, 185, 129, 0.24));
         font-size: 0.74rem;
         font-weight: 950;
         letter-spacing: 0.08em;
@@ -182,14 +182,14 @@ st.markdown(
     }
 
     .tm-plan-name {
-        color: #0f172a;
+        color: var(--tm-navy, #0f172a);
         font-size: 1.45rem;
         font-weight: 950;
         letter-spacing: -0.03em;
     }
 
     .tm-price {
-        color: #0f172a;
+        color: var(--tm-navy, #0f172a);
         font-size: 4.2rem;
         line-height: 0.95;
         letter-spacing: -0.08em;
@@ -198,20 +198,20 @@ st.markdown(
     }
 
     .tm-price span {
-        color: #64748b;
+        color: var(--tm-slate, #64748b);
         font-size: 1rem;
         letter-spacing: 0;
         font-weight: 850;
     }
 
     .tm-price-note {
-        color: #64748b;
+        color: var(--tm-slate, #64748b);
         font-size: 0.87rem;
         margin-bottom: 1.15rem;
     }
 
     .tm-plan-description {
-        color: #475569;
+        color: var(--tm-slate, #475569);
         line-height: 1.62;
         min-height: 78px;
         margin-bottom: 1rem;
@@ -229,16 +229,16 @@ st.markdown(
         gap: 0.62rem;
         padding: 0.72rem 0.78rem;
         border-radius: 16px;
-        border: 1px solid rgba(148, 163, 184, 0.16);
-        background: rgba(248, 250, 252, 0.68);
-        color: #334155;
+        border: 1px solid var(--tm-border, rgba(148, 163, 184, 0.16));
+        background: var(--tm-card-strong, rgba(248, 250, 252, 0.68));
+        color: var(--tm-navy-2, #334155);
         line-height: 1.4;
         font-weight: 760;
     }
 
     .tm-feature-item-pro {
-        border-color: rgba(16, 185, 129, 0.18);
-        background: rgba(236, 253, 245, 0.67);
+        border-color: var(--tm-border, rgba(16, 185, 129, 0.18));
+        background: var(--tm-green-soft, rgba(236, 253, 245, 0.67));
     }
 
     .tm-feature-icon {
@@ -250,16 +250,27 @@ st.markdown(
     .tm-roi-panel {
         padding: 1.35rem;
         border-radius: 28px;
-        border: 1px solid rgba(37, 99, 235, 0.24);
+        border: 1px solid var(--tm-border-strong, rgba(37, 99, 235, 0.24));
         background:
             radial-gradient(circle at top left, rgba(37, 99, 235, 0.15), transparent 36%),
             radial-gradient(circle at bottom right, rgba(16, 185, 129, 0.13), transparent 38%),
-            rgba(255, 255, 255, 0.82);
-        box-shadow: 0 26px 68px rgba(37, 99, 235, 0.09);
+            var(--tm-card-strong, rgba(255, 255, 255, 0.82));
+        box-shadow: var(--tm-shadow, 0 26px 68px rgba(37, 99, 235, 0.09));
+    }
+
+    .tm-roi-grid {
+        display: grid;
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+        gap: 1rem;
+    }
+
+    .tm-roi-stat {
+        min-width: 0;
+        padding: 0.35rem 0.2rem;
     }
 
     .tm-roi-number {
-        color: #0f172a;
+        color: var(--tm-navy, #0f172a);
         font-size: 2.25rem;
         font-weight: 950;
         letter-spacing: -0.06em;
@@ -268,7 +279,7 @@ st.markdown(
     }
 
     .tm-roi-label {
-        color: #64748b;
+        color: var(--tm-slate, #64748b);
         font-size: 0.88rem;
         line-height: 1.5;
     }
@@ -276,9 +287,9 @@ st.markdown(
     .tm-comparison {
         overflow: hidden;
         border-radius: 28px;
-        border: 1px solid rgba(148, 163, 184, 0.22);
-        background: rgba(255, 255, 255, 0.80);
-        box-shadow: 0 24px 64px rgba(15, 23, 42, 0.07);
+        border: 1px solid var(--tm-border, rgba(148, 163, 184, 0.22));
+        background: var(--tm-card, rgba(255, 255, 255, 0.80));
+        box-shadow: var(--tm-shadow, 0 24px 64px rgba(15, 23, 42, 0.07));
     }
 
     .tm-feature-row {
@@ -287,13 +298,18 @@ st.markdown(
         align-items: center;
         gap: 1rem;
         padding: 0.92rem 1rem;
-        border-bottom: 1px solid rgba(148, 163, 184, 0.17);
-        color: #475569;
+        border-bottom: 1px solid var(--tm-border, rgba(148, 163, 184, 0.17));
+        color: var(--tm-slate, #475569);
         font-size: 0.94rem;
     }
 
-    .tm-feature-row:last-child { border-bottom: 0; }
-    .tm-feature-row:nth-child(even) { background: rgba(248, 250, 252, 0.62); }
+    .tm-feature-row:last-child {
+        border-bottom: 0;
+    }
+
+    .tm-feature-row:nth-child(even) {
+        background: var(--tm-card-strong, rgba(248, 250, 252, 0.62));
+    }
 
     .tm-feature-header {
         color: #f8fafc;
@@ -301,8 +317,15 @@ st.markdown(
         font-weight: 950;
     }
 
-    .tm-feature-name { color: #0f172a; font-weight: 900; }
-    .tm-feature-pro { color: #047857; font-weight: 950; }
+    .tm-feature-name {
+        color: var(--tm-navy, #0f172a);
+        font-weight: 900;
+    }
+
+    .tm-feature-pro {
+        color: var(--tm-green-dark, #047857);
+        font-weight: 950;
+    }
 
     .tm-secure-strip {
         padding: 1.4rem;
@@ -340,7 +363,7 @@ st.markdown(
     }
 
     .tm-card-title {
-        color: #0f172a;
+        color: var(--tm-navy, #0f172a);
         font-size: 1.05rem;
         font-weight: 950;
         letter-spacing: -0.02em;
@@ -354,7 +377,7 @@ st.markdown(
     }
 
     .tm-quote-text {
-        color: #1e293b;
+        color: var(--tm-navy-2, #1e293b);
         font-size: 1.03rem;
         font-weight: 760;
         line-height: 1.65;
@@ -362,7 +385,7 @@ st.markdown(
     }
 
     .tm-quote-meta {
-        color: #64748b;
+        color: var(--tm-slate, #64748b);
         font-size: 0.84rem;
         line-height: 1.5;
     }
@@ -374,7 +397,7 @@ st.markdown(
     }
 
     .tm-faq-question {
-        color: #0f172a;
+        color: var(--tm-navy, #0f172a);
         font-weight: 950;
         margin-bottom: 0.25rem;
     }
@@ -382,17 +405,17 @@ st.markdown(
     .tm-cta-panel {
         padding: 1.8rem;
         border-radius: 32px;
-        border: 1px solid rgba(16, 185, 129, 0.34);
+        border: 1px solid var(--tm-green, rgba(16, 185, 129, 0.34));
         background:
             radial-gradient(circle at top right, rgba(16, 185, 129, 0.20), transparent 34%),
             radial-gradient(circle at bottom left, rgba(37, 99, 235, 0.16), transparent 38%),
-            rgba(255, 255, 255, 0.91);
-        box-shadow: 0 32px 82px rgba(16, 185, 129, 0.14);
+            var(--tm-card-strong, rgba(255, 255, 255, 0.91));
+        box-shadow: var(--tm-shadow-lg, 0 32px 82px rgba(16, 185, 129, 0.14));
         margin-top: 1rem;
     }
 
     .tm-cta-title {
-        color: #0f172a;
+        color: var(--tm-navy, #0f172a);
         font-size: clamp(1.8rem, 3vw, 2.65rem);
         font-weight: 950;
         letter-spacing: -0.06em;
@@ -401,14 +424,14 @@ st.markdown(
     }
 
     .tm-cta-price {
-        color: #047857;
+        color: var(--tm-green-dark, #047857);
         font-size: 1.2rem;
         font-weight: 950;
         margin-bottom: 0.55rem;
     }
 
     .tm-cta-copy {
-        color: #64748b;
+        color: var(--tm-slate, #64748b);
         line-height: 1.65;
         max-width: 760px;
     }
@@ -416,9 +439,9 @@ st.markdown(
     .tm-contact-panel {
         padding: 1.25rem 1.35rem;
         border-radius: 24px;
-        border: 1px solid rgba(148, 163, 184, 0.22);
-        background: rgba(255, 255, 255, 0.74);
-        box-shadow: 0 18px 48px rgba(15, 23, 42, 0.06);
+        border: 1px solid var(--tm-border, rgba(148, 163, 184, 0.22));
+        background: var(--tm-card, rgba(255, 255, 255, 0.74));
+        box-shadow: var(--tm-shadow, 0 18px 48px rgba(15, 23, 42, 0.06));
     }
 
     @media (max-width: 720px) {
@@ -431,6 +454,10 @@ st.markdown(
 
         .tm-plan-card {
             min-height: auto;
+        }
+
+        .tm-roi-grid {
+            grid-template-columns: 1fr;
         }
     }
     </style>
@@ -652,24 +679,19 @@ manual_hours = (cv_tasks_per_month * manual_minutes_per_task) / 60
 estimated_hours_saved = manual_hours * (estimated_time_reduction / 100)
 hours_per_dollar = estimated_hours_saved / PRO_PRICE_USD
 
-st.markdown('<div class="tm-roi-panel">', unsafe_allow_html=True)
-roi_col1, roi_col2, roi_col3 = st.columns(3)
-with roi_col1:
-    st.markdown(
-        f'<div class="tm-roi-number">{manual_hours:.1f} h</div><div class="tm-roi-label">Estimated manual workload per month</div>',
-        unsafe_allow_html=True,
-    )
-with roi_col2:
-    st.markdown(
-        f'<div class="tm-roi-number">{estimated_hours_saved:.1f} h</div><div class="tm-roi-label">Illustrative time saved per month</div>',
-        unsafe_allow_html=True,
-    )
-with roi_col3:
-    st.markdown(
-        f'<div class="tm-roi-number">{hours_per_dollar:.2f} h</div><div class="tm-roi-label">Illustrative hours saved per subscription dollar</div>',
-        unsafe_allow_html=True,
-    )
-st.markdown("</div>", unsafe_allow_html=True)
+st.markdown(
+    (
+        '<div class="tm-roi-panel"><div class="tm-roi-grid">'
+        f'<div class="tm-roi-stat"><div class="tm-roi-number">{manual_hours:.1f} h</div>'
+        '<div class="tm-roi-label">Estimated manual workload per month</div></div>'
+        f'<div class="tm-roi-stat"><div class="tm-roi-number">{estimated_hours_saved:.1f} h</div>'
+        '<div class="tm-roi-label">Illustrative time saved per month</div></div>'
+        f'<div class="tm-roi-stat"><div class="tm-roi-number">{hours_per_dollar:.2f} h</div>'
+        '<div class="tm-roi-label">Illustrative hours saved per subscription dollar</div></div>'
+        '</div></div>'
+    ),
+    unsafe_allow_html=True,
+)
 st.caption("Estimator only. It is not a guarantee of time savings, productivity or employment outcomes.")
 
 
