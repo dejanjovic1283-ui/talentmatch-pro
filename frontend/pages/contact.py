@@ -3,18 +3,20 @@ import streamlit as st
 from components.footer import render_footer
 from components.sidebar import render_sidebar
 
+
 st.set_page_config(page_title="Contact Us", page_icon="📬", layout="wide")
 
 render_sidebar()
 
 st.title("📬 Contact Us")
-st.caption("TalentMatch Pro support, billing, Pro plan requests, and general inquiries")
+st.caption("TalentMatch Pro support, billing, account assistance, and general inquiries")
 
-st.markdown("""
+st.markdown(
+    """
 # TalentMatch Pro – Contact Us
 
 Need help with TalentMatch Pro?  
-You can contact us for support, billing questions, refund requests, account issues, partnership opportunities, or Pro plan access.
+You can contact us for technical support, billing questions, refund requests, account issues, partnership opportunities, or general product questions.
 
 ---
 
@@ -24,27 +26,18 @@ You can contact us for support, billing questions, refund requests, account issu
 
 ---
 
-## 🚀 Pro Plan Requests
+## 💳 Pro Plan & Billing
 
-If you want access to the TalentMatch Pro plan, please send an email with the following subject:
+TalentMatch Pro is available for **$19/month** as a recurring **PayPal** subscription.
 
-**Subject:** TalentMatch Pro - Pro Plan Request
+Use the Pricing page to review the plan, subscribe, or check your current Pro access. Existing subscriptions are managed through PayPal.
+"""
+)
 
-Suggested message:
+st.page_link("pages/pricing.py", label="💳 Open Pricing & Billing")
 
-```text
-Hello,
-
-I would like to request access to the TalentMatch Pro plan.
-
-Name:
-Email:
-
-Thank you.
-
-Kind regards,
-```
-
+st.markdown(
+    """
 ---
 
 ## ⏱️ Response Time
@@ -72,7 +65,7 @@ Response time may be longer during weekends or holidays.
 - Account issues
 - Login or registration issues
 - Billing questions
-- Pro plan access
+- Subscription status questions
 - Refund requests
 - CV analysis questions
 - Report export questions
@@ -90,6 +83,7 @@ For CV-related support, describe the issue clearly and include only the informat
 ---
 
 Thank you for using TalentMatch Pro.
-""")
+"""
+)
 
 render_footer()
