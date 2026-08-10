@@ -3,11 +3,13 @@ import streamlit as st
 from components.footer import render_footer
 from components.sidebar import render_sidebar
 
+
 st.set_page_config(
     page_title="Terms of Service | TalentMatch Pro",
     page_icon="📃",
     layout="wide",
 )
+
 
 render_sidebar()
 
@@ -17,7 +19,7 @@ st.markdown(
     """
 # TalentMatch Pro – Terms of Service
 
-Last Updated: June 2026
+Last Updated: August 2026
 
 ## 1. Acceptance of Terms
 
@@ -83,19 +85,27 @@ TalentMatch Pro does not guarantee that any analysis result will be accepted by 
 
 TalentMatch Pro may offer free and paid plans.
 
-Paid features may include unlimited analyses, PDF reports, CV Rewrite AI, Semantic Match, Recruiter Mode, candidate ranking, saved history, and recruiter-ready reports.
+The TalentMatch Pro plan is currently offered for **$19 per month** as a recurring subscription.
 
-Subscription access depends on the active plan assigned to the user account.
+Paid subscription billing, approval, recurring payment processing, and subscription management are handled through **PayPal**.
 
-Billing and subscription processing may be handled by a third-party payment provider.
+Paid features may include unlimited analyses, PDF reports, CV Rewrite AI, Semantic Match, Recruiter Mode, Candidate Database access, candidate ranking, saved history, and recruiter-ready reports.
+
+Subscription access depends on the active subscription status associated with the user account.
+
+TalentMatch Pro may change plan features or pricing in the future. Any updated pricing applies prospectively and will be reflected on the Pricing page before a new subscription or applicable future billing cycle.
 
 ## 8. Refunds and Cancellations
 
 Refunds and cancellations are governed by our Refund Policy.
 
-Users may cancel subscriptions according to the available billing process.
+Users may cancel an active TalentMatch Pro subscription through the available PayPal subscription management process.
 
-Cancellation prevents future billing but does not automatically guarantee a refund for the current billing period.
+Cancellation prevents future recurring billing in accordance with the subscription status processed by PayPal.
+
+Cancellation does not automatically guarantee a refund for the current or any previous billing period.
+
+Any refund request is evaluated under the Refund Policy applicable at the time of the request.
 
 ## 9. Intellectual Property
 
