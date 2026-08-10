@@ -17,7 +17,7 @@ st.markdown(
     """
 # TalentMatch Pro – Privacy Policy
 
-Last Updated: June 2026
+Last Updated: August 2026
 
 ## 1. Introduction
 
@@ -37,7 +37,7 @@ We may collect the following information when you use TalentMatch Pro:
 - Uploaded CV, resume, or job description files
 - Usage information related to analyses, reports, and platform activity
 - Technical information such as browser, device, and session data
-- Payment and subscription-related information processed securely by our payment provider
+- Payment and subscription-related information processed securely by PayPal
 
 We do not intentionally collect sensitive personal data unless it is included by the user inside uploaded CVs, resumes, or job descriptions.
 
@@ -76,7 +76,7 @@ TalentMatch Pro may use trusted third-party services, including:
 - OpenAI APIs for AI-powered analysis
 - Firebase for authentication and/or storage
 - Database and infrastructure providers
-- Payment provider for billing and subscription processing
+- PayPal for billing and subscription processing
 - Analytics and monitoring services
 
 These providers may process data according to their own privacy policies and security practices.
@@ -85,7 +85,7 @@ These providers may process data according to their own privacy policies and sec
 
 TalentMatch Pro does not directly store full payment card details.
 
-Payment information is handled securely by our payment provider.
+Payment information is handled securely by PayPal.
 
 Billing-related data may be used to manage subscriptions, refunds, cancellations, invoices, and access to paid features.
 
@@ -137,13 +137,13 @@ Continued use of TalentMatch Pro after updates means you accept the revised poli
 TalentMatch Pro  
 Owner: Dejan Jovic  
 Country: Serbia  
-Business Email: support@talentmatchcv.com
+Business Email: [support@talentmatchcv.com](mailto:support@talentmatchcv.com)
 
 ## 14. Contact
 
 For privacy questions, data requests, or support:
 
-Email: support@talentmatchcv.com
+Email: [support@talentmatchcv.com](mailto:support@talentmatchcv.com)
 """
 )
 
