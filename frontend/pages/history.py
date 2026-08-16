@@ -472,7 +472,7 @@ def render_history_info_card(title: str, value: str, subtitle: str, icon: str) -
         f"""
         <div class="tm-card" style="min-height:132px">
             <div class="tm-kicker">{safe_html(icon)} {safe_html(title)}</div>
-            <div style="font-size:2rem;font-weight:900;color:#0F172A;margin:.35rem 0">
+            <div style="font-size:2rem;font-weight:900;color:var(--tm-navy);margin:.35rem 0">
                 {safe_html(value)}
             </div>
             <div class="tm-muted">{safe_html(subtitle)}</div>
@@ -968,15 +968,9 @@ def render_history_evidence_cards(
     key_prefix: str,
     visible_limit: int = 8,
 ) -> None:
-    palette = {
-        "success": ("#ECFDF5", "#A7F3D0", "#047857", "rgba(16,185,129,.12)"),
-        "danger": ("#FFF7ED", "#FED7AA", "#B45309", "rgba(245,158,11,.12)"),
-        "info": ("#EFF6FF", "#BFDBFE", "#0369A1", "rgba(37,99,235,.12)"),
-    }
-    background, border, color, shadow = palette.get(
-        kind,
-        ("#F8FAFC", "#CBD5E1", "#334155", "rgba(15,23,42,.08)"),
-    )
+    """Render report evidence cards using the active TalentMatch theme tokens."""
+    normalized_kind = kind if kind in {"success", "danger", "info"} else "neutral"
+    _ = key_prefix
 
     st.markdown(
         (
@@ -994,9 +988,8 @@ def render_history_evidence_cards(
 
     cards_html = "".join(
         (
-            '<div class="tm-history-evidence-card" '
-            f'style="background:{background};border-color:{border};'
-            f'color:{color};box-shadow:0 14px 34px {shadow};">'
+            '<div class="tm-history-evidence-card '
+            f'tm-history-evidence-card--{normalized_kind}">'
             f'{safe_html(value)}'
             '</div>'
         )
@@ -1011,9 +1004,9 @@ def render_history_evidence_cards(
         ):
             remaining_html = "".join(
                 (
-                    '<div class="tm-history-evidence-card tm-history-evidence-card--compact" '
-                    f'style="background:{background};border-color:{border};'
-                    f'color:{color};box-shadow:0 12px 28px {shadow};">'
+                    '<div class="tm-history-evidence-card '
+                    f'tm-history-evidence-card--{normalized_kind} '
+                    'tm-history-evidence-card--compact">'
                     f'{safe_html(value)}'
                     '</div>'
                 )
@@ -1023,19 +1016,26 @@ def render_history_evidence_cards(
 
 
 def render_history_css() -> None:
+    """Apply History-specific polish without overriding the active global theme."""
     st.markdown(
         """
         <style>
+        /*
+         * History intentionally consumes the global TalentMatch design tokens.
+         * Those tokens are switched by components.ui for Light, Dark and System,
+         * so this page never hardcodes a light surface over the active theme.
+         */
+
         .tm-history-toolbar,
         .st-key-history_toolbar {
-            border: 1px solid rgba(148, 163, 184, .22);
+            border: 1px solid var(--tm-border);
             border-radius: 28px;
             padding: 1.2rem 1.25rem .4rem;
             background:
-                radial-gradient(circle at 100% 0%, rgba(37,99,235,.12), transparent 34%),
-                radial-gradient(circle at 0% 100%, rgba(16,185,129,.09), transparent 34%),
-                rgba(255,255,255,.90);
-            box-shadow: 0 24px 70px rgba(15,23,42,.09);
+                radial-gradient(circle at 100% 0%, var(--tm-blue-soft), transparent 34%),
+                radial-gradient(circle at 0% 100%, var(--tm-green-soft), transparent 34%),
+                var(--tm-card-strong);
+            box-shadow: var(--tm-shadow-lg);
             backdrop-filter: blur(18px);
             margin: .85rem 0 1.4rem;
         }
@@ -1044,28 +1044,27 @@ def render_history_css() -> None:
         [class*="st-key-history_report_"] {
             position: relative;
             overflow: hidden;
-            border: 1px solid rgba(148,163,184,.22);
+            border: 1px solid var(--tm-border);
             border-radius: 32px;
             padding: 1.55rem;
             background:
-                radial-gradient(circle at 100% 0%, rgba(37,99,235,.12), transparent 30%),
-                radial-gradient(circle at 0% 100%, rgba(16,185,129,.10), transparent 34%),
-                rgba(255,255,255,.94);
-            box-shadow:
-                0 28px 78px rgba(15,23,42,.11),
-                inset 0 1px 0 rgba(255,255,255,.92);
+                radial-gradient(circle at 100% 0%, var(--tm-blue-soft), transparent 30%),
+                radial-gradient(circle at 0% 100%, var(--tm-green-soft), transparent 34%),
+                var(--tm-card-strong);
+            box-shadow: var(--tm-shadow-lg);
             backdrop-filter: blur(20px);
             margin: 1rem 0 1.4rem;
             transition: transform .22s ease, box-shadow .22s ease, border-color .22s ease;
+            color: var(--tm-navy);
         }
 
         .tm-history-report:hover,
         [class*="st-key-history_report_"]:hover {
             transform: translateY(-4px);
-            border-color: rgba(37,99,235,.28);
+            border-color: var(--tm-border-strong);
             box-shadow:
-                0 36px 92px rgba(15,23,42,.15),
-                0 0 0 1px rgba(37,99,235,.05);
+                var(--tm-shadow-lg),
+                0 0 0 1px var(--tm-blue-soft);
         }
 
         .tm-history-report::after,
@@ -1077,7 +1076,7 @@ def render_history_css() -> None:
             right: -110px;
             bottom: -130px;
             border-radius: 50%;
-            background: radial-gradient(circle, rgba(37,99,235,.10), transparent 68%);
+            background: radial-gradient(circle, var(--tm-blue-soft), transparent 68%);
             pointer-events: none;
         }
 
@@ -1092,7 +1091,7 @@ def render_history_css() -> None:
         }
 
         .tm-history-title {
-            color: #0f172a;
+            color: var(--tm-navy);
             font-size: 1.24rem;
             line-height: 1.35;
             font-weight: 950;
@@ -1102,7 +1101,7 @@ def render_history_css() -> None:
         }
 
         .tm-history-meta {
-            color: #64748b;
+            color: var(--tm-muted);
             font-size: .84rem;
             font-weight: 750;
             margin-top: .35rem;
@@ -1113,17 +1112,15 @@ def render_history_css() -> None:
             text-align: center;
             border-radius: 26px;
             padding: 1rem .95rem;
-            border: 1px solid rgba(148,163,184,.22);
+            border: 1px solid var(--tm-border);
             background:
-                radial-gradient(circle at 50% 0%, rgba(37,99,235,.14), transparent 62%),
-                rgba(248,250,252,.94);
-            box-shadow:
-                0 18px 44px rgba(15,23,42,.10),
-                inset 0 1px 0 rgba(255,255,255,.95);
+                radial-gradient(circle at 50% 0%, var(--tm-blue-soft), transparent 62%),
+                var(--tm-card);
+            box-shadow: var(--tm-shadow);
         }
 
         .tm-history-score-kicker {
-            color: #2563eb;
+            color: var(--tm-blue);
             font-size: .68rem;
             font-weight: 950;
             text-transform: uppercase;
@@ -1139,7 +1136,7 @@ def render_history_css() -> None:
         }
 
         .tm-history-score-status {
-            color: #475569;
+            color: var(--tm-slate);
             font-size: .8rem;
             line-height: 1.2;
             font-weight: 850;
@@ -1147,7 +1144,7 @@ def render_history_css() -> None:
         }
 
         .tm-history-score-label {
-            color: #94a3b8;
+            color: var(--tm-muted);
             font-size: .64rem;
             font-weight: 900;
             text-transform: uppercase;
@@ -1156,14 +1153,15 @@ def render_history_css() -> None:
         }
 
         .tm-history-summary {
-            border: 1px solid rgba(191,219,254,.95);
-            border-left: 5px solid #2563eb;
+            border: 1px solid var(--tm-border-strong);
+            border-left: 5px solid var(--tm-blue);
             border-radius: 24px;
             padding: 1.2rem 1.35rem;
             background:
-                linear-gradient(135deg, rgba(239,246,255,.98), rgba(248,250,252,.92));
-            box-shadow: 0 18px 48px rgba(37,99,235,.09);
-            color: #475569;
+                linear-gradient(135deg, var(--tm-blue-soft), transparent 70%),
+                var(--tm-card);
+            box-shadow: var(--tm-shadow);
+            color: var(--tm-slate);
             line-height: 1.72;
             margin: .9rem 0 1.25rem;
             position: relative;
@@ -1171,7 +1169,7 @@ def render_history_css() -> None:
         }
 
         .tm-history-summary-label {
-            color: #2563eb;
+            color: var(--tm-blue);
             font-size: .73rem;
             font-weight: 950;
             letter-spacing: .12em;
@@ -1189,7 +1187,7 @@ def render_history_css() -> None:
             font-weight: 950;
             letter-spacing: .055em;
             text-transform: uppercase;
-            border: 1px solid rgba(148,163,184,.20);
+            border: 1px solid var(--tm-border);
             box-shadow: 0 8px 22px rgba(15,23,42,.06);
         }
 
@@ -1197,7 +1195,7 @@ def render_history_css() -> None:
             display: flex;
             align-items: center;
             gap: .55rem;
-            color: #0f172a;
+            color: var(--tm-navy);
             font-size: 1.06rem;
             font-weight: 950;
             letter-spacing: -.02em;
@@ -1205,22 +1203,50 @@ def render_history_css() -> None:
         }
 
         .tm-history-evidence-card {
-            border: 1px solid;
+            border: 1px solid var(--tm-border);
             border-radius: 22px;
             padding: 1rem 1.05rem;
             min-height: 64px;
             display: flex;
             align-items: center;
+            color: var(--tm-navy);
             font-size: .94rem;
             line-height: 1.45;
-            font-weight: 650;
+            font-weight: 700;
             margin-bottom: .75rem;
+            box-shadow: var(--tm-shadow);
             transition: transform .2s ease, box-shadow .2s ease, border-color .2s ease;
+        }
+
+        .tm-history-evidence-card--success {
+            background:
+                linear-gradient(135deg, var(--tm-green-soft), transparent 82%),
+                var(--tm-card);
+            border-color: rgba(16,185,129,.30);
+        }
+
+        .tm-history-evidence-card--danger {
+            background:
+                linear-gradient(135deg, var(--tm-amber-soft), transparent 82%),
+                var(--tm-card);
+            border-color: rgba(245,158,11,.32);
+        }
+
+        .tm-history-evidence-card--info {
+            background:
+                linear-gradient(135deg, var(--tm-blue-soft), transparent 82%),
+                var(--tm-card);
+            border-color: rgba(37,99,235,.30);
+        }
+
+        .tm-history-evidence-card--neutral {
+            background: var(--tm-card);
         }
 
         .tm-history-evidence-card:hover {
             transform: translateY(-3px);
-            filter: saturate(1.04);
+            border-color: var(--tm-border-strong);
+            box-shadow: var(--tm-shadow-lg);
         }
 
         .tm-history-evidence-card--compact {
@@ -1229,36 +1255,39 @@ def render_history_css() -> None:
         }
 
         .tm-history-distribution {
-            border: 1px solid rgba(148,163,184,.20);
+            border: 1px solid var(--tm-border);
             border-radius: 28px;
             padding: 1.2rem 1.25rem;
             background:
-                radial-gradient(circle at 100% 0%, rgba(37,99,235,.09), transparent 38%),
-                rgba(255,255,255,.92);
-            box-shadow: 0 22px 62px rgba(15,23,42,.09);
+                radial-gradient(circle at 100% 0%, var(--tm-blue-soft), transparent 38%),
+                var(--tm-card-strong);
+            box-shadow: var(--tm-shadow);
             min-height: 100%;
             transition: transform .2s ease, box-shadow .2s ease;
+            color: var(--tm-navy);
         }
 
         .tm-history-distribution:hover {
             transform: translateY(-3px);
-            box-shadow: 0 30px 76px rgba(15,23,42,.12);
+            box-shadow: var(--tm-shadow-lg);
         }
 
         .tm-history-distribution-title {
-            color: #0f172a;
+            color: var(--tm-navy);
             font-size: 1.02rem;
             font-weight: 950;
             margin-bottom: .9rem;
         }
 
-        .tm-history-bar-row { margin: .82rem 0; }
+        .tm-history-bar-row {
+            margin: .82rem 0;
+        }
 
         .tm-history-bar-label {
             display: flex;
             justify-content: space-between;
             gap: 1rem;
-            color: #475569;
+            color: var(--tm-slate);
             font-size: .8rem;
             font-weight: 850;
             margin-bottom: .38rem;
@@ -1267,9 +1296,11 @@ def render_history_css() -> None:
         .tm-history-bar-track {
             height: 12px;
             border-radius: 999px;
-            background: #e2e8f0;
+            background: var(--tm-control-bg);
+            border: 1px solid var(--tm-border);
             overflow: hidden;
-            box-shadow: inset 0 1px 3px rgba(15,23,42,.08);
+            box-shadow: inset 0 1px 3px rgba(15,23,42,.14);
+            opacity: 1;
         }
 
         .tm-history-bar-fill {
@@ -1288,15 +1319,18 @@ def render_history_css() -> None:
 
         .tm-history-danger,
         .st-key-history_retention {
-            border: 1px solid rgba(239,68,68,.24);
+            border: 1px solid rgba(239,68,68,.28);
             border-radius: 28px;
             padding: 1.1rem 1.2rem;
-            background: linear-gradient(135deg, rgba(254,242,242,.88), rgba(255,255,255,.92));
-            box-shadow: 0 18px 50px rgba(239,68,68,.07);
+            background:
+                linear-gradient(135deg, var(--tm-red-soft), transparent 78%),
+                var(--tm-card-strong);
+            box-shadow: var(--tm-shadow);
             margin-top: 1rem;
+            color: var(--tm-navy);
         }
 
-        /* Final History UI polish */
+        /* Controls inherit the active global theme instead of forcing light inputs. */
         .st-key-history_toolbar {
             animation: tmHistoryFadeUp .45s ease both;
         }
@@ -1304,11 +1338,11 @@ def render_history_css() -> None:
         .st-key-history_toolbar [data-baseweb="select"] > div,
         .st-key-history_toolbar input {
             border-radius: 18px !important;
-            border-color: rgba(148,163,184,.24) !important;
-            background: rgba(248,250,252,.96) !important;
-            color: #0f172a !important;
-            -webkit-text-fill-color: #0f172a !important;
-            caret-color: #2563eb !important;
+            border-color: var(--tm-control-border) !important;
+            background: var(--tm-control-bg) !important;
+            color: var(--tm-control-text) !important;
+            -webkit-text-fill-color: var(--tm-control-text) !important;
+            caret-color: var(--tm-blue) !important;
             transition: border-color .18s ease, box-shadow .18s ease, transform .18s ease;
         }
 
@@ -1316,33 +1350,33 @@ def render_history_css() -> None:
         .st-key-history_toolbar label p,
         .st-key-history_toolbar [data-testid="stWidgetLabel"],
         .st-key-history_toolbar [data-testid="stWidgetLabel"] p {
-            color: #334155 !important;
-            -webkit-text-fill-color: #334155 !important;
+            color: var(--tm-slate) !important;
+            -webkit-text-fill-color: var(--tm-slate) !important;
             opacity: 1 !important;
         }
 
         .st-key-history_toolbar [data-baseweb="select"] span,
         .st-key-history_toolbar [data-baseweb="select"] div {
-            color: #0f172a !important;
-            -webkit-text-fill-color: #0f172a !important;
+            color: var(--tm-control-text) !important;
+            -webkit-text-fill-color: var(--tm-control-text) !important;
             opacity: 1 !important;
         }
 
         .st-key-history_toolbar [data-baseweb="select"] svg {
-            color: #334155 !important;
-            fill: #334155 !important;
+            color: var(--tm-slate) !important;
+            fill: var(--tm-slate) !important;
         }
 
         .st-key-history_toolbar input::placeholder {
-            color: #64748b !important;
-            -webkit-text-fill-color: #64748b !important;
+            color: var(--tm-muted) !important;
+            -webkit-text-fill-color: var(--tm-muted) !important;
             opacity: 1 !important;
         }
 
         .st-key-history_toolbar [data-baseweb="select"] > div:focus-within,
         .st-key-history_toolbar input:focus {
-            border-color: rgba(37,99,235,.48) !important;
-            box-shadow: 0 0 0 4px rgba(37,99,235,.10) !important;
+            border-color: var(--tm-border-strong) !important;
+            box-shadow: var(--tm-focus) !important;
         }
 
         .st-key-history_toolbar button {
@@ -1354,7 +1388,7 @@ def render_history_css() -> None:
 
         .st-key-history_toolbar button:hover {
             transform: translateY(-2px);
-            box-shadow: 0 14px 30px rgba(37,99,235,.13);
+            box-shadow: var(--tm-shadow);
         }
 
         [class*="st-key-history_report_"] {
@@ -1362,35 +1396,41 @@ def render_history_css() -> None:
             isolation: isolate;
         }
 
-        [class*="st-key-history_report_"] [data-testid="stExpander"] {
-            border: 1px solid rgba(148,163,184,.20);
+        [class*="st-key-history_report_"] [data-testid="stExpander"],
+        .st-key-history_retention [data-testid="stExpander"] {
+            border: 1px solid var(--tm-border);
             border-radius: 22px;
             overflow: hidden;
-            background: rgba(248,250,252,.72);
-            box-shadow: 0 12px 34px rgba(15,23,42,.06);
-        }
-
-        [class*="st-key-history_report_"] [data-testid="stExpander"] summary {
-            font-weight: 800;
+            background: var(--tm-card);
+            box-shadow: var(--tm-shadow);
+            color: var(--tm-navy);
         }
 
         [class*="st-key-history_report_"] [data-testid="stExpander"] summary,
         .st-key-history_retention [data-testid="stExpander"] summary {
-            background: rgba(248,250,252,.97) !important;
-            color: #0f172a !important;
+            background: var(--tm-control-bg) !important;
+            color: var(--tm-control-text) !important;
+            font-weight: 800;
+            border-bottom-color: var(--tm-border) !important;
         }
 
         [class*="st-key-history_report_"] [data-testid="stExpander"] summary *,
         .st-key-history_retention [data-testid="stExpander"] summary * {
-            color: #0f172a !important;
-            -webkit-text-fill-color: #0f172a !important;
+            color: var(--tm-control-text) !important;
+            -webkit-text-fill-color: var(--tm-control-text) !important;
             opacity: 1 !important;
         }
 
         [class*="st-key-history_report_"] [data-testid="stExpander"] summary svg,
         .st-key-history_retention [data-testid="stExpander"] summary svg {
-            color: #334155 !important;
+            color: var(--tm-slate) !important;
             fill: currentColor !important;
+        }
+
+        [class*="st-key-history_report_"] [data-testid="stExpanderDetails"],
+        .st-key-history_retention [data-testid="stExpanderDetails"] {
+            background: var(--tm-card) !important;
+            color: var(--tm-navy) !important;
         }
 
         [class*="st-key-history_report_"] button,
@@ -1404,20 +1444,65 @@ def render_history_css() -> None:
         [class*="st-key-history_report_"] button:hover,
         [class*="st-key-history_report_"] [data-testid="stDownloadButton"] button:hover {
             transform: translateY(-2px);
-            box-shadow: 0 14px 32px rgba(15,23,42,.10);
-        }
-
-        .st-key-history_retention [data-testid="stExpander"] {
-            border-radius: 22px;
-            overflow: hidden;
-            border: 1px solid rgba(239,68,68,.20);
-            background: rgba(255,255,255,.70);
+            box-shadow: var(--tm-shadow);
         }
 
         .st-key-history_retention button {
             border-radius: 18px !important;
             min-height: 48px;
             font-weight: 850 !important;
+        }
+
+        .st-key-history_retention input,
+        .st-key-history_retention [data-baseweb="input"] {
+            background: var(--tm-control-bg) !important;
+            border-color: var(--tm-control-border) !important;
+            color: var(--tm-control-text) !important;
+            -webkit-text-fill-color: var(--tm-control-text) !important;
+            caret-color: var(--tm-blue) !important;
+            border-radius: 16px !important;
+        }
+
+        .st-key-history_retention label,
+        .st-key-history_retention label p,
+        .st-key-history_retention [data-testid="stWidgetLabel"],
+        .st-key-history_retention [data-testid="stWidgetLabel"] p {
+            color: var(--tm-slate) !important;
+            -webkit-text-fill-color: var(--tm-slate) !important;
+        }
+
+        .st-key-history_retention div[data-testid="stAlert"] {
+            border: 1px solid rgba(245,158,11,.24) !important;
+            background:
+                linear-gradient(135deg, var(--tm-amber-soft), transparent 80%),
+                var(--tm-card) !important;
+            color: var(--tm-navy) !important;
+        }
+
+        .st-key-history_retention div[data-testid="stAlert"] * {
+            color: var(--tm-navy) !important;
+            -webkit-text-fill-color: var(--tm-navy) !important;
+        }
+
+        /* Streamlit number input uses a separate outer shell for +/- controls. */
+        .st-key-history_current_page [data-baseweb="input"],
+        .st-key-history_current_page [data-baseweb="base-input"],
+        .st-key-history_current_page input {
+            background: var(--tm-control-bg) !important;
+            border-color: var(--tm-control-border) !important;
+            color: var(--tm-control-text) !important;
+            -webkit-text-fill-color: var(--tm-control-text) !important;
+        }
+
+        .st-key-history_current_page button {
+            background: var(--tm-control-bg) !important;
+            border-color: var(--tm-control-border) !important;
+            color: var(--tm-control-text) !important;
+        }
+
+        .st-key-history_current_page button * {
+            color: var(--tm-control-text) !important;
+            -webkit-text-fill-color: var(--tm-control-text) !important;
         }
 
         div[data-testid="stDownloadButton"] > button {
@@ -1429,7 +1514,7 @@ def render_history_css() -> None:
 
         div[data-testid="stDownloadButton"] > button:hover {
             transform: translateY(-2px);
-            box-shadow: 0 14px 32px rgba(15,23,42,.10);
+            box-shadow: var(--tm-shadow);
         }
 
         div[data-testid="stAlert"] {
@@ -1438,6 +1523,117 @@ def render_history_css() -> None:
 
         div[data-testid="stSlider"] {
             padding: .25rem .1rem .35rem;
+        }
+
+        /*
+         * Streamlit 1.61+ renders visible input shells on wrapper nodes in addition
+         * to the native input/select element. Normalize those shells explicitly so
+         * Dark never exposes the library's light fallback surfaces while Light and
+         * System continue to follow the shared TalentMatch theme tokens.
+         */
+        .st-key-history_toolbar [data-testid="stSelectbox"] [data-baseweb="select"] {
+            background: var(--tm-control-bg) !important;
+            border: 1px solid var(--tm-border) !important;
+            border-radius: 18px !important;
+            box-shadow: none !important;
+            overflow: hidden !important;
+        }
+
+        /*
+         * Streamlit 1.61 renders selectboxes through a React Aria ComboBox shell.
+         * The direct group child owns the visible background/border around the
+         * indicator area, so BaseWeb-only selectors cannot remove its light fallback.
+         * This structural selector was verified live in Chrome DevTools on both
+         * Report type and Sort and intentionally avoids unstable emotion class names.
+         */
+        .st-key-history_type_filter .react-aria-ComboBox > [data-rac][role="group"],
+        .st-key-history_sort_option .react-aria-ComboBox > [data-rac][role="group"] {
+            background-color: var(--tm-control-bg) !important;
+            border-color: var(--tm-control-border) !important;
+        }
+
+        /*
+         * Streamlit/BaseWeb selectboxes split the visible control into a value area
+         * and a separate indicator container. In Dark mode the indicator container
+         * can otherwise retain BaseWeb's light fallback background. Force every
+         * visible select shell layer - especially the SVG indicator parent - to the
+         * shared TalentMatch control surface while keeping labels/theme tokens intact.
+         */
+        .st-key-history_type_filter [data-baseweb="select"] > div,
+        .st-key-history_sort_option [data-baseweb="select"] > div,
+        .st-key-history_toolbar [data-testid="stSelectbox"] [data-baseweb="select"] > div,
+        .st-key-history_type_filter [data-baseweb="select"] > div > div,
+        .st-key-history_sort_option [data-baseweb="select"] > div > div,
+        .st-key-history_toolbar [data-testid="stSelectbox"] [data-baseweb="select"] > div > div,
+        .st-key-history_type_filter [data-baseweb="select"] div:has(svg),
+        .st-key-history_sort_option [data-baseweb="select"] div:has(svg),
+        .st-key-history_toolbar [data-testid="stSelectbox"] [data-baseweb="select"] div:has(svg) {
+            background: var(--tm-control-bg) !important;
+            background-color: var(--tm-control-bg) !important;
+            border-color: transparent !important;
+            box-shadow: none !important;
+        }
+
+        .st-key-history_type_filter [data-baseweb="select"] div:has(svg)::before,
+        .st-key-history_type_filter [data-baseweb="select"] div:has(svg)::after,
+        .st-key-history_sort_option [data-baseweb="select"] div:has(svg)::before,
+        .st-key-history_sort_option [data-baseweb="select"] div:has(svg)::after,
+        .st-key-history_toolbar [data-testid="stSelectbox"] [data-baseweb="select"] div:has(svg)::before,
+        .st-key-history_toolbar [data-testid="stSelectbox"] [data-baseweb="select"] div:has(svg)::after {
+            background: transparent !important;
+            background-color: transparent !important;
+            box-shadow: none !important;
+        }
+
+        .st-key-history_toolbar [data-testid="stTextInput"] [data-baseweb="input"],
+        .st-key-history_toolbar [data-testid="stTextInput"] [data-baseweb="base-input"],
+        .st-key-history_toolbar [data-testid="stTextInput"] div:has(> input) {
+            background: var(--tm-control-bg) !important;
+            border-color: var(--tm-border) !important;
+            box-shadow: none !important;
+            border-radius: 18px !important;
+        }
+
+        .st-key-history_toolbar [data-testid="stTextInput"] input {
+            background: transparent !important;
+            border-color: transparent !important;
+            box-shadow: none !important;
+        }
+
+        .st-key-history_current_page [data-testid="stNumberInput"] [data-baseweb="input"],
+        .st-key-history_current_page [data-testid="stNumberInput"] [data-baseweb="base-input"],
+        .st-key-history_current_page [data-testid="stNumberInput"] div:has(> input),
+        .st-key-history_current_page [data-testid="stNumberInput"] div:has(> button) {
+            background: var(--tm-control-bg) !important;
+            border-color: var(--tm-border) !important;
+            box-shadow: none !important;
+        }
+
+        .st-key-history_current_page [data-testid="stNumberInput"] input {
+            background: transparent !important;
+            border-color: transparent !important;
+            box-shadow: none !important;
+        }
+
+        .st-key-history_current_page [data-testid="stNumberInput"] button {
+            background: var(--tm-control-bg) !important;
+            border-color: var(--tm-border) !important;
+            box-shadow: none !important;
+        }
+
+        .st-key-history_retention [data-testid="stTextInput"] [data-baseweb="input"],
+        .st-key-history_retention [data-testid="stTextInput"] [data-baseweb="base-input"],
+        .st-key-history_retention [data-testid="stTextInput"] div:has(> input) {
+            background: var(--tm-control-bg) !important;
+            border-color: var(--tm-border) !important;
+            box-shadow: none !important;
+            border-radius: 16px !important;
+        }
+
+        .st-key-history_retention [data-testid="stTextInput"] input {
+            background: transparent !important;
+            border-color: transparent !important;
+            box-shadow: none !important;
         }
 
         @keyframes tmHistoryFadeUp {
