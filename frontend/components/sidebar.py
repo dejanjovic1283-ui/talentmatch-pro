@@ -5,7 +5,13 @@ from typing import Final
 
 import streamlit as st
 
-from auth_utils import clear_auth, is_logged_in, is_pro_user, refresh_profile
+from auth_utils import (
+    clear_auth,
+    is_admin_user,
+    is_logged_in,
+    is_pro_user,
+    refresh_profile,
+)
 from components.language_selector import render_language_selector
 from components.ui import apply_theme_overrides, get_display_name, get_initials, safe_html
 from i18n import get_locale, t
@@ -154,6 +160,13 @@ def _nav() -> None:
     st.page_link("pages/history.py", label=f"📜 {t('navigation.history')}")
     st.page_link("pages/pricing.py", label=f"💳 {t('navigation.pricing')}")
     st.page_link("pages/account.py", label=f"⚙ {t('navigation.account')}")
+
+    if is_admin_user():
+        _section(t("navigation.administration", default="Administration"))
+        st.page_link(
+            "pages/admin_analytics.py",
+            label=f"📊 {t('navigation.admin_analytics', default='Admin Analytics')}",
+        )
 
     _section(c("company"))
     st.page_link("pages/about.py", label=f"ℹ {t('navigation.about')}")

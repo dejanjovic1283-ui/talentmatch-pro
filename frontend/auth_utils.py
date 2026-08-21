@@ -125,6 +125,9 @@ def _sync_profile_to_session(profile: Mapping[str, Any]) -> None:
     full_name = _clean_display_name(
         profile.get("full_name") or profile.get("display_name") or profile.get("name")
     )
+    is_admin = profile.get("is_admin") is True
+
+    st.session_state["is_admin"] = is_admin
 
     if email:
         st.session_state["email"] = email
@@ -146,6 +149,7 @@ def _sync_profile_to_session(profile: Mapping[str, Any]) -> None:
         user_state["display_name"] = full_name
         user_state["name"] = full_name
 
+    user_state["is_admin"] = is_admin
     st.session_state["user"] = user_state
 
 
@@ -170,8 +174,12 @@ def save_auth(token: str, email: str = "", full_name: str = "") -> None:
         st.session_state["name"] = clean_name
 
     st.session_state["authenticated"] = True
+    st.session_state["is_admin"] = False
 
-    user_state: dict[str, str] = {"email": clean_email}
+    user_state: dict[str, Any] = {
+        "email": clean_email,
+        "is_admin": False,
+    }
     if clean_name:
         user_state.update(
             {
@@ -192,6 +200,7 @@ def clear_auth() -> None:
         "email",
         "user_email",
         "authenticated",
+        "is_admin",
         "profile",
         "user",
         "full_name",
@@ -449,6 +458,22 @@ def is_pro_user() -> bool:
         or subscription_status in {"active", "approved"}
         or paypal_status in {"active", "approved"}
     )
+
+
+def is_admin_user() -> bool:
+    """
+    Check administrator access from the last backend-validated profile.
+
+    The frontend never derives administrator access from an email address or
+    local session flag. The backend /me response is the authority and exposes
+    only the boolean authorization decision.
+    """
+    profile = get_profile()
+
+    if not profile:
+        return False
+
+    return profile.get("is_admin") is True
 
 
 # =========================

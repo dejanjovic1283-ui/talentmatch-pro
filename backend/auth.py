@@ -45,6 +45,8 @@ LOCAL_TEST_NAME: Final[str] = "Local Test User"
 
 MAX_EMAIL_LENGTH: Final[int] = 255
 MAX_DISPLAY_NAME_LENGTH: Final[int] = 255
+ADMIN_EMAILS_ENV_VAR: Final[str] = "ADMIN_EMAILS"
+PRODUCTION_ENVIRONMENTS: Final[frozenset[str]] = frozenset({"production", "prod"})
 
 _EMAIL_PATTERN: Final[re.Pattern[str]] = re.compile(
     r"^[^@\s]+@[^@\s]+\.[^@\s]+$"
@@ -114,6 +116,11 @@ AUTH_ERRORS: Final[dict[str, AuthenticationErrorDefinition]] = {
         status_code=500,
         message="Local test user could not be created.",
         error_type="local_test_user_create_failed",
+    ),
+    "admin_access_denied": AuthenticationErrorDefinition(
+        status_code=403,
+        message="Administrator access required.",
+        error_type="admin_access_denied",
     ),
 }
 
@@ -198,6 +205,50 @@ def _clean_email(value: Any) -> str:
         return ""
 
     return email
+
+
+def _is_production_environment() -> bool:
+    environment = os.getenv(
+        "ENVIRONMENT",
+        os.getenv("APP_ENV", "development"),
+    ).strip().lower()
+    return environment in PRODUCTION_ENVIRONMENTS
+
+
+def get_admin_email_allowlist() -> frozenset[str]:
+    """
+    Return the normalized server-side administrator email allowlist.
+
+    ADMIN_EMAILS is intentionally read at request time instead of import time so
+    configuration changes are reflected after a normal process restart and test
+    environments can override the variable without mutating module globals.
+    Invalid entries are ignored here; startup configuration validation is
+    responsible for rejecting malformed production configuration.
+    """
+    raw_value = os.getenv(ADMIN_EMAILS_ENV_VAR, "")
+
+    if not raw_value.strip():
+        return frozenset()
+
+    normalized_emails = {
+        email
+        for item in raw_value.split(",")
+        if (email := _clean_email(item))
+    }
+    return frozenset(normalized_emails)
+
+
+def is_admin_user(user: User | None) -> bool:
+    """Return True only when the authenticated user's email is server-authorized."""
+    if user is None:
+        return False
+
+    email = _clean_email(getattr(user, "email", ""))
+
+    if not email:
+        return False
+
+    return email in get_admin_email_allowlist()
 
 
 def _clean_display_name(value: Any) -> str:
@@ -727,9 +778,34 @@ def get_current_user(
     )
 
 
+def get_current_admin(
+    current_user: User = Depends(get_current_user),
+) -> User:
+    """
+    Require an authenticated user whose normalized email is in ADMIN_EMAILS.
+
+    This dependency is the backend security boundary for administrator-only
+    endpoints. Frontend session state is never trusted for authorization.
+    """
+    if is_admin_user(current_user):
+        return current_user
+
+    LOGGER.warning(
+        "Administrator access denied.",
+        extra={
+            "event": "admin_access_denied",
+            "user_id": getattr(current_user, "id", None),
+        },
+    )
+    raise _http_error("admin_access_denied")
+
+
 def get_test_user(
     db: Session = Depends(get_db),
 ) -> User:
+    if _is_production_environment():
+        raise HTTPException(status_code=404, detail="Not found.")
+
     user = (
         db.query(User)
         .filter(User.email == LOCAL_TEST_EMAIL)

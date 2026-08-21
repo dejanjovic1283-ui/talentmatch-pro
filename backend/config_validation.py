@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 import logging
 import os
+import re
 from dataclasses import asdict, dataclass, field
 from urllib.parse import urlparse
 
@@ -24,6 +25,10 @@ PLACEHOLDER_VALUES = {
 
 TRUE_VALUES = {"1", "true", "yes", "on"}
 FALSE_VALUES = {"0", "false", "no", "off"}
+
+ADMIN_EMAILS_ENV_VAR = "ADMIN_EMAILS"
+MAX_ADMIN_EMAIL_LENGTH = 255
+ADMIN_EMAIL_PATTERN = re.compile(r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
 
 SUPPORTED_ENVIRONMENTS = {
     "development",
@@ -328,6 +333,72 @@ def _validate_database_configuration(
     report.database_values = parsed_values
 
 
+
+def _validate_admin_configuration(
+    report: ConfigurationValidationReport,
+    *,
+    production: bool,
+) -> None:
+    """
+    Validate the server-side administrator email allowlist.
+
+    The configured addresses are intentionally never copied into the validation
+    report or logs. Only the environment variable name and a bounded diagnostic
+    message are exposed when configuration is invalid.
+    """
+    raw_value = _value(ADMIN_EMAILS_ENV_VAR)
+
+    if not raw_value:
+        if production:
+            _add_error(
+                report,
+                ADMIN_EMAILS_ENV_VAR,
+                "Production ADMIN_EMAILS must contain at least one administrator email.",
+            )
+        return
+
+    if _is_placeholder(raw_value):
+        _add_error(
+            report,
+            ADMIN_EMAILS_ENV_VAR,
+            "ADMIN_EMAILS contains a placeholder value.",
+        )
+        return
+
+    raw_entries = raw_value.split(",")
+    entries = [entry.strip() for entry in raw_entries]
+
+    if any(not entry for entry in entries):
+        _add_error(
+            report,
+            ADMIN_EMAILS_ENV_VAR,
+            "ADMIN_EMAILS must be a comma-separated list without empty entries.",
+        )
+        return
+
+    normalized_entries = [entry.lower() for entry in entries]
+    invalid_entry_present = any(
+        len(entry) > MAX_ADMIN_EMAIL_LENGTH
+        or ADMIN_EMAIL_PATTERN.fullmatch(entry) is None
+        for entry in normalized_entries
+    )
+
+    if invalid_entry_present:
+        _add_error(
+            report,
+            ADMIN_EMAILS_ENV_VAR,
+            "ADMIN_EMAILS must contain only valid email addresses.",
+        )
+        return
+
+    if len(set(normalized_entries)) != len(normalized_entries):
+        _add_warning(
+            report,
+            ADMIN_EMAILS_ENV_VAR,
+            "ADMIN_EMAILS contains duplicate addresses; duplicates are ignored at runtime.",
+        )
+
+
 def _validate_firebase_credentials(
     report: ConfigurationValidationReport,
 ) -> None:
@@ -580,6 +651,11 @@ def validate_configuration() -> ConfigurationValidationReport:
             "ENABLE_RATE_LIMITING",
             default=True,
         )
+
+    _validate_admin_configuration(
+        report,
+        production=production,
+    )
 
     _validate_hosts_and_cors(
         report,

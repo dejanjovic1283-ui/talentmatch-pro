@@ -120,9 +120,11 @@ def get_request_id(request: Request) -> str:
 
 
 from auth import (
+    get_current_admin,
     get_current_user,
     get_firebase_resilience_status,
     get_test_user,
+    is_admin_user,
 )
 from billing.factory import get_billing_provider
 from billing.paypal_provider import get_paypal_resilience_status
@@ -159,6 +161,7 @@ from pdf_report import build_analysis_pdf_report
 from pdf_utils import extract_text_from_pdf
 from recruiter_service import analyze_candidate, build_ranking_result, rank_candidates
 from schemas import (
+    AdminAnalyticsResponse,
     AnalysisResponse,
     HistoryItemResponse,
     RecruiterJobCreateResponse,
@@ -1930,6 +1933,191 @@ def parse_stored_history_list(value: object) -> list[str]:
     return normalize_history_list(value)
 
 
+ADMIN_ANALYTICS_PRO_PRICE_USD = 19.0
+ADMIN_ANALYTICS_TOP_MISSING_SKILLS_LIMIT = 10
+ADMIN_ANALYTICS_CANONICAL_TYPES = (
+    "cv_analysis",
+    "ats_checker",
+    "semantic_match",
+    "recruiter_mode",
+    "cv_rewrite",
+)
+ADMIN_ANALYTICS_SCORED_TYPES = frozenset(
+    {
+        "cv_analysis",
+        "ats_checker",
+        "semantic_match",
+        "recruiter_mode",
+    }
+)
+ADMIN_ANALYTICS_PAYPAL_ACTIVE_STATUSES = frozenset({"active", "approved"})
+
+
+def normalize_admin_analysis_type(value: object) -> str:
+    """Normalize persisted analysis types into the administrator dashboard contract."""
+    normalized = str(value or "cv_analysis").strip().lower() or "cv_analysis"
+
+    if normalized == "ats":
+        return "ats_checker"
+
+    if normalized in ADMIN_ANALYTICS_CANONICAL_TYPES:
+        return normalized
+
+    return "other"
+
+
+def normalize_admin_skill_name(value: object) -> str:
+    """Normalize one persisted missing-skill label without inventing new data."""
+    normalized = re.sub(r"\s+", " ", str(value or "")).strip()
+    return normalized[:255]
+
+
+def build_admin_analytics_snapshot(db: Session) -> dict:
+    """
+    Build one database-backed administrator analytics snapshot.
+
+    CV Rewrite records remain part of total activity and the analysis mix, but
+    their synthetic score of 100 is intentionally excluded from score-quality
+    metrics. Estimated MRR uses only operational Pro users with a non-empty
+    PayPal subscription identifier and an active/approved PayPal status.
+    """
+    total_users = int(db.query(User.id).count())
+
+    pro_subscription_rows = (
+        db.query(
+            User.paypal_subscription_id,
+            User.paypal_subscription_status,
+        )
+        .filter(User.is_pro.is_(True))
+        .all()
+    )
+
+    active_pro_users = len(pro_subscription_rows)
+    free_users = max(0, total_users - active_pro_users)
+
+    paid_subscribers = sum(
+        1
+        for subscription_id, subscription_status in pro_subscription_rows
+        if str(subscription_id or "").strip()
+        and str(subscription_status or "").strip().lower()
+        in ADMIN_ANALYTICS_PAYPAL_ACTIVE_STATUSES
+    )
+
+    pro_conversion_rate = (
+        round((paid_subscribers / total_users) * 100.0, 2)
+        if total_users
+        else 0.0
+    )
+
+    analysis_mix = {
+        "cv_analysis": 0,
+        "ats_checker": 0,
+        "semantic_match": 0,
+        "recruiter_mode": 0,
+        "cv_rewrite": 0,
+        "other": 0,
+    }
+
+    total_analyses = 0
+    scored_analyses = 0
+    score_total = 0
+    strong_matches = 0
+    competitive_matches = 0
+    needs_work_matches = 0
+
+    missing_skill_counts: dict[str, int] = {}
+    missing_skill_labels: dict[str, str] = {}
+
+    analysis_rows = (
+        db.query(
+            AnalysisRecord.analysis_type,
+            AnalysisRecord.score,
+            AnalysisRecord.missing_skills,
+        )
+        .yield_per(1000)
+    )
+
+    for raw_analysis_type, raw_score, raw_missing_skills in analysis_rows:
+        total_analyses += 1
+
+        analysis_type = normalize_admin_analysis_type(raw_analysis_type)
+        analysis_mix[analysis_type] += 1
+
+        if analysis_type in ADMIN_ANALYTICS_SCORED_TYPES:
+            score = normalize_history_score(raw_score)
+            scored_analyses += 1
+            score_total += score
+
+            if score >= 75:
+                strong_matches += 1
+            elif score >= 50:
+                competitive_matches += 1
+            else:
+                needs_work_matches += 1
+
+        seen_missing_skills: set[str] = set()
+        for raw_skill in parse_stored_history_list(raw_missing_skills):
+            skill_name = normalize_admin_skill_name(raw_skill)
+            if not skill_name:
+                continue
+
+            skill_key = skill_name.casefold()
+            if skill_key in seen_missing_skills:
+                continue
+
+            seen_missing_skills.add(skill_key)
+            missing_skill_counts[skill_key] = missing_skill_counts.get(skill_key, 0) + 1
+            missing_skill_labels.setdefault(skill_key, skill_name)
+
+    average_score = (
+        round(score_total / scored_analyses, 2)
+        if scored_analyses
+        else 0.0
+    )
+
+    top_missing_skills = [
+        {
+            "name": missing_skill_labels[skill_key],
+            "count": count,
+        }
+        for skill_key, count in sorted(
+            missing_skill_counts.items(),
+            key=lambda item: (
+                -item[1],
+                missing_skill_labels[item[0]].casefold(),
+            ),
+        )[:ADMIN_ANALYTICS_TOP_MISSING_SKILLS_LIMIT]
+    ]
+
+    return {
+        "generated_at": datetime.now(timezone.utc),
+        "users": {
+            "total_users": total_users,
+            "free_users": free_users,
+            "active_pro_users": active_pro_users,
+            "paid_subscribers": paid_subscribers,
+            "pro_conversion_rate": pro_conversion_rate,
+        },
+        "analyses": {
+            "total_analyses": total_analyses,
+            "scored_analyses": scored_analyses,
+            "average_score": average_score,
+            "strong_matches": strong_matches,
+            "competitive_matches": competitive_matches,
+            "needs_work_matches": needs_work_matches,
+        },
+        "analysis_mix": analysis_mix,
+        "top_missing_skills": top_missing_skills,
+        "billing": {
+            "pro_price_usd": ADMIN_ANALYTICS_PRO_PRICE_USD,
+            "estimated_mrr_usd": round(
+                paid_subscribers * ADMIN_ANALYTICS_PRO_PRICE_USD,
+                2,
+            ),
+        },
+    }
+
+
 def create_analysis_history_record(
     db: Session,
     current_user: User,
@@ -2173,11 +2361,48 @@ def get_profile(
         "full_name": user.full_name,
         "plan": user.plan,
         "is_pro": bool(user.is_pro),
+        "is_admin": is_admin_user(user),
         "paypal_customer_id": getattr(user, "paypal_customer_id", None),
         "paypal_subscription_id": getattr(user, "paypal_subscription_id", None),
         "paypal_subscription_status": getattr(user, "paypal_subscription_status", None),
         **usage,
     }
+
+
+@app.get("/admin/analytics", response_model=AdminAnalyticsResponse)
+def get_admin_analytics(
+    db: Session = Depends(get_db),
+    current_admin: User = Depends(get_current_admin),
+):
+    """Return live administrator-only SaaS analytics from persisted application data."""
+    try:
+        snapshot = build_admin_analytics_snapshot(db)
+    except SQLAlchemyError as exc:
+        db.rollback()
+        logger.exception(
+            "Administrator analytics query failed.",
+            extra={
+                "event": "admin_analytics_query_failed",
+                "user_id": current_admin.id,
+                "error_type": type(exc).__name__,
+            },
+        )
+        raise HTTPException(
+            status_code=503,
+            detail={
+                "message": "Administrator analytics are temporarily unavailable.",
+                "type": "admin_analytics_unavailable",
+            },
+        ) from exc
+
+    logger.info(
+        "Administrator analytics snapshot generated.",
+        extra={
+            "event": "admin_analytics_generated",
+            "user_id": current_admin.id,
+        },
+    )
+    return snapshot
 
 
 @app.post("/analyze-resume", response_model=AnalysisResponse)
@@ -2231,7 +2456,7 @@ async def analyze_resume(
     return result
 
 
-@app.post("/analyze-test", response_model=AnalysisResponse)
+@app.post("/analyze-test", response_model=AnalysisResponse, include_in_schema=False)
 async def analyze_test(
     file: UploadFile = File(...),
     job_description: str = Form(...),
@@ -3201,8 +3426,11 @@ def delete_all_history(
     }
 
 
-@app.get("/history-test")
+@app.get("/history-test", include_in_schema=False)
 def get_history_test():
+    if get_environment() in {"production", "prod"}:
+        raise HTTPException(status_code=404, detail="Not found.")
+
     return [
         {
             "id": 1,
@@ -3248,11 +3476,14 @@ def create_portal(current_user: User = Depends(get_current_user)):
     return {"portal_url": provider.create_customer_portal_url(current_user)}
 
 
-@app.post("/billing/demo-upgrade")
+@app.post("/billing/demo-upgrade", include_in_schema=False)
 def demo_upgrade_to_pro(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
+    if get_environment() in {"production", "prod"}:
+        raise HTTPException(status_code=404, detail="Not found.")
+
     current_user.plan = "pro"
     current_user.is_pro = True
     if hasattr(current_user, "paypal_subscription_status"):

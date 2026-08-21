@@ -15,6 +15,10 @@ from pydantic import (
 
 Identifier = Annotated[int, Field(gt=0)]
 Score = Annotated[int, Field(ge=0, le=100)]
+NonNegativeInt = Annotated[int, Field(ge=0)]
+PositiveCount = Annotated[int, Field(ge=1)]
+Percentage = Annotated[float, Field(ge=0.0, le=100.0)]
+MoneyUSD = Annotated[float, Field(ge=0.0)]
 ShortText = Annotated[str, Field(max_length=255)]
 NonEmptyText = Annotated[str, Field(min_length=1)]
 
@@ -47,6 +51,7 @@ class UserProfileResponse(APIResponseModel):
 
     plan: Annotated[str, Field(min_length=1, max_length=50)]
     is_pro: bool
+    is_admin: bool = False
 
     paypal_customer_id: ShortText | None = None
     paypal_subscription_id: ShortText | None = None
@@ -147,3 +152,73 @@ class RecruiterJobStatusResponse(RecruiterJobCreateResponse):
     started_at: datetime | None = None
     completed_at: datetime | None = None
     updated_at: datetime
+
+
+class AdminAnalyticsUserMetrics(APIResponseModel):
+    """User, plan, and conversion metrics for the administrator dashboard."""
+
+    total_users: NonNegativeInt
+    free_users: NonNegativeInt
+    active_pro_users: NonNegativeInt
+    paid_subscribers: NonNegativeInt
+    pro_conversion_rate: Percentage
+
+
+class AdminAnalyticsAnalysisMetrics(APIResponseModel):
+    """Product usage and score-quality metrics for persisted analyses."""
+
+    total_analyses: NonNegativeInt
+    scored_analyses: NonNegativeInt
+    average_score: Percentage
+    strong_matches: NonNegativeInt
+    competitive_matches: NonNegativeInt
+    needs_work_matches: NonNegativeInt
+
+
+class AdminAnalyticsMixMetrics(APIResponseModel):
+    """Persisted analysis counts grouped by production analysis type."""
+
+    cv_analysis: NonNegativeInt = 0
+    ats_checker: NonNegativeInt = 0
+    semantic_match: NonNegativeInt = 0
+    recruiter_mode: NonNegativeInt = 0
+    cv_rewrite: NonNegativeInt = 0
+    other: NonNegativeInt = 0
+
+
+class AdminAnalyticsMissingSkill(APIResponseModel):
+    """One normalized missing-skill frequency entry."""
+
+    name: Annotated[str, Field(min_length=1, max_length=255)]
+    count: PositiveCount
+
+
+class AdminAnalyticsBillingMetrics(APIResponseModel):
+    """
+    Current PayPal-derived subscription estimate.
+
+    This is intentionally named estimated MRR rather than recognized revenue
+    because TalentMatch Pro does not persist a payment-ledger history.
+    """
+
+    pro_price_usd: MoneyUSD
+    estimated_mrr_usd: MoneyUSD
+
+
+class AdminAnalyticsResponse(APIResponseModel):
+    """Canonical response payload for the administrator analytics endpoint."""
+
+    generated_at: datetime
+    users: AdminAnalyticsUserMetrics
+    analyses: AdminAnalyticsAnalysisMetrics
+    analysis_mix: AdminAnalyticsMixMetrics
+    top_missing_skills: list[AdminAnalyticsMissingSkill]
+    billing: AdminAnalyticsBillingMetrics
+
+    @field_validator("generated_at")
+    @classmethod
+    def normalize_generated_at(cls, value: datetime) -> datetime:
+        """Expose the analytics snapshot timestamp as timezone-aware UTC."""
+        if value.tzinfo is None:
+            return value.replace(tzinfo=timezone.utc)
+        return value.astimezone(timezone.utc)
