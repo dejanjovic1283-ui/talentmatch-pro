@@ -981,7 +981,6 @@ def render_results(data: Dict[str, Any]) -> None:
         max_chars=MAX_JOB_DESCRIPTION_CHARS,
     )
 
-    _, confidence = score_tone(combined_score)
     readiness = readiness_label(combined_score)
 
     st.success("Semantic match completed and saved to History.")
@@ -1033,7 +1032,7 @@ def render_results(data: Dict[str, Any]) -> None:
         title="Overall semantic alignment",
         value=combined_score,
         total=100,
-        subtitle=f"{verdict} • {confidence}",
+        subtitle=f"{verdict} • semantic and keyword alignment",
         icon="🧠",
     )
 
@@ -1047,7 +1046,7 @@ def render_results(data: Dict[str, Any]) -> None:
                 '<div class="tm-card" style="border-left:5px solid #2563EB;'
                 'padding:1.35rem 1.5rem;">'
                 '<div class="tm-kicker">Hiring perspective</div>'
-                '<div style="margin-top:.55rem;line-height:1.7;color:#475569;'
+                '<div style="margin-top:.55rem;line-height:1.7;'
                 'font-size:1rem;">'
                 f'{safe_html(summary)}</div></div>'
             ),
