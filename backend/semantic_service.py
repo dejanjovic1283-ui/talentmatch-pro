@@ -870,11 +870,11 @@ def semantic_score(cv_text: str, job_description: str) -> int:
 
 def get_verdict(score: int) -> str:
     bounded_score = max(0, min(100, int(score)))
-    if bounded_score >= 80:
-        return "Strong Semantic Match"
-    if bounded_score >= 60:
-        return "Good Semantic Match"
-    return "Weak Semantic Match"
+    if bounded_score >= 75:
+        return "Strong"
+    if bounded_score >= 50:
+        return "Competitive"
+    return "Needs work"
 
 
 def explain_semantic_match(

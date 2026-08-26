@@ -393,13 +393,11 @@ def clear_cv_analysis_state() -> None:
 
 
 def score_tone(score: int) -> Tuple[str, str]:
-    if score >= 80:
-        return "green", "Strong match"
-    if score >= 60:
+    if score >= 75:
+        return "green", "Strong"
+    if score >= 50:
         return "blue", "Competitive"
-    if score >= 40:
-        return "amber", "Needs improvement"
-    return "red", "Low match"
+    return "amber", "Needs work"
 
 
 def render_recommendations(items: List[str]) -> None:

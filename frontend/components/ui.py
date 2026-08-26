@@ -127,8 +127,8 @@ def safe_html(value: Any) -> str:
 
 def _safe_percent(value: int | float) -> int:
     try:
-        numeric = int(float(value))
-    except Exception:
+        numeric = int(round(float(value)))
+    except (TypeError, ValueError, OverflowError):
         numeric = 0
     return max(0, min(100, numeric))
 
@@ -1271,15 +1271,11 @@ def render_feature_grid(items: Sequence[tuple[str, str, str]]) -> None:
 
 def _score_tone(value: int | float) -> tuple[str, str]:
     percent = _safe_percent(value)
-    if percent >= 80:
-        return "green", "Excellent"
-    if percent >= 65:
-        return "blue", "Strong"
+    if percent >= 75:
+        return "green", "Strong"
     if percent >= 50:
-        return "purple", "Competitive"
-    if percent >= 35:
-        return "amber", "Needs improvement"
-    return "red", "Low match"
+        return "blue", "Competitive"
+    return "amber", "Needs work"
 
 
 def render_action_panel(*, title: str, description: str, icon: str = "🚀", eyebrow: str = "AI WORKFLOW") -> None:

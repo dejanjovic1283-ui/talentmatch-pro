@@ -312,40 +312,31 @@ def get_score(
 
 
 def get_verdict(score: int, existing: str = "") -> str:
-    normalized = clean_text(existing, max_chars=120)
-    if normalized:
-        return normalized
-
-    if score >= 85:
-        return "Excellent Semantic Match"
+    # Keep the parameter for backward compatibility, but derive the public verdict
+    # deterministically from the normalized score so legacy/API wording cannot drift.
+    _ = existing
     if score >= 75:
-        return "Strong Semantic Match"
-    if score >= 60:
-        return "Good Semantic Match"
-    if score >= 40:
-        return "Moderate Semantic Match"
-    return "Weak Semantic Match"
+        return "Strong"
+    if score >= 50:
+        return "Competitive"
+    return "Needs work"
 
 
 def score_tone(score: int) -> Tuple[str, str]:
-    if score >= 80:
-        return "#059669", "High confidence"
-    if score >= 60:
+    if score >= 75:
+        return "#059669", "Strong"
+    if score >= 50:
         return "#2563EB", "Competitive"
-    if score >= 40:
-        return "#D97706", "Needs optimization"
-    return "#DC2626", "Low alignment"
+    return "#D97706", "Needs work"
 
 
 def readiness_label(score: int) -> str:
-    """Return a compact readiness label that fits enterprise KPI cards."""
-    if score >= 80:
-        return "Ready"
-    if score >= 60:
+    """Return the canonical score-status label for the readiness KPI."""
+    if score >= 75:
+        return "Strong"
+    if score >= 50:
         return "Competitive"
-    if score >= 40:
-        return "Needs work"
-    return "Low"
+    return "Needs work"
 
 
 def extract_report_data(data: Dict[str, Any]) -> Dict[str, Any]:

@@ -2570,7 +2570,7 @@ async def ats_test(
             missing.append(keyword)
 
     coverage = round((len(matched) / len(keywords)) * 100) if keywords else 0
-    verdict = "ATS Strong" if coverage >= 80 else "ATS Good" if coverage >= 60 else "ATS Weak"
+    verdict = "Strong" if coverage >= 75 else "Competitive" if coverage >= 50 else "Needs work"
 
     recommendations = [
         f"Add missing high-value keywords where truthful: {', '.join(missing[:8])}."
@@ -2640,7 +2640,7 @@ async def ats_check(
             missing.append(keyword)
 
     coverage = round((len(matched) / len(keywords)) * 100) if keywords else 0
-    verdict = "ATS Strong" if coverage >= 80 else "ATS Good" if coverage >= 60 else "ATS Weak"
+    verdict = "Strong" if coverage >= 75 else "Competitive" if coverage >= 50 else "Needs work"
 
     recommendations = [
         f"Add missing high-value keywords where truthful: {', '.join(missing[:8])}."

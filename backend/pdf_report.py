@@ -133,10 +133,10 @@ def _clamp_score(score: Any) -> int:
 
 def _score_color(score: int) -> tuple[Any, Any, str]:
     if score >= 75:
-        return BRAND_GREEN, BRAND_GREEN_LIGHT, "Strong Match"
+        return BRAND_GREEN, BRAND_GREEN_LIGHT, "Strong"
     if score >= 50:
-        return BRAND_YELLOW, BRAND_YELLOW_LIGHT, "Moderate Match"
-    return BRAND_RED, BRAND_RED_LIGHT, "Needs Improvement"
+        return BRAND_YELLOW, BRAND_YELLOW_LIGHT, "Competitive"
+    return BRAND_RED, BRAND_RED_LIGHT, "Needs work"
 
 
 def _build_styles() -> dict[str, ParagraphStyle]:

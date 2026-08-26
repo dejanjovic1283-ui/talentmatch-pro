@@ -254,40 +254,32 @@ def score_level(score: Any) -> Tuple[str, str, int]:
     if numeric_score is None:
         return "Not scored", "No numeric score returned", 0
 
-    if numeric_score >= 85:
+    if numeric_score >= 75:
         return (
-            "Excellent",
+            "Strong",
             "Strong ATS alignment for this job description",
-            numeric_score,
-        )
-    if numeric_score >= 70:
-        return (
-            "Good",
-            "Solid match with a limited number of keyword gaps",
             numeric_score,
         )
     if numeric_score >= 50:
         return (
-            "Needs polish",
-            "Improve missing keywords and role alignment",
+            "Competitive",
+            "Competitive ATS alignment with targeted keyword gaps",
             numeric_score,
         )
 
     return (
-        "Weak match",
-        "Rewrite important CV sections before applying",
+        "Needs work",
+        "Improve missing keywords and role alignment before applying",
         numeric_score,
     )
 
 
 def score_tone(score: int) -> Tuple[str, str]:
-    if score >= 85:
-        return "#059669", "High confidence"
-    if score >= 70:
-        return "#2563EB", "Competitive"
+    if score >= 75:
+        return "#059669", "Strong"
     if score >= 50:
-        return "#D97706", "Needs optimization"
-    return "#DC2626", "Low alignment"
+        return "#2563EB", "Competitive"
+    return "#D97706", "Needs work"
 
 
 def extract_report_data(data: Dict[str, Any]) -> Dict[str, Any]:
