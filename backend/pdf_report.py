@@ -1,33 +1,29 @@
 from __future__ import annotations
 
 from datetime import datetime, timezone
+from html import escape
 from io import BytesIO
 import math
+import os
 import re
-from typing import Any, Iterable, Sequence
+from typing import Any, Iterable
 
+import arabic_reshaper
+from bidi.algorithm import get_display
 from reportlab.lib import colors
-from reportlab.lib.enums import TA_CENTER, TA_LEFT
+from reportlab.lib.enums import TA_CENTER, TA_LEFT, TA_RIGHT
 from reportlab.lib.pagesizes import A4
 from reportlab.lib.styles import ParagraphStyle, getSampleStyleSheet
 from reportlab.lib.units import cm
-from reportlab.platypus import (
-    HRFlowable,
-    PageBreak,
-    Paragraph,
-    SimpleDocTemplate,
-    Spacer,
-    Table,
-    TableStyle,
-)
+from reportlab.pdfbase import pdfmetrics
+from reportlab.pdfbase.ttfonts import TTFont
+from reportlab.platypus import Paragraph, SimpleDocTemplate, Spacer, Table, TableStyle
 
 
 BRAND_NAVY = colors.HexColor("#0F172A")
-BRAND_DARK = colors.HexColor("#111827")
 BRAND_TEXT = colors.HexColor("#1F2937")
 BRAND_MUTED = colors.HexColor("#64748B")
 BRAND_BLUE = colors.HexColor("#2563EB")
-BRAND_BLUE_LIGHT = colors.HexColor("#DBEAFE")
 BRAND_GREEN = colors.HexColor("#16A34A")
 BRAND_GREEN_LIGHT = colors.HexColor("#DCFCE7")
 BRAND_RED = colors.HexColor("#DC2626")
@@ -38,97 +34,96 @@ BRAND_BORDER = colors.HexColor("#D1D5DB")
 BRAND_SOFT = colors.HexColor("#F8FAFC")
 BRAND_WHITE = colors.white
 
-CONTENT_WIDTH = 16.2 * cm
+CONTENT_WIDTH = 17.8 * cm
 MAX_LIST_ITEMS = 40
 MAX_ITEM_CHARACTERS = 650
 MAX_SUMMARY_CHARACTERS = 5000
 MAX_JOB_DESCRIPTION_CHARACTERS = 6500
 
+_UNICODE_REGULAR = os.getenv(
+    "TALENTMATCH_PDF_UNICODE_REGULAR",
+    "/usr/share/fonts/truetype/noto/NotoSans-Regular.ttf",
+)
+_UNICODE_BOLD = os.getenv(
+    "TALENTMATCH_PDF_UNICODE_BOLD",
+    "/usr/share/fonts/truetype/noto/NotoSans-Bold.ttf",
+)
+_ARABIC_REGULAR = os.getenv(
+    "TALENTMATCH_PDF_ARABIC_REGULAR",
+    "/usr/share/fonts/truetype/noto/NotoSansArabic-Regular.ttf",
+)
+_ARABIC_BOLD = os.getenv(
+    "TALENTMATCH_PDF_ARABIC_BOLD",
+    "/usr/share/fonts/truetype/noto/NotoSansArabic-Bold.ttf",
+)
+_CJK_REGULAR = os.getenv(
+    "TALENTMATCH_PDF_CJK_REGULAR",
+    "/usr/share/fonts/truetype/droid/DroidSansFallbackFull.ttf",
+)
 
-def _strip_control_characters(value: str) -> str:
-    return re.sub(r"[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]", " ", value)
+_ARABIC_RE = re.compile(
+    r"[\u0600-\u06FF\u0750-\u077F\u08A0-\u08FF\uFB50-\uFDFF\uFE70-\uFEFF]"
+)
+_CJK_RE = re.compile(r"[\u3400-\u4DBF\u4E00-\u9FFF\uF900-\uFAFF]")
+_FONTS_READY = False
 
 
-def _safe_text(
-    value: Any,
-    *,
-    max_chars: int | None = None,
-) -> str:
-    """Convert a value into bounded, ReportLab-safe paragraph text."""
-    if value is None:
-        return ""
-
-    text = _strip_control_characters(str(value))
+def _clean(value: Any, max_chars: int | None = None) -> str:
+    text = str(value or "")
+    text = re.sub(r"[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]", " ", text)
+    text = text.replace("\u00a0", " ").replace("\u200b", "")
     text = re.sub(r"[ \t]+", " ", text)
     text = re.sub(r"\n{3,}", "\n\n", text).strip()
-
     if max_chars is not None and len(text) > max_chars:
         text = text[: max_chars - 3].rstrip() + "..."
-
-    return (
-        text.replace("&", "&amp;")
-        .replace("<", "&lt;")
-        .replace(">", "&gt;")
-    )
+    return text
 
 
-def _as_list(
+def _items(
     value: Any,
     *,
     max_items: int = MAX_LIST_ITEMS,
     max_item_chars: int = MAX_ITEM_CHARACTERS,
 ) -> list[str]:
-    """Normalize arbitrary input into a clean, bounded, deduplicated list."""
     if value is None:
         return []
-
-    raw_items: Iterable[Any]
     if isinstance(value, (list, tuple, set)):
-        raw_items = value
+        source: Iterable[Any] = value
     elif isinstance(value, str):
-        raw_items = [value]
+        source = [value]
     else:
-        raw_items = [value]
+        source = [value]
 
     normalized: list[str] = []
     seen: set[str] = set()
-
-    for item in raw_items:
+    for item in source:
         if isinstance(item, (dict, list, tuple, set)):
             continue
-
-        text = _safe_text(item, max_chars=max_item_chars)
+        text = _clean(item, max_item_chars)
         if not text:
             continue
-
         key = text.casefold()
         if key in seen:
             continue
-
         seen.add(key)
         normalized.append(text)
-
         if len(normalized) >= max_items:
             break
-
     return normalized
 
 
 def _clamp_score(score: Any) -> int:
-    """Normalize score-like input to an integer from 0 to 100."""
     if score is None or isinstance(score, bool):
         return 0
-
     try:
-        numeric_score = float(score)
-        if 0 < numeric_score <= 1:
-            numeric_score *= 100
-        if not math.isfinite(numeric_score):
+        numeric = float(score)
+        if 0 < numeric <= 1:
+            numeric *= 100
+        if not math.isfinite(numeric):
             return 0
     except (TypeError, ValueError, OverflowError):
         return 0
-
-    return max(0, min(100, int(round(numeric_score))))
+    return max(0, min(100, int(round(numeric))))
 
 
 def _score_color(score: int) -> tuple[Any, Any, str]:
@@ -139,497 +134,158 @@ def _score_color(score: int) -> tuple[Any, Any, str]:
     return BRAND_RED, BRAND_RED_LIGHT, "Needs work"
 
 
-def _build_styles() -> dict[str, ParagraphStyle]:
-    base = getSampleStyleSheet()
+def _register_fonts() -> None:
+    global _FONTS_READY
+    if _FONTS_READY:
+        return
 
+    required = {
+        "Noto Sans Regular": _UNICODE_REGULAR,
+        "Noto Sans Bold": _UNICODE_BOLD,
+        "Noto Sans Arabic Regular": _ARABIC_REGULAR,
+        "Noto Sans Arabic Bold": _ARABIC_BOLD,
+        "Droid Sans Fallback Full": _CJK_REGULAR,
+    }
+    missing = [f"{label}: {path}" for label, path in required.items() if not os.path.isfile(path)]
+    if missing:
+        raise RuntimeError(
+            "TalentMatch PDF fonts are missing from the runtime: " + "; ".join(missing)
+        )
+
+    pdfmetrics.registerFont(TTFont("TMUnicode", _UNICODE_REGULAR))
+    pdfmetrics.registerFont(TTFont("TMUnicodeBold", _UNICODE_BOLD))
+    pdfmetrics.registerFont(TTFont("TMArabic", _ARABIC_REGULAR))
+    pdfmetrics.registerFont(TTFont("TMArabicBold", _ARABIC_BOLD))
+    pdfmetrics.registerFont(TTFont("TMCJK", _CJK_REGULAR))
+    pdfmetrics.registerFont(TTFont("TMCJKBold", _CJK_REGULAR))
+
+    pdfmetrics.registerFontFamily(
+        "TMUnicode",
+        normal="TMUnicode",
+        bold="TMUnicodeBold",
+        italic="TMUnicode",
+        boldItalic="TMUnicodeBold",
+    )
+    pdfmetrics.registerFontFamily(
+        "TMArabic",
+        normal="TMArabic",
+        bold="TMArabicBold",
+        italic="TMArabic",
+        boldItalic="TMArabicBold",
+    )
+    pdfmetrics.registerFontFamily(
+        "TMCJK",
+        normal="TMCJK",
+        bold="TMCJKBold",
+        italic="TMCJK",
+        boldItalic="TMCJKBold",
+    )
+    _FONTS_READY = True
+
+
+def _script(text: str) -> str:
+    if _ARABIC_RE.search(text):
+        return "arabic"
+    if _CJK_RE.search(text):
+        return "cjk"
+    return "unicode"
+
+
+def _arabic_visual(text: str) -> str:
+    lines: list[str] = []
+    for line in text.splitlines() or [""]:
+        if not line:
+            lines.append("")
+            continue
+
+        visual = get_display(arabic_reshaper.reshape(line))
+        if isinstance(visual, bytes):
+            visual = visual.decode("utf-8", errors="replace")
+
+        lines.append(visual)
+
+    return "\n".join(lines)
+
+
+def _display_text(value: Any, max_chars: int) -> tuple[str, str]:
+    text = _clean(value, max_chars)
+    script = _script(text)
+    if script == "arabic":
+        text = _arabic_visual(text)
+    return escape(text).replace("\n", "<br/>"), script
+
+
+def _styled(
+    base: ParagraphStyle,
+    script: str,
+    *,
+    bold: bool = False,
+) -> ParagraphStyle:
+    style = ParagraphStyle(f"{base.name}_{script}_{'b' if bold else 'r'}", parent=base)
+    if script == "arabic":
+        style.fontName = "TMArabicBold" if bold else "TMArabic"
+        style.alignment = TA_RIGHT
+    elif script == "cjk":
+        style.fontName = "TMCJKBold" if bold else "TMCJK"
+        style.wordWrap = "CJK"
+    else:
+        style.fontName = "TMUnicodeBold" if bold else "TMUnicode"
+    return style
+
+
+def _paragraph(
+    value: Any,
+    base_style: ParagraphStyle,
+    *,
+    max_chars: int,
+    bold: bool = False,
+) -> Paragraph:
+    html, script = _display_text(value, max_chars)
+    return Paragraph(html or " ", _styled(base_style, script, bold=bold))
+
+
+def _styles(accent: colors.Color) -> dict[str, ParagraphStyle]:
+    base = getSampleStyleSheet()
     return {
-        "cover_title": ParagraphStyle(
-            "TMCoverTitle",
-            parent=base["Title"],
-            fontName="Helvetica-Bold",
-            fontSize=26,
-            leading=31,
-            textColor=BRAND_NAVY,
-            alignment=TA_LEFT,
-            spaceAfter=5,
+        "title": ParagraphStyle(
+            "TMFinalAnalysisTitle", parent=base["Title"], fontName="TMUnicodeBold",
+            fontSize=22, leading=25, textColor=BRAND_NAVY, alignment=TA_LEFT, spaceAfter=3,
         ),
-        "cover_subtitle": ParagraphStyle(
-            "TMCoverSubtitle",
-            parent=base["BodyText"],
-            fontName="Helvetica",
-            fontSize=10.5,
-            leading=15,
-            textColor=BRAND_MUTED,
-            alignment=TA_LEFT,
-            spaceAfter=10,
+        "subtitle": ParagraphStyle(
+            "TMFinalAnalysisSubtitle", parent=base["BodyText"], fontName="TMUnicode",
+            fontSize=9.2, leading=12.2, textColor=BRAND_MUTED, spaceAfter=7,
         ),
         "section": ParagraphStyle(
-            "TMSection",
-            parent=base["Heading2"],
-            fontName="Helvetica-Bold",
-            fontSize=14,
-            leading=18,
-            textColor=BRAND_NAVY,
-            keepWithNext=True,
-            spaceBefore=10,
-            spaceAfter=6,
-        ),
-        "subsection": ParagraphStyle(
-            "TMSubsection",
-            parent=base["Heading3"],
-            fontName="Helvetica-Bold",
-            fontSize=11,
-            leading=14,
-            textColor=BRAND_NAVY,
-            keepWithNext=True,
-            spaceBefore=0,
-            spaceAfter=5,
+            "TMFinalAnalysisSection", parent=base["Heading2"], fontName="TMUnicodeBold",
+            fontSize=12.5, leading=15, textColor=BRAND_NAVY, keepWithNext=True,
+            spaceBefore=7, spaceAfter=4,
         ),
         "body": ParagraphStyle(
-            "TMBody",
-            parent=base["BodyText"],
-            fontName="Helvetica",
-            fontSize=9.5,
-            leading=13.5,
-            textColor=BRAND_TEXT,
-            spaceAfter=4,
-        ),
-        "body_center": ParagraphStyle(
-            "TMBodyCenter",
-            parent=base["BodyText"],
-            fontName="Helvetica",
-            fontSize=9.5,
-            leading=13,
-            textColor=BRAND_TEXT,
-            alignment=TA_CENTER,
-            spaceAfter=3,
+            "TMFinalAnalysisBody", parent=base["BodyText"], fontName="TMUnicode",
+            fontSize=8.9, leading=11.7, textColor=BRAND_TEXT, spaceAfter=2.5,
         ),
         "small": ParagraphStyle(
-            "TMSmall",
-            parent=base["BodyText"],
-            fontName="Helvetica",
-            fontSize=8.2,
-            leading=10.5,
-            textColor=BRAND_MUTED,
-        ),
-        "tiny": ParagraphStyle(
-            "TMTiny",
-            parent=base["BodyText"],
-            fontName="Helvetica",
-            fontSize=7.5,
-            leading=9.5,
-            textColor=BRAND_MUTED,
+            "TMFinalAnalysisSmall", parent=base["BodyText"], fontName="TMUnicode",
+            fontSize=7.7, leading=9.7, textColor=BRAND_MUTED,
         ),
         "metric_label": ParagraphStyle(
-            "TMMetricLabel",
-            parent=base["BodyText"],
-            fontName="Helvetica-Bold",
-            fontSize=8,
-            leading=10,
-            textColor=BRAND_MUTED,
+            "TMFinalAnalysisMetricLabel", parent=base["BodyText"], fontName="TMUnicodeBold",
+            fontSize=7.2, leading=8.5, textColor=BRAND_MUTED, alignment=TA_CENTER,
         ),
         "metric_value": ParagraphStyle(
-            "TMMetricValue",
-            parent=base["BodyText"],
-            fontName="Helvetica-Bold",
-            fontSize=15,
-            leading=18,
-            textColor=BRAND_NAVY,
+            "TMFinalAnalysisMetricValue", parent=base["BodyText"], fontName="TMUnicodeBold",
+            fontSize=14, leading=16, textColor=BRAND_NAVY, alignment=TA_CENTER,
         ),
-        "score_value": ParagraphStyle(
-            "TMScoreValue",
-            parent=base["BodyText"],
-            fontName="Helvetica-Bold",
-            fontSize=22,
-            leading=25,
-            textColor=BRAND_NAVY,
-            alignment=TA_CENTER,
-            allowWidows=0,
-            allowOrphans=0,
-        ),
-        "score_label": ParagraphStyle(
-            "TMScoreLabel",
-            parent=base["BodyText"],
-            fontName="Helvetica-Bold",
-            fontSize=8.5,
-            leading=10,
-            textColor=BRAND_MUTED,
-            alignment=TA_CENTER,
+        "accent_value": ParagraphStyle(
+            "TMFinalAnalysisAccentValue", parent=base["BodyText"], fontName="TMUnicodeBold",
+            fontSize=14, leading=16, textColor=accent, alignment=TA_CENTER,
         ),
         "bullet": ParagraphStyle(
-            "TMBullet",
-            parent=base["BodyText"],
-            fontName="Helvetica",
-            fontSize=9.4,
-            leading=13,
-            leftIndent=13,
-            firstLineIndent=-8,
-            bulletIndent=0,
-            textColor=BRAND_TEXT,
-            spaceAfter=3,
-        ),
-        "numbered": ParagraphStyle(
-            "TMNumbered",
-            parent=base["BodyText"],
-            fontName="Helvetica",
-            fontSize=9.4,
-            leading=13,
-            leftIndent=16,
-            firstLineIndent=-13,
-            textColor=BRAND_TEXT,
-            spaceAfter=5,
-        ),
-        "card_label_green": ParagraphStyle(
-            "TMCardLabelGreen",
-            parent=base["BodyText"],
-            fontName="Helvetica-Bold",
-            fontSize=10,
-            leading=13,
-            textColor=BRAND_GREEN,
-            keepWithNext=True,
-            spaceAfter=4,
-        ),
-        "card_label_yellow": ParagraphStyle(
-            "TMCardLabelYellow",
-            parent=base["BodyText"],
-            fontName="Helvetica-Bold",
-            fontSize=10,
-            leading=13,
-            textColor=BRAND_YELLOW,
-            keepWithNext=True,
-            spaceAfter=4,
+            "TMFinalAnalysisBullet", parent=base["BodyText"], fontName="TMUnicode",
+            fontSize=8.7, leading=11.4, leftIndent=10, firstLineIndent=-7,
+            textColor=BRAND_TEXT, spaceAfter=1.8,
         ),
     }
-
-
-def _header_footer(canvas, doc) -> None:
-    """Draw the branded header and footer on every page."""
-    canvas.saveState()
-
-    width, height = A4
-
-    canvas.setStrokeColor(BRAND_BORDER)
-    canvas.setLineWidth(0.45)
-    canvas.line(
-        1.6 * cm,
-        height - 1.15 * cm,
-        width - 1.6 * cm,
-        height - 1.15 * cm,
-    )
-
-    canvas.setFillColor(BRAND_BLUE)
-    canvas.roundRect(
-        1.6 * cm,
-        height - 0.98 * cm,
-        0.22 * cm,
-        0.22 * cm,
-        0.05 * cm,
-        fill=1,
-        stroke=0,
-    )
-
-    canvas.setFont("Helvetica-Bold", 9)
-    canvas.setFillColor(BRAND_NAVY)
-    canvas.drawString(
-        1.95 * cm,
-        height - 0.9 * cm,
-        "TalentMatch Pro",
-    )
-
-    canvas.setFont("Helvetica", 8)
-    canvas.setFillColor(BRAND_MUTED)
-    canvas.drawRightString(
-        width - 1.6 * cm,
-        height - 0.9 * cm,
-        "AI-powered CV Analysis",
-    )
-
-    canvas.setStrokeColor(BRAND_BORDER)
-    canvas.setLineWidth(0.45)
-    canvas.line(
-        1.6 * cm,
-        1.08 * cm,
-        width - 1.6 * cm,
-        1.08 * cm,
-    )
-
-    canvas.setFont("Helvetica", 8)
-    canvas.setFillColor(BRAND_MUTED)
-    canvas.drawString(
-        1.6 * cm,
-        0.72 * cm,
-        "Generated by TalentMatch Pro",
-    )
-    canvas.drawRightString(
-        width - 1.6 * cm,
-        0.72 * cm,
-        f"Page {doc.page}",
-    )
-
-    canvas.restoreState()
-
-
-def _bullet_list(
-    items: Any,
-    style: ParagraphStyle,
-) -> list[Paragraph]:
-    normalized = _as_list(items)
-
-    if not normalized:
-        return [Paragraph("- No items available.", style)]
-
-    return [
-        Paragraph(f"- {item}", style)
-        for item in normalized
-    ]
-
-
-def _numbered_list(
-    items: Any,
-    style: ParagraphStyle,
-) -> list[Paragraph]:
-    normalized = _as_list(items)
-
-    if not normalized:
-        return [Paragraph("1. No recommendations available.", style)]
-
-    return [
-        Paragraph(f"{index}. {item}", style)
-        for index, item in enumerate(normalized, start=1)
-    ]
-
-
-def _summary_card(
-    summary: str,
-    styles: dict[str, ParagraphStyle],
-) -> Table:
-    table = Table(
-        [[
-            Paragraph(
-                _safe_text(
-                    summary,
-                    max_chars=MAX_SUMMARY_CHARACTERS,
-                ) or "No summary available.",
-                styles["body"],
-            )
-        ]],
-        colWidths=[CONTENT_WIDTH],
-        splitByRow=1,
-        repeatRows=0,
-    )
-    table.setStyle(
-        TableStyle(
-            [
-                ("BACKGROUND", (0, 0), (-1, -1), BRAND_SOFT),
-                ("BOX", (0, 0), (-1, -1), 0.7, BRAND_BORDER),
-                ("LINEBEFORE", (0, 0), (0, -1), 3.0, BRAND_BLUE),
-                ("LEFTPADDING", (0, 0), (-1, -1), 12),
-                ("RIGHTPADDING", (0, 0), (-1, -1), 12),
-                ("TOPPADDING", (0, 0), (-1, -1), 10),
-                ("BOTTOMPADDING", (0, 0), (-1, -1), 10),
-                ("VALIGN", (0, 0), (-1, -1), "TOP"),
-            ]
-        )
-    )
-    return table
-
-
-def _cover_band(
-    *,
-    cv_filename: str,
-    score: int,
-    verdict: str,
-    generated_at: str,
-    styles: dict[str, ParagraphStyle],
-) -> Table:
-    score_color, score_bg, default_verdict = _score_color(score)
-    verdict_text = _safe_text(verdict or default_verdict, max_chars=120)
-
-    data = [
-        [
-            Paragraph("Score", styles["score_label"]),
-            Paragraph("Verdict", styles["metric_label"]),
-            Paragraph("CV File", styles["metric_label"]),
-            Paragraph("Generated", styles["metric_label"]),
-        ],
-        [
-            Paragraph(
-                f"<nobr>{score}/100</nobr>",
-                styles["score_value"],
-            ),
-            Paragraph(verdict_text, styles["metric_value"]),
-            Paragraph(
-                _safe_text(cv_filename, max_chars=180) or "Uploaded CV",
-                styles["body"],
-            ),
-            Paragraph(
-                _safe_text(generated_at, max_chars=80),
-                styles["body"],
-            ),
-        ],
-    ]
-
-    table = Table(
-        data,
-        colWidths=[
-            4.25 * cm,
-            3.75 * cm,
-            4.85 * cm,
-            3.35 * cm,
-        ],
-        splitByRow=1,
-    )
-    table.setStyle(
-        TableStyle(
-            [
-                ("BACKGROUND", (0, 0), (0, -1), score_bg),
-                ("BACKGROUND", (1, 0), (-1, -1), BRAND_WHITE),
-                ("BOX", (0, 0), (-1, -1), 0.8, BRAND_BORDER),
-                ("LINEBEFORE", (1, 0), (1, -1), 1.2, score_color),
-                ("INNERGRID", (0, 0), (-1, -1), 0.35, BRAND_BORDER),
-                ("LEFTPADDING", (0, 0), (-1, -1), 8),
-                ("RIGHTPADDING", (0, 0), (-1, -1), 8),
-                ("TOPPADDING", (0, 0), (-1, -1), 8),
-                ("BOTTOMPADDING", (0, 0), (-1, -1), 8),
-                ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
-            ]
-        )
-    )
-    return table
-
-
-def _insight_card(
-    *,
-    title: str,
-    items: Any,
-    background: Any,
-    accent: Any,
-    title_style: ParagraphStyle,
-    bullet_style: ParagraphStyle,
-) -> Table:
-    normalized_items = _as_list(items)
-
-    rows: list[list[Any]] = [[Paragraph(title, title_style)]]
-
-    if normalized_items:
-        rows.extend(
-            [[Paragraph(f"- {item}", bullet_style)]]
-            for item in normalized_items
-        )
-    else:
-        rows.append(
-            [Paragraph("- No items available.", bullet_style)]
-        )
-
-    table = Table(
-        rows,
-        colWidths=[CONTENT_WIDTH],
-        splitByRow=1,
-        repeatRows=1,
-    )
-    table.setStyle(
-        TableStyle(
-            [
-                ("BACKGROUND", (0, 0), (-1, -1), background),
-                ("BOX", (0, 0), (-1, -1), 0.6, BRAND_BORDER),
-                ("LINEBEFORE", (0, 0), (0, -1), 3.0, accent),
-                ("LEFTPADDING", (0, 0), (-1, -1), 11),
-                ("RIGHTPADDING", (0, 0), (-1, -1), 11),
-                ("TOPPADDING", (0, 0), (-1, -1), 7),
-                ("BOTTOMPADDING", (0, 0), (-1, -1), 7),
-                ("VALIGN", (0, 0), (-1, -1), "TOP"),
-            ]
-        )
-    )
-    return table
-
-
-def _recommendation_card(
-    index: int,
-    recommendation: str,
-    styles: dict[str, ParagraphStyle],
-) -> Table:
-    index_cell = Paragraph(
-        str(index),
-        ParagraphStyle(
-            f"TMRecommendationIndex{index}",
-            parent=styles["body_center"],
-            fontName="Helvetica-Bold",
-            fontSize=11,
-            leading=14,
-            textColor=BRAND_BLUE,
-            alignment=TA_CENTER,
-        ),
-    )
-    recommendation_cell = Paragraph(
-        _safe_text(
-            recommendation,
-            max_chars=MAX_ITEM_CHARACTERS,
-        ),
-        styles["body"],
-    )
-
-    table = Table(
-        [[index_cell, recommendation_cell]],
-        colWidths=[1.1 * cm, 15.1 * cm],
-        splitByRow=1,
-    )
-    table.setStyle(
-        TableStyle(
-            [
-                ("BACKGROUND", (0, 0), (0, 0), BRAND_BLUE_LIGHT),
-                ("BACKGROUND", (1, 0), (1, 0), BRAND_WHITE),
-                ("BOX", (0, 0), (-1, -1), 0.55, BRAND_BORDER),
-                ("LINEBEFORE", (1, 0), (1, 0), 0.7, BRAND_BORDER),
-                ("LEFTPADDING", (0, 0), (-1, -1), 8),
-                ("RIGHTPADDING", (0, 0), (-1, -1), 8),
-                ("TOPPADDING", (0, 0), (-1, -1), 7),
-                ("BOTTOMPADDING", (0, 0), (-1, -1), 7),
-                ("VALIGN", (0, 0), (-1, -1), "TOP"),
-            ]
-        )
-    )
-    return table
-
-
-def _job_description_block(
-    job_description: str,
-    styles: dict[str, ParagraphStyle],
-) -> list[Any]:
-    clean_job = _safe_text(
-        job_description,
-        max_chars=MAX_JOB_DESCRIPTION_CHARACTERS,
-    )
-
-    return [
-        Paragraph("Job Description Appendix", styles["section"]),
-        Paragraph(
-            "The appendix preserves the source job description used for this analysis.",
-            styles["small"],
-        ),
-        Spacer(1, 5),
-        Table(
-            [[
-                Paragraph(
-                    clean_job or "No job description provided.",
-                    styles["body"],
-                )
-            ]],
-            colWidths=[CONTENT_WIDTH],
-            splitByRow=1,
-            style=TableStyle(
-                [
-                    ("BACKGROUND", (0, 0), (-1, -1), colors.HexColor("#F9FAFB")),
-                    ("BOX", (0, 0), (-1, -1), 0.6, BRAND_BORDER),
-                    ("LEFTPADDING", (0, 0), (-1, -1), 11),
-                    ("RIGHTPADDING", (0, 0), (-1, -1), 11),
-                    ("TOPPADDING", (0, 0), (-1, -1), 10),
-                    ("BOTTOMPADDING", (0, 0), (-1, -1), 10),
-                    ("VALIGN", (0, 0), (-1, -1), "TOP"),
-                ]
-            ),
-        ),
-    ]
 
 
 def build_analysis_pdf_report(
@@ -643,141 +299,167 @@ def build_analysis_pdf_report(
     job_description: str,
     verdict: str | None = None,
 ) -> bytes:
-    """Generate a branded, page-safe TalentMatch Pro CV Analysis PDF."""
+    """Generate the unified compact multilingual TalentMatch Pro CV Analysis PDF."""
+    _register_fonts()
+
     buffer = BytesIO()
-
     normalized_score = _clamp_score(score)
-    normalized_strengths = _as_list(strengths)
-    normalized_weaknesses = _as_list(weaknesses)
-    normalized_recommendations = _as_list(recommendations)
-
-    styles = _build_styles()
+    normalized_strengths = _items(strengths)
+    normalized_weaknesses = _items(weaknesses)
+    normalized_recommendations = _items(recommendations)
     _, _, default_verdict = _score_color(normalized_score)
-    generated_at = datetime.now(timezone.utc).strftime(
-        "%Y-%m-%d %H:%M UTC"
-    )
-    verdict_text = verdict or default_verdict
+    verdict_text = _clean(verdict or default_verdict, 120)
+    generated_at = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M UTC")
+
+    accent = BRAND_BLUE
+    styles = _styles(accent)
 
     doc = SimpleDocTemplate(
         buffer,
         pagesize=A4,
-        rightMargin=1.6 * cm,
         leftMargin=1.6 * cm,
-        topMargin=1.75 * cm,
-        bottomMargin=1.55 * cm,
+        rightMargin=1.6 * cm,
+        topMargin=1.7 * cm,
+        bottomMargin=1.6 * cm,
         title="TalentMatch Pro CV Analysis Report",
         author="TalentMatch Pro",
-        subject="AI-powered CV analysis report",
+        subject="CV Analysis",
         allowSplitting=True,
     )
 
+    def header_footer(canvas: Any, document: Any) -> None:
+        canvas.saveState()
+        width, height = A4
+        left, right = doc.leftMargin, width - doc.rightMargin
+        canvas.setStrokeColor(BRAND_BORDER)
+        canvas.setLineWidth(0.4)
+        canvas.line(left, height - 1.07 * cm, right, height - 1.07 * cm)
+        canvas.setFillColor(accent)
+        canvas.roundRect(left, height - 0.85 * cm, 0.22 * cm, 0.22 * cm, 0.05 * cm, fill=1, stroke=0)
+        canvas.setFillColor(BRAND_NAVY)
+        canvas.setFont("TMUnicodeBold", 8.6)
+        canvas.drawString(left + 0.4 * cm, height - 0.78 * cm, "TalentMatch Pro")
+        canvas.setFillColor(BRAND_MUTED)
+        canvas.setFont("TMUnicode", 7.6)
+        canvas.drawRightString(right, height - 0.78 * cm, "CV Analysis")
+        canvas.setStrokeColor(BRAND_BORDER)
+        canvas.line(left, 1.05 * cm, right, 1.05 * cm)
+        canvas.setFillColor(BRAND_MUTED)
+        canvas.setFont("TMUnicode", 7.4)
+        canvas.drawString(left, 0.68 * cm, "Generated by TalentMatch Pro")
+        canvas.drawRightString(right, 0.68 * cm, f"Page {document.page}")
+        canvas.restoreState()
+
+    def card(value: Any) -> Table:
+        body = _paragraph(
+            value or "No content available.",
+            styles["body"],
+            max_chars=MAX_SUMMARY_CHARACTERS,
+        )
+        table = Table([[body]], colWidths=[CONTENT_WIDTH], splitByRow=1)
+        table.setStyle(TableStyle([
+            ("BACKGROUND", (0, 0), (-1, -1), BRAND_SOFT),
+            ("BOX", (0, 0), (-1, -1), 0.5, BRAND_BORDER),
+            ("LINEBEFORE", (0, 0), (0, -1), 2.5, accent),
+            ("LEFTPADDING", (0, 0), (-1, -1), 8),
+            ("RIGHTPADDING", (0, 0), (-1, -1), 8),
+            ("TOPPADDING", (0, 0), (-1, -1), 6),
+            ("BOTTOMPADDING", (0, 0), (-1, -1), 6),
+            ("VALIGN", (0, 0), (-1, -1), "TOP"),
+        ]))
+        return table
+
     story: list[Any] = [
-        Paragraph("TalentMatch Pro", styles["cover_title"]),
-        Paragraph(
-            "Professional AI-powered CV analysis report for ATS matching, "
-            "skill gaps, recruiter fit and practical next steps.",
-            styles["cover_subtitle"],
-        ),
-        HRFlowable(
-            width="100%",
-            thickness=1.0,
-            color=BRAND_BLUE,
-        ),
-        Spacer(1, 8),
-        _cover_band(
-            cv_filename=cv_filename,
-            score=normalized_score,
-            verdict=verdict_text,
-            generated_at=generated_at,
-            styles=styles,
-        ),
-        Spacer(1, 8),
-        Paragraph("Executive Summary", styles["section"]),
-        _summary_card(summary, styles),
-        Spacer(1, 5),
-        Paragraph("CV Coverage", styles["section"]),
-        _insight_card(
-            title="Strengths",
-            items=normalized_strengths,
-            background=colors.HexColor("#F0FDF4"),
-            accent=BRAND_GREEN,
-            title_style=styles["card_label_green"],
-            bullet_style=styles["bullet"],
-        ),
-        Spacer(1, 6),
-        _insight_card(
-            title="Weaknesses / Gaps",
-            items=normalized_weaknesses,
-            background=colors.HexColor("#FFFBEB"),
-            accent=BRAND_YELLOW,
-            title_style=styles["card_label_yellow"],
-            bullet_style=styles["bullet"],
-        ),
-        Spacer(1, 5),
-        Paragraph(
-            "Priority Recommendations",
-            styles["section"],
+        _paragraph("CV Analysis Report", styles["title"], max_chars=180, bold=True),
+        _paragraph(
+            "ATS alignment, strengths, gaps and practical next-step recommendations.",
+            styles["subtitle"],
+            max_chars=500,
         ),
     ]
 
-    if normalized_recommendations:
-        for index, recommendation in enumerate(
-            normalized_recommendations,
-            start=1,
-        ):
-            story.append(
-                _recommendation_card(
-                    index,
-                    recommendation,
-                    styles,
-                )
-            )
-            story.append(Spacer(1, 4))
-    else:
-        story.extend(
-            _numbered_list(
-                [],
-                styles["numbered"],
-            )
-        )
+    meta_cells = [
+        _paragraph(f"Generated: {generated_at}", styles["small"], max_chars=120),
+        _paragraph(f"CV file: {_clean(cv_filename, 180)}", styles["small"], max_chars=230),
+        _paragraph("", styles["small"], max_chars=1),
+        _paragraph("", styles["small"], max_chars=1),
+    ]
+    meta = Table([meta_cells], colWidths=[CONTENT_WIDTH / 4] * 4)
+    meta.setStyle(TableStyle([
+        ("BACKGROUND", (0, 0), (-1, -1), BRAND_SOFT),
+        ("BOX", (0, 0), (-1, -1), 0.45, BRAND_BORDER),
+        ("INNERGRID", (0, 0), (-1, -1), 0.25, BRAND_BORDER),
+        ("LEFTPADDING", (0, 0), (-1, -1), 6),
+        ("RIGHTPADDING", (0, 0), (-1, -1), 6),
+        ("TOPPADDING", (0, 0), (-1, -1), 5),
+        ("BOTTOMPADDING", (0, 0), (-1, -1), 5),
+        ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
+    ]))
+    story.extend([meta, Spacer(1, 0.35 * cm)])
 
-    story.extend(
+    metric_cells = [
         [
-            Spacer(1, 4),
-            HRFlowable(
-                width="100%",
-                thickness=0.6,
-                color=BRAND_BORDER,
-            ),
-            Spacer(1, 4),
-            Paragraph(
-                "This report is generated automatically by TalentMatch Pro "
-                "and should be reviewed before making final hiring or "
-                "application decisions.",
-                styles["tiny"],
-            ),
-        ]
-    )
+            _paragraph("OVERALL SCORE", styles["metric_label"], max_chars=60, bold=True),
+            _paragraph(f"{normalized_score}/100", styles["accent_value"], max_chars=100, bold=True),
+        ],
+        [
+            _paragraph("STATUS", styles["metric_label"], max_chars=60, bold=True),
+            _paragraph(verdict_text, styles["metric_value"], max_chars=120, bold=True),
+        ],
+        [
+            _paragraph("STRENGTHS", styles["metric_label"], max_chars=60, bold=True),
+            _paragraph(str(len(normalized_strengths)), styles["metric_value"], max_chars=20, bold=True),
+        ],
+        [
+            _paragraph("GAPS", styles["metric_label"], max_chars=60, bold=True),
+            _paragraph(str(len(normalized_weaknesses)), styles["metric_value"], max_chars=20, bold=True),
+        ],
+    ]
+    metrics = Table([metric_cells], colWidths=[CONTENT_WIDTH / 4] * 4)
+    metrics.setStyle(TableStyle([
+        ("BACKGROUND", (0, 0), (-1, -1), BRAND_WHITE),
+        ("BOX", (0, 0), (-1, -1), 0.55, BRAND_BORDER),
+        ("INNERGRID", (0, 0), (-1, -1), 0.35, BRAND_BORDER),
+        ("LEFTPADDING", (0, 0), (-1, -1), 5),
+        ("RIGHTPADDING", (0, 0), (-1, -1), 5),
+        ("TOPPADDING", (0, 0), (-1, -1), 6),
+        ("BOTTOMPADDING", (0, 0), (-1, -1), 6),
+        ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
+    ]))
+    story.extend([
+        metrics,
+        Spacer(1, 0.35 * cm),
+        _paragraph("Executive Summary", styles["section"], max_chars=120, bold=True),
+        card(summary),
+        Spacer(1, 0.15 * cm),
+    ])
 
-    if _safe_text(job_description):
-        story.append(PageBreak())
-        story.extend(
-            _job_description_block(
-                job_description,
-                styles,
-            )
-        )
+    for title, values, fallback in (
+        ("Strengths", normalized_strengths, "No strengths returned."),
+        ("Weaknesses / Gaps", normalized_weaknesses, "No weaknesses returned."),
+    ):
+        story.append(_paragraph(title, styles["section"], max_chars=120, bold=True))
+        for item in values or [fallback]:
+            story.append(_paragraph("• " + item, styles["bullet"], max_chars=MAX_ITEM_CHARACTERS))
+        story.append(Spacer(1, 0.15 * cm))
 
-    doc.build(
-        story,
-        onFirstPage=_header_footer,
-        onLaterPages=_header_footer,
-    )
+    story.append(_paragraph("Priority Recommendations", styles["section"], max_chars=120, bold=True))
+    for index, item in enumerate(
+        normalized_recommendations or ["No recommendations returned."],
+        start=1,
+    ):
+        story.append(_paragraph(f"{index}. {item}", styles["bullet"], max_chars=MAX_ITEM_CHARACTERS))
+    story.append(Spacer(1, 0.15 * cm))
 
-    pdf_bytes = buffer.getvalue()
+    clean_job_description = _clean(job_description, MAX_JOB_DESCRIPTION_CHARACTERS)
+    if clean_job_description:
+        story.append(_paragraph("Job Description Appendix", styles["section"], max_chars=120, bold=True))
+        story.append(_paragraph(clean_job_description, styles["body"], max_chars=MAX_JOB_DESCRIPTION_CHARACTERS))
+
+    doc.build(story, onFirstPage=header_footer, onLaterPages=header_footer)
+    payload = buffer.getvalue()
     buffer.close()
 
-    if not pdf_bytes.startswith(b"%PDF"):
+    if not payload.startswith(b"%PDF"):
         raise RuntimeError("Generated CV Analysis report is not a valid PDF.")
-
-    return pdf_bytes
+    return payload

@@ -1,19 +1,29 @@
+from .ar_ae import TRANSLATIONS as AR_AE_TRANSLATIONS
 from .de import TRANSLATIONS as DE_TRANSLATIONS
 from .en import TRANSLATIONS as EN_TRANSLATIONS
+from .en_us import TRANSLATIONS as EN_US_TRANSLATIONS
 from .es import TRANSLATIONS as ES_TRANSLATIONS
 from .fr import TRANSLATIONS as FR_TRANSLATIONS
 from .it import TRANSLATIONS as IT_TRANSLATIONS
-from .sr_cyrl import TRANSLATIONS as SR_CYRL_TRANSLATIONS
+from .nl import TRANSLATIONS as NL_TRANSLATIONS
+from .pt_br import TRANSLATIONS as PT_BR_TRANSLATIONS
+from .ru import TRANSLATIONS as RU_TRANSLATIONS
 from .sr_latn import TRANSLATIONS as SR_LATN_TRANSLATIONS
+from .zh_cn import TRANSLATIONS as ZH_CN_TRANSLATIONS
 
 CATALOGS = {
     "en": EN_TRANSLATIONS,
+    "en_us": EN_US_TRANSLATIONS,
     "sr_latn": SR_LATN_TRANSLATIONS,
-    "sr_cyrl": SR_CYRL_TRANSLATIONS,
     "de": DE_TRANSLATIONS,
     "fr": FR_TRANSLATIONS,
     "es": ES_TRANSLATIONS,
     "it": IT_TRANSLATIONS,
+    "pt_br": PT_BR_TRANSLATIONS,
+    "nl": NL_TRANSLATIONS,
+    "ru": RU_TRANSLATIONS,
+    "zh_cn": ZH_CN_TRANSLATIONS,
+    "ar_ae": AR_AE_TRANSLATIONS,
 }
 
 __all__ = ["CATALOGS"]

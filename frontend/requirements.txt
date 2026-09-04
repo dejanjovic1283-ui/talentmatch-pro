@@ -5,4 +5,6 @@ pandas
 plotly
 pypdf
 PyPDF2
-reportlab>=4.0
+reportlab==5.0.1
+arabic-reshaper==3.0.1
+python-bidi==0.6.11

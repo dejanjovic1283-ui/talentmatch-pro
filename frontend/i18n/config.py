@@ -20,10 +20,17 @@ LANGUAGE_SESSION_KEY: Final[str] = "tm_locale"
 SUPPORTED_LOCALES: Final[dict[str, LocaleDefinition]] = {
     "en": LocaleDefinition(
         code="en",
-        label="English",
-        native_label="English",
+        label="English (UK)",
+        native_label="English (UK)",
         flag="🇬🇧",
-        html_lang="en",
+        html_lang="en-GB",
+    ),
+    "en_us": LocaleDefinition(
+        code="en_us",
+        label="English (US)",
+        native_label="English (US)",
+        flag="🇺🇸",
+        html_lang="en-US",
     ),
     "sr_latn": LocaleDefinition(
         code="sr_latn",
@@ -32,13 +39,6 @@ SUPPORTED_LOCALES: Final[dict[str, LocaleDefinition]] = {
         flag="🇷🇸",
         html_lang="sr-Latn",
     ),
-    "sr_cyrl": LocaleDefinition(
-        code="sr_cyrl",
-        label="Serbian (Cyrillic)",
-        native_label="Српски (ћирилица)",
-        flag="🇷🇸",
-        html_lang="sr-Cyrl",
-    ),
     "de": LocaleDefinition(
         code="de",
         label="German",
@@ -46,7 +46,13 @@ SUPPORTED_LOCALES: Final[dict[str, LocaleDefinition]] = {
         flag="🇩🇪",
         html_lang="de",
     ),
-    "fr": LocaleDefinition(code="fr", label="French", native_label="Français", flag="🇫🇷", html_lang="fr"),
+    "fr": LocaleDefinition(
+        code="fr",
+        label="French",
+        native_label="Français",
+        flag="🇫🇷",
+        html_lang="fr",
+    ),
     "es": LocaleDefinition(
         code="es",
         label="Spanish",
@@ -54,7 +60,48 @@ SUPPORTED_LOCALES: Final[dict[str, LocaleDefinition]] = {
         flag="🇪🇸",
         html_lang="es",
     ),
-    "it": LocaleDefinition(code="it", label="Italian", native_label="Italiano", flag="🇮🇹", html_lang="it"),
+    "it": LocaleDefinition(
+        code="it",
+        label="Italian",
+        native_label="Italiano",
+        flag="🇮🇹",
+        html_lang="it",
+    ),
+    "pt_br": LocaleDefinition(
+        code="pt_br",
+        label="Portuguese (Brazil)",
+        native_label="Português (Brasil)",
+        flag="🇧🇷",
+        html_lang="pt-BR",
+    ),
+    "nl": LocaleDefinition(
+        code="nl",
+        label="Dutch",
+        native_label="Nederlands",
+        flag="🇳🇱",
+        html_lang="nl",
+    ),
+    "ru": LocaleDefinition(
+        code="ru",
+        label="Russian",
+        native_label="Русский",
+        flag="🇷🇺",
+        html_lang="ru",
+    ),
+    "zh_cn": LocaleDefinition(
+        code="zh_cn",
+        label="Chinese (Simplified)",
+        native_label="简体中文",
+        flag="🇨🇳",
+        html_lang="zh-CN",
+    ),
+    "ar_ae": LocaleDefinition(
+        code="ar_ae",
+        label="Arabic (UAE)",
+        native_label="العربية (الإمارات)",
+        flag="🇦🇪",
+        html_lang="ar-AE",
+    ),
 }
 
 SUPPORTED_LOCALE_CODES: Final[tuple[str, ...]] = tuple(SUPPORTED_LOCALES)

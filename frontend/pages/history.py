@@ -13,6 +13,7 @@ import streamlit as st
 
 from auth_utils import api_get, is_logged_in, is_pro_user
 from components.sidebar import render_sidebar
+from components.pdf_reports import MODULE_ACCENTS, build_branded_pdf_report
 from components.ui import (
     apply_global_styles,
     render_action_panel,
@@ -654,224 +655,43 @@ def safe_report_filename(cv_filename: str, suffix: str = "talentmatch_report") -
 
 
 def build_pdf_report(items: list[dict[str, Any]], title: str = "TalentMatch Pro History Report") -> bytes | None:
+    """Build a compact unified History PDF using the same final report system."""
     try:
-        from reportlab.lib import colors
-        from reportlab.lib.enums import TA_CENTER
-        from reportlab.lib.pagesizes import A4
-        from reportlab.lib.styles import ParagraphStyle, getSampleStyleSheet
-        from reportlab.lib.units import cm, inch
-        from reportlab.platypus import Paragraph, SimpleDocTemplate, Spacer, Table, TableStyle
+        counts = calculate_counts(items)
+        sections: list[dict[str, Any]] = []
+        for idx, item in enumerate(items, start=1):
+            cv_file = clean_export_text(get_cv_filename(item))
+            created_at = clean_export_text(get_created_at(item))
+            score = get_report_score(item)
+            label = history_label(item)
+            summary = clean_export_text(item.get("summary") or item.get("analysis") or "")
+            positive_label, strengths, negative_label, weaknesses = report_section_data(item)
+            recommendations = first_nonempty_item_list(item, "recommendations")
+            job_description = clean_export_text(item.get("job_description") or item.get("job") or item.get("description") or "")
+            sections.extend([
+                {"title": f"{idx}. {cv_file} - {label} - {score}/100 - {format_created_at(created_at)}", "kind": "card", "content": summary or "No summary returned."},
+                {"title": positive_label, "kind": "bullets", "content": strengths, "fallback": f"No {positive_label.lower()} saved."},
+                {"title": negative_label, "kind": "bullets", "content": weaknesses, "fallback": f"No {negative_label.lower()} saved."},
+                {"title": "Recommendations", "kind": "bullets", "content": recommendations, "fallback": "No recommendations saved."},
+            ])
+            if job_description:
+                sections.append({"title": "Job Description Appendix", "kind": "text", "content": job_description[:2500]})
+        return build_branded_pdf_report(
+            title=title,
+            report_label="History",
+            accent_hex=MODULE_ACCENTS["history"],
+            subtitle="Saved TalentMatch Pro reports in one consistent export.",
+            metrics=(
+                ("Total", counts["total"]),
+                ("ATS", counts["ats_checker"]),
+                ("Semantic", counts["semantic_match"]),
+                ("Recruiter", counts["recruiter_mode"]),
+            ),
+            metadata=(("CV Analysis", counts["cv_analysis"]), ("CV Rewrite", counts["cv_rewrite"])),
+            sections=sections or ({"title": "History", "kind": "text", "content": "No history items available."},),
+        )
     except Exception:
         return None
-
-    buffer = BytesIO()
-    doc = SimpleDocTemplate(
-        buffer,
-        pagesize=A4,
-        rightMargin=42,
-        leftMargin=42,
-        topMargin=52,
-        bottomMargin=58,
-        title=title,
-        author="TalentMatch Pro",
-    )
-
-    styles = getSampleStyleSheet()
-
-    title_style = ParagraphStyle(
-        "TalentMatchTitle",
-        parent=styles["Title"],
-        fontSize=22,
-        leading=28,
-        alignment=TA_CENTER,
-        textColor=colors.HexColor("#111827"),
-        spaceAfter=8,
-    )
-    subtitle_style = ParagraphStyle(
-        "TalentMatchSubtitle",
-        parent=styles["Normal"],
-        fontSize=9,
-        leading=12,
-        alignment=TA_CENTER,
-        textColor=colors.HexColor("#6B7280"),
-        spaceAfter=18,
-    )
-    section_style = ParagraphStyle(
-        "TalentMatchSection",
-        parent=styles["Heading2"],
-        fontSize=14,
-        leading=18,
-        textColor=colors.HexColor("#111827"),
-        spaceBefore=12,
-        spaceAfter=8,
-    )
-    label_style = ParagraphStyle(
-        "TalentMatchLabel",
-        parent=styles["Normal"],
-        fontSize=9,
-        leading=12,
-        textColor=colors.white,
-        alignment=TA_CENTER,
-    )
-    normal_style = ParagraphStyle(
-        "TalentMatchNormal",
-        parent=styles["Normal"],
-        fontSize=9,
-        leading=13,
-        textColor=colors.HexColor("#1F2937"),
-    )
-    small_style = ParagraphStyle(
-        "TalentMatchSmall",
-        parent=styles["Normal"],
-        fontSize=8,
-        leading=11,
-        textColor=colors.HexColor("#6B7280"),
-    )
-    bullet_style = ParagraphStyle(
-        "TalentMatchBullet",
-        parent=styles["Normal"],
-        fontSize=8.5,
-        leading=12,
-        leftIndent=10,
-        firstLineIndent=-6,
-        textColor=colors.HexColor("#1F2937"),
-    )
-
-    def draw_header_footer(canvas: Any, document: Any) -> None:
-        canvas.saveState()
-        width, height = A4
-
-        canvas.setStrokeColor(colors.HexColor("#D1D5DB"))
-        canvas.setLineWidth(0.4)
-        canvas.line(1.6 * cm, height - 1.12 * cm, width - 1.6 * cm, height - 1.12 * cm)
-
-        canvas.setFont("Helvetica-Bold", 9)
-        canvas.setFillColor(colors.HexColor("#111827"))
-        canvas.drawString(1.6 * cm, height - 0.82 * cm, "TalentMatch Pro")
-
-        canvas.setFont("Helvetica", 8)
-        canvas.setFillColor(colors.HexColor("#6B7280"))
-        canvas.drawRightString(width - 1.6 * cm, height - 0.82 * cm, "History PDF Report")
-
-        footer_y = 0.72 * cm
-        line_y = 1.08 * cm
-        canvas.setStrokeColor(colors.HexColor("#D1D5DB"))
-        canvas.line(1.6 * cm, line_y, width - 1.6 * cm, line_y)
-        canvas.setFont("Helvetica", 8)
-        canvas.setFillColor(colors.HexColor("#6B7280"))
-        canvas.drawString(1.6 * cm, footer_y, "Generated by TalentMatch Pro")
-        canvas.drawRightString(width - 1.6 * cm, footer_y, f"Page {document.page}")
-        canvas.restoreState()
-
-    story: list[Any] = [
-        Paragraph(safe_html(title), title_style),
-        Paragraph(f"Generated: {format_generated_timestamp()}", subtitle_style),
-    ]
-
-    if not items:
-        story.append(Paragraph("No history items available.", normal_style))
-        doc.build(story, onFirstPage=draw_header_footer, onLaterPages=draw_header_footer)
-        pdf_bytes = buffer.getvalue()
-        buffer.close()
-        return pdf_bytes
-
-    counts = calculate_counts(items)
-    summary_data = [
-        ["Total", str(counts["total"])],
-        ["ATS", str(counts["ats_checker"])],
-        ["Semantic", str(counts["semantic_match"])],
-        ["Recruiter", str(counts["recruiter_mode"])],
-        ["CV Analysis", str(counts["cv_analysis"])],
-        ["CV Rewrite", str(counts["cv_rewrite"])],
-    ]
-    summary_table = Table(summary_data, colWidths=[2.0 * inch, 1.0 * inch])
-    summary_table.setStyle(
-        TableStyle(
-            [
-                ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#E8F0FE")),
-                ("TEXTCOLOR", (0, 0), (-1, -1), colors.HexColor("#1F2937")),
-                ("GRID", (0, 0), (-1, -1), 0.4, colors.HexColor("#D1D5DB")),
-                ("FONTNAME", (0, 0), (-1, -1), "Helvetica-Bold"),
-                ("PADDING", (0, 0), (-1, -1), 7),
-            ]
-        )
-    )
-    story.append(summary_table)
-    story.append(Spacer(1, 14))
-
-    for idx, item in enumerate(items, start=1):
-        cv_file = clean_export_text(get_cv_filename(item))
-        created_at = clean_export_text(get_created_at(item))
-        score = get_report_score(item)
-        analysis_type = normalize_type(item)
-        label = history_label(item)
-        label_color = PDF_TYPE_COLORS.get(analysis_type, "#263238")
-        sc_color = score_color(score)
-
-        summary = clean_export_text(item.get("summary") or item.get("analysis") or "")
-        positive_label, strengths, negative_label, weaknesses = report_section_data(item)
-        recommendations = first_nonempty_item_list(item, "recommendations")
-        job_description = clean_export_text(item.get("job_description") or item.get("job") or item.get("description") or "")
-
-        story.append(Paragraph(f"{idx}. {safe_html(cv_file)}", section_style))
-
-        meta_table = Table(
-            [
-                [
-                    Paragraph(safe_html(label), label_style),
-                    Paragraph(f"<b>Score:</b> <font color='{sc_color}'>{score}/100</font>", normal_style),
-                    Paragraph(f"<b>Saved:</b> {safe_html(format_created_at(created_at))}", small_style),
-                ]
-            ],
-            colWidths=[1.35 * inch, 1.25 * inch, 3.6 * inch],
-        )
-        meta_table.setStyle(
-            TableStyle(
-                [
-                    ("BACKGROUND", (0, 0), (0, 0), colors.HexColor(label_color)),
-                    ("BACKGROUND", (1, 0), (-1, 0), colors.HexColor("#F9FAFB")),
-                    ("GRID", (0, 0), (-1, -1), 0.4, colors.HexColor("#D1D5DB")),
-                    ("PADDING", (0, 0), (-1, -1), 7),
-                    ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
-                ]
-            )
-        )
-        story.append(meta_table)
-        story.append(Spacer(1, 8))
-
-        story.append(Paragraph("<b>Summary</b>", normal_style))
-        story.append(Paragraph(safe_html(summary or "No summary returned."), normal_style))
-        story.append(Spacer(1, 6))
-
-        story.append(Paragraph(f"<b>{safe_html(positive_label)}</b>", normal_style))
-        for value in strengths or [f"No {positive_label.lower()} saved."]:
-            story.append(Paragraph(f"• {safe_html(value)}", bullet_style))
-
-        story.append(Spacer(1, 4))
-        story.append(Paragraph(f"<b>{safe_html(negative_label)}</b>", normal_style))
-        for value in weaknesses or [f"No {negative_label.lower()} saved."]:
-            story.append(Paragraph(f"• {safe_html(value)}", bullet_style))
-
-        story.append(Spacer(1, 4))
-        story.append(Paragraph("<b>Recommendations</b>", normal_style))
-        for value in recommendations or ["No recommendations saved."]:
-            story.append(Paragraph(f"• {safe_html(value)}", bullet_style))
-
-        if job_description:
-            clean_job = safe_html(clean_export_text(job_description))
-            if len(clean_job) > 2500:
-                clean_job = clean_job[:2500] + "..."
-            story.append(Spacer(1, 4))
-            story.append(Paragraph("<b>Job Description Appendix</b>", normal_style))
-            story.append(Paragraph(clean_job, small_style))
-
-        story.append(Spacer(1, 14))
-
-    doc.build(story, onFirstPage=draw_header_footer, onLaterPages=draw_header_footer)
-    pdf_bytes = buffer.getvalue()
-    buffer.close()
-    return pdf_bytes
-
 
 def history_endpoint(selected_type: str | None) -> str:
     if not selected_type:

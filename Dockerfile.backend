@@ -10,7 +10,12 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
 
 WORKDIR /app
 
-RUN groupadd --system appgroup \
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends \
+        fonts-droid-fallback \
+        fonts-noto-core \
+    && rm -rf /var/lib/apt/lists/* \
+    && groupadd --system appgroup \
     && useradd --system --gid appgroup --create-home appuser
 
 COPY backend/requirements.txt /tmp/requirements.txt
