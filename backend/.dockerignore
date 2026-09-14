@@ -1,0 +1,39 @@
+﻿# Python caches and test artifacts
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+
+# Virtual environments
+.venv/
+venv/
+env/
+
+# Local databases and runtime files
+*.db
+*.sqlite
+*.sqlite3
+*.log
+*.pid
+
+# Secrets and local environment files
+.env
+.env.*
+serviceAccountKey.json
+service-account*.json
+*firebase*credentials*.json
+
+# Editor / OS metadata
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Build/package output
+build/
+dist/
+*.egg-info/

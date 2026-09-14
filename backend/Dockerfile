@@ -1,0 +1,41 @@
+﻿# syntax=docker/dockerfile:1.7
+
+FROM python:3.13-slim-bookworm
+
+ENV PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1 \
+    PIP_DISABLE_PIP_VERSION_CHECK=1 \
+    PIP_NO_CACHE_DIR=1 \
+    PORT=8000
+
+WORKDIR /app
+
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends \
+        fonts-droid-fallback \
+        fonts-noto-core \
+    && rm -rf /var/lib/apt/lists/* \
+    && groupadd --system appgroup \
+    && useradd --system --gid appgroup --create-home appuser
+
+COPY requirements.txt /tmp/requirements.txt
+
+RUN python -m pip install --upgrade pip \
+    && python -m pip install --no-cache-dir -r /tmp/requirements.txt \
+    && rm -f /tmp/requirements.txt
+
+COPY --chown=appuser:appgroup . /app/
+
+RUN mkdir -p /app/data \
+    && chown -R appuser:appgroup /app/data
+
+USER appuser
+
+EXPOSE 8000
+
+HEALTHCHECK --interval=30s --timeout=5s --start-period=25s --retries=3 \
+    CMD python -c "import os, urllib.request; urllib.request.urlopen('http://127.0.0.1:' + os.getenv('PORT', '8000') + '/healthz', timeout=4)" || exit 1
+
+STOPSIGNAL SIGTERM
+
+CMD ["sh", "-c", "exec uvicorn main:app --host 0.0.0.0 --port ${PORT:-8000} --proxy-headers --forwarded-allow-ips='*'"]
