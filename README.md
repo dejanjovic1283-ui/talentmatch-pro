@@ -1,7 +1,6 @@
 <!--
 TalentMatch Pro
-Final GitHub Showcase README.md
-Production SaaS Portfolio Documentation
+v3.0 FINAL — Production & Portfolio README
 -->
 
 <div align="center">
@@ -14,55 +13,53 @@ Production SaaS Portfolio Documentation
 
 ### AI-Powered Resume Intelligence & Recruitment Platform
 
-**Analyze resumes. Improve ATS compatibility. Match candidates semantically. Rank applicants. Export professional reports.**
+**Analyze resumes. Improve ATS compatibility. Match candidates semantically. Rank applicants. Manage candidate intelligence. Export professional reports.**
 
 <br />
 
 <a href="https://talentmatchcv.com"><strong>🌐 Live App</strong></a>
 &nbsp;&nbsp;•&nbsp;&nbsp;
+<a href="https://api.talentmatchcv.com"><strong>⚡ Production API</strong></a>
+&nbsp;&nbsp;•&nbsp;&nbsp;
 <a href="https://github.com/dejanjovic1283-ui/talentmatch-pro"><strong>📦 Repository</strong></a>
-&nbsp;&nbsp;•&nbsp;&nbsp;
-<a href="#-table-of-contents"><strong>📚 Documentation</strong></a>
-&nbsp;&nbsp;•&nbsp;&nbsp;
-<a href="#-api-reference"><strong>⚡ API</strong></a>
 
 <br />
 <br />
 
-![Version](https://img.shields.io/badge/version-v1.0.0-blue)
+![Version](https://img.shields.io/badge/version-v3.0%20FINAL-blue)
 ![Status](https://img.shields.io/badge/status-production-success)
-![Release](https://img.shields.io/badge/release-stable-success)
-![Python](https://img.shields.io/badge/Python-3.14-blue)
-![FastAPI](https://img.shields.io/badge/FastAPI-backend-009688)
-![Streamlit](https://img.shields.io/badge/Streamlit-frontend-FF4B4B)
-![PostgreSQL](https://img.shields.io/badge/PostgreSQL-database-336791)
-![Firebase](https://img.shields.io/badge/Firebase-auth%20%26%20storage-FFCA28)
-![OpenAI](https://img.shields.io/badge/OpenAI-AI%20engine-10A37F)
-![PayPal](https://img.shields.io/badge/Billing-PayPal-00457C)
-![Render](https://img.shields.io/badge/Deploy-Render-black)
-![License](https://img.shields.io/badge/license-MIT-yellow)
+![Frontend](https://img.shields.io/badge/frontend-Streamlit-FF4B4B)
+![Backend](https://img.shields.io/badge/backend-FastAPI-009688)
+![Database](https://img.shields.io/badge/database-PostgreSQL-336791)
+![Auth](https://img.shields.io/badge/auth-Firebase-FFCA28)
+![AI](https://img.shields.io/badge/AI-OpenAI-10A37F)
+![Billing](https://img.shields.io/badge/billing-PayPal-00457C)
+![Deploy](https://img.shields.io/badge/deploy-Render-black)
+![Runtime](https://img.shields.io/badge/runtime-Docker-2496ED)
 
 </div>
 
 ---
 
-## 📌 Project Summary
+## 📌 Executive Overview
 
-**TalentMatch Pro** is a production-ready SaaS application for resume analysis, ATS optimization, semantic job matching, recruiter workflows, subscription billing, user history, and professional report generation.
+**TalentMatch Pro** is a production AI SaaS platform for resume intelligence, ATS optimization, semantic job matching, recruiter workflows, candidate management, subscription billing, multilingual UX, persistent analysis history, and professional report generation.
 
-It is built as a real full-stack SaaS product, not as a simple demo.
+It is built as a real end-to-end SaaS product rather than a single-feature AI demo.
 
 The platform combines:
 
-- **Streamlit** frontend for the SaaS user interface.
-- **FastAPI** backend for secure and reusable API workflows.
-- **OpenAI** for AI-powered resume intelligence.
-- **PostgreSQL** for persistent analysis history and user-related records.
-- **Firebase Authentication** for secure user access.
-- **Firebase Storage** for CV file handling.
-- **PayPal** for subscription billing.
-- **Render** for production deployment.
-- **Custom domain** for the public production app.
+- **Streamlit** for the user-facing SaaS experience.
+- **FastAPI** for secure API and business workflows.
+- **OpenAI** for resume intelligence, rewrite assistance, semantic scoring, and recruiter analysis.
+- **PostgreSQL** for persistent production data.
+- **Firebase Authentication** for user identity and protected access.
+- **Firebase Storage** for file-oriented workflows.
+- **PayPal** as the only production billing provider.
+- **ReportLab** for professional PDF generation.
+- **Docker** for reproducible production runtimes.
+- **Render** for frontend, backend, and managed PostgreSQL deployment.
+- **Cloudflare-backed custom domains** for public production access.
 
 ---
 
@@ -71,714 +68,384 @@ The platform combines:
 | Resource | URL |
 |---|---|
 | Production App | https://talentmatchcv.com |
+| Production API | https://api.talentmatchcv.com |
+| API Documentation | https://api.talentmatchcv.com/docs |
 | Frontend Render Service | https://talentmatch-frontend-dejan.onrender.com |
 | Backend Render Service | https://talentmatch-backend-1283.onrender.com |
 | Repository | https://github.com/dejanjovic1283-ui/talentmatch-pro |
-| Health Endpoint | https://talentmatch-backend-1283.onrender.com/healthz |
-| Ready Endpoint | https://talentmatch-backend-1283.onrender.com/readyz |
+| Frontend Health | https://talentmatchcv.com/_stcore/health |
+| Backend Health | https://api.talentmatchcv.com/healthz |
+| Backend Readiness | https://api.talentmatchcv.com/readyz |
+| Sitemap | https://api.talentmatchcv.com/sitemap.xml |
+| Robots | https://api.talentmatchcv.com/robots.txt |
 
 ---
 
 ## 🧭 Table of Contents
 
-- [Project Summary](#-project-summary)
+- [Executive Overview](#-executive-overview)
 - [Production URLs](#-production-urls)
-- [Product Vision](#-product-vision)
-- [Core Features](#-core-features)
-- [User Workflows](#-user-workflows)
+- [What TalentMatch Pro Solves](#-what-talentmatch-pro-solves)
+- [v3.0 FINAL Highlights](#-v30-final-highlights)
+- [Core Product Modules](#-core-product-modules)
+- [Internationalization](#-internationalization)
+- [Theme System](#-theme-system)
+- [Professional Reporting](#-professional-reporting)
+- [Application Showcase](#-application-showcase)
 - [Technology Stack](#-technology-stack)
 - [System Architecture](#-system-architecture)
-- [C4 Container View](#-c4-container-view)
-- [Deployment Architecture](#-deployment-architecture)
-- [Authentication Flow](#-authentication-flow)
-- [AI Processing Pipeline](#-ai-processing-pipeline)
-- [Billing Architecture](#-billing-architecture)
-- [Database Model](#-database-model)
-- [Folder Structure](#-folder-structure)
-- [API Reference](#-api-reference)
-- [Request and Response Examples](#-request-and-response-examples)
-- [Local Development](#-local-development)
-- [Environment Variables](#-environment-variables)
-- [Docker](#-docker)
+- [Authentication](#-authentication)
+- [AI Processing](#-ai-processing)
+- [Billing](#-billing)
+- [Data & Persistence](#-data--persistence)
+- [Docker Production Architecture](#-docker-production-architecture)
 - [Render Deployment](#-render-deployment)
 - [Security](#-security)
-- [Performance](#-performance)
-- [Monitoring and Logging](#-monitoring-and-logging)
-- [Testing Strategy](#-testing-strategy)
-- [Production Checklist](#-production-checklist)
-- [Troubleshooting](#-troubleshooting)
-- [Roadmap](#-roadmap)
-- [Architecture Decision Records](#-architecture-decision-records)
-- [Contributing](#-contributing)
-- [License](#-license)
+- [Performance & Reliability](#-performance--reliability)
+- [Observability](#-observability)
+- [Health & Readiness](#-health--readiness)
+- [SEO & Domain Configuration](#-seo--domain-configuration)
+- [Production Acceptance](#-production-acceptance)
+- [API Overview](#-api-overview)
+- [Local Development](#-local-development)
+- [Environment Configuration](#-environment-configuration)
+- [Repository Structure](#-repository-structure)
+- [Sample Reports](#-sample-reports)
+- [Architecture Documentation](#-architecture-documentation)
+- [Release Status](#-release-status)
+- [Future Development](#-future-development)
 - [Founder](#-founder)
 - [Support](#-support)
-- [Acknowledgements](#-acknowledgements)
-- [Application Showcase](#-application-showcase)
-- [Report Gallery](#-report-gallery)
-- [Documentation & Assets](#-documentation--assets)
-- [Project Statistics](#-project-statistics)
-- [Production Highlights](#-production-highlights)
-- [Project Showcase](#-project-showcase)
-- [Repository Highlights](#-repository-highlights)
-- [Why TalentMatch Pro?](#-why-talentmatch-pro)
-- [Project Goals](#-project-goals)
-- [Built With Passion](#-built-with-passion)
 
 ---
 
-## 🎯 Product Vision
+## 🎯 What TalentMatch Pro Solves
 
-TalentMatch Pro is designed to make resume review and candidate evaluation more practical, structured, and explainable.
+TalentMatch Pro helps job seekers and recruiters evaluate resume-to-role alignment in a structured, explainable workflow.
 
-Instead of giving generic resume advice, TalentMatch Pro evaluates a resume against a specific target job description.
+Instead of returning generic resume advice, the platform works against a specific target job description and combines multiple signals:
 
-That makes the output useful for:
+- resume quality,
+- ATS keyword coverage,
+- contextual semantic alignment,
+- recruiter-style strengths and gaps,
+- rewrite guidance,
+- candidate ranking,
+- persistent history,
+- downloadable evidence-rich reports.
 
-- job seekers preparing applications,
+This makes the platform useful for:
+
+- job seekers preparing targeted applications,
 - recruiters comparing candidates,
-- HR teams screening applicants,
+- HR and talent teams screening applicants,
 - career coaches supporting clients,
-- developers reviewing a real SaaS architecture,
-- technical reviewers evaluating a production-grade portfolio project.
+- technical reviewers evaluating a real production Python SaaS architecture.
+
+---
+
+## 🚀 v3.0 FINAL Highlights
+
+TalentMatch Pro v3.0 FINAL represents the completed production hardening and portfolio release of the platform.
+
+### Product
+
+- AI CV Analysis
+- ATS Checker
+- CV Rewrite
+- Semantic Match
+- Recruiter Mode
+- Candidate Database integrated into the recruiter workflow
+- History and report archive
+- Admin Analytics
+- PayPal production subscriptions
+- Professional CSV / TXT / PDF exports
+
+### User Experience
+
+- 12 production locales
+- Dark theme
+- Light theme
+- System theme
+- Theme-aware enterprise UI
+- Production-ready account and pricing workflows
+- Responsive Streamlit workspace
+
+### Platform Engineering
+
+- Dockerized frontend runtime
+- Dockerized backend runtime
+- PostgreSQL production persistence
+- Firebase Authentication and Storage
+- OpenAI reliability controls
+- Request IDs and structured logging
+- Health/readiness endpoints
+- Rate limiting
+- Security headers
+- ETag and conditional GET
+- GZip compression
+- Cache-Control policies
+- Graceful degradation and external-service circuit breakers
+- Unified multilingual Unicode PDF engine
+
+---
+
+## ✨ Core Product Modules
+
+### 📄 CV Analysis
+
+Evaluates a resume against a target job description and returns structured recruiter-style intelligence.
+
+Typical output includes:
+
+- overall score,
+- executive summary,
+- strengths,
+- gaps,
+- priority recommendations,
+- job description appendix,
+- TXT/PDF exports,
+- persistent History record.
+
+### 🎯 ATS Checker
+
+Evaluates resume keyword coverage and ATS-oriented alignment.
+
+Outputs include:
+
+- ATS score,
+- matched keywords,
+- missing keywords,
+- coverage insight,
+- improvement recommendations,
+- TXT/PDF exports.
+
+### ✍️ CV Rewrite
+
+Produces targeted rewrite guidance while preserving truthful candidate experience.
+
+Focus areas include:
+
+- stronger headline,
+- improved professional summary,
+- rewritten experience bullets,
+- ATS keyword integration,
+- cautions against unsupported claims,
+- TXT/PDF export.
+
+### 🧠 Semantic Match
+
+Combines contextual semantic similarity with keyword alignment.
+
+Outputs include:
+
+- overall score,
+- semantic score,
+- keyword score,
+- matched themes,
+- missing themes,
+- matched/missing keywords,
+- recruiter-style interpretation,
+- priority recommendations,
+- TXT/PDF export.
+
+### 👥 Recruiter Mode
+
+Recruiter Mode evaluates one or more candidates against a shared target job description.
+
+Capabilities include:
+
+- candidate upload and batch ranking,
+- overall / semantic / keyword scoring,
+- recruiter verdicts,
+- candidate summaries,
+- strengths and gaps,
+- candidate-specific recommendations,
+- overall recruiter recommendations,
+- CSV export,
+- TXT export,
+- PDF export,
+- saving candidates into Candidate Database.
+
+### 🗂️ Candidate Database
+
+Candidate Database belongs to the **Recruiter Workspace / Recruiter Mode** and provides persistent candidate intelligence for recruiter workflows.
+
+It supports:
+
+- saving analyzed candidates,
+- reviewing stored candidate data,
+- recruiter-oriented organization,
+- reuse of candidate intelligence across hiring workflows.
+
+### 📜 History
+
+Authenticated users can review prior analysis activity and export historical intelligence.
+
+History supports:
+
+- analysis type filtering,
+- search and sorting,
+- score and status display,
+- individual record actions,
+- TXT export,
+- PDF export,
+- multi-record History PDF generation,
+- record deletion,
+- delete-all workflow,
+- pagination.
+
+### 📊 Admin Analytics
+
+Admin Analytics provides production metrics backed by real application data.
+
+Highlights include:
+
+- subscriber intelligence,
+- paid subscriber calculations,
+- MRR calculation,
+- scored analysis counts,
+- product usage distribution,
+- production-oriented KPI presentation,
+- admin-only visibility.
+
+---
+
+## 🌍 Internationalization
+
+TalentMatch Pro v3.0 FINAL ships with 12 active production locales:
+
+| # | Language | Locale |
+|---:|---|---|
+| 1 | English (UK) | `en` |
+| 2 | English (US) | `en_us` |
+| 3 | Srpski — Latinica | `sr_latn` |
+| 4 | Deutsch | `de` |
+| 5 | Français | `fr` |
+| 6 | Español | `es` |
+| 7 | Italiano | `it` |
+| 8 | Português (Brasil) | `pt_br` |
+| 9 | Nederlands | `nl` |
+| 10 | Русский | `ru` |
+| 11 | 简体中文 | `zh_cn` |
+| 12 | العربية (UAE) | `ar_ae` |
+
+The multilingual system includes production UI translation coverage for the language selector, navigation, landing experience, and supporting locale infrastructure.
+
+Serbian Cyrillic is intentionally not part of the final active locale set.
+
+---
+
+## 🌓 Theme System
+
+TalentMatch Pro supports:
+
+- **Dark**
+- **Light**
+- **System**
+
+The final UI acceptance covered all three modes in production, including key analysis, reporting, recruiter, history, pricing, and account workflows.
+
+---
+
+## 📑 Professional Reporting
+
+TalentMatch Pro uses a unified report architecture for production exports.
+
+### Final PDF modules
+
+1. CV Analysis
+2. ATS Checker
+3. CV Rewrite
+4. Semantic Match
+5. Recruiter Mode
+6. History
+
+### Unicode support
+
+The production PDF runtime supports multilingual output with:
+
+- Noto Sans,
+- Noto Sans Arabic,
+- Droid Sans Fallback for CJK coverage,
+- Arabic reshaping,
+- bidi rendering for RTL text.
+
+The Docker runtime installs required system fonts directly so PDF generation is reproducible across local and Render environments.
+
+### Export formats
+
+- PDF
+- TXT
+- CSV where appropriate to the workflow
+
+### Report characteristics
+
+- shared visual structure,
+- module-specific accent styling,
+- compact professional spacing,
+- score/status consistency,
+- structured recommendations,
+- job description appendices,
+- Unicode multilingual support.
 
 ---
 
 ## 📸 Application Showcase
 
-Below are selected screenshots demonstrating the primary TalentMatch Pro workflows and user experience.
-
----
-
-## 🏠 Dashboard Overview
+### Dashboard
 
 ![Dashboard Overview](docs/screenshots/01_dashboard_overview.png)
 
-Production dashboard showing subscription status, available AI tools, quick actions, and workspace overview.
+Production workspace overview with user context, feature access, and navigation.
 
----
+### ATS Checker
 
-## 📊 Dashboard Features
+![ATS Checker Results](docs/screenshots/04_ats_checker_results.png)
 
-![Dashboard Features](docs/screenshots/02_dashboard_features.png)
+ATS-oriented score, matched keywords, missing keywords, and recommendations.
 
-Overview of the main workspace and feature navigation.
-
----
-
-## 📄 ATS Checker
-
-### Input
-
-![ATS Input](docs/screenshots/03_ats_checker_input.png)
-
-### Results
-
-![ATS Results](docs/screenshots/04_ats_checker_results.png)
-
-The ATS Checker evaluates keyword coverage, missing skills, and overall ATS compatibility.
-
----
-
-## ✍️ CV Rewrite
-
-### Input
-
-![CV Rewrite Input](docs/screenshots/05_cv_rewrite_input.png)
-
-### Results
+### CV Rewrite
 
 ![CV Rewrite Results](docs/screenshots/06_cv_rewrite_results.png)
 
-AI-assisted resume rewriting while preserving truthful candidate experience.
+AI-assisted rewrite guidance for stronger role alignment and clearer resume positioning.
 
----
-
-## 🧠 Semantic Match
-
-### Input
-
-![Semantic Match Input](docs/screenshots/07_semantic_match_input.png)
-
-### Results
+### Semantic Match
 
 ![Semantic Match Results](docs/screenshots/08_semantic_match_results.png)
 
-Semantic similarity analysis compares contextual meaning between the resume and the target job description.
+Contextual matching that combines semantic and keyword signals.
 
----
-
-## 👥 Recruiter Mode
-
-### Candidate Upload
-
-![Recruiter Upload](docs/screenshots/09_recruiter_mode_input.png)
-
-### Candidate Ranking
+### Recruiter Mode
 
 ![Recruiter Ranking](docs/screenshots/10_recruiter_mode_ranking.png)
 
-Recruiters can rank multiple candidates against a single job description.
+Candidate ranking, scoring, recruiter verdicts, and hiring intelligence.
 
----
-
-## 📜 Reports & History
-
-### History Overview
+### History
 
 ![History](docs/screenshots/11_reports_history_overview.png)
 
-### Report Details
+Persistent analysis history with filtering, export, and report management.
 
-![Report Details](docs/screenshots/12_report_detail.png)
+### Pricing
 
-Generated reports remain available through the authenticated history page.
+![Pricing](docs/screenshots/13_pricing_overview.png)
 
----
+Production pricing and PayPal-backed Pro upgrade workflow.
 
-## 💳 Pricing
-
-### Pricing Overview
-
-![Pricing Overview](docs/screenshots/13_pricing_overview.png)
-
-### Plan Comparison
-
-![Pricing Comparison](docs/screenshots/14_pricing_comparison.png)
-
-TalentMatch Pro uses PayPal subscriptions for production billing.
-
----
-
-## ⚙️ Account
+### Account
 
 ![Account](docs/screenshots/15_account_overview.png)
 
-Users can manage their profile, subscription, and account settings.
+Profile, subscription, and account status experience.
 
----
-
-## ❤️ System Health
+### System Health / Usage
 
 ![System Health](docs/screenshots/16_usage_and_system_health.png)
 
-Administrative overview showing platform usage and operational status.
-
----
-
-## 📑 Report Gallery
-
-TalentMatch Pro generates professional downloadable reports for every completed analysis.
-
-Reports are available in both **PDF** and **TXT** formats and are stored in the authenticated user history.
-
-## 📄 Sample PDF Reports
-
-| Report | Description |
-|---------|-------------|
-| CV Analysis Report | AI-powered resume evaluation |
-| ATS Checker Report | ATS compatibility and keyword coverage |
-| Semantic Match Report | Contextual resume-to-job comparison |
-| Recruiter Ranking Report | Candidate ranking and recruiter insights |
-| History Export | Complete user analysis history |
-
-📂 Sample reports:
-
-- [`docs/reports/pdf/`](docs/reports/pdf/)
-
----
-
-## 📝 Sample TXT Reports
-
-TXT reports contain the same structured analysis in lightweight text format.
-
-📂 Sample reports:
-
-- [`docs/reports/txt/`](docs/reports/txt/)
-
----
-
-### Report Features
-
-- Professional PDF formatting
-- Clean TXT export
-- AI-generated summaries
-- ATS recommendations
-- Semantic analysis
-- Recruiter insights
-- Downloadable from History
-- Production-ready report generation
-
----
-
-## 📚 Documentation & Assets
-
-TalentMatch Pro includes a complete documentation package located in the `docs/` directory.
-
-This repository contains production-ready documentation, screenshots, sample reports, and architecture diagrams.
-
-## 📂 Documentation Structure
-
-```text
-docs/
-├── screenshots/
-├── reports/
-│   ├── pdf/
-│   └── txt/
-├── architecture/
-├── gifs/
-└── README-assets/
-```
-
-## 📸 Screenshots
-
-Application screenshots:
-
-- Dashboard
-- ATS Checker
-- CV Rewrite
-- Semantic Match
-- Recruiter Mode
-- Reports
-- Pricing
-- Account
-- System Health
-
-📁 Location:
-
-```text
-docs/screenshots/
-```
-
----
-
-## 📑 Reports
-
-Example generated reports:
-
-- PDF Analysis Reports
-- TXT Analysis Reports
-- History Reports
-
-📁 Location:
-
-```text
-docs/reports/
-```
-
----
-
-## 🏗️ Architecture
-
-The complete architecture documentation is available here:
-
-```text
-docs/architecture/architecture.md
-```
-
-Architecture documentation includes:
-
-- System Architecture
-- Deployment Architecture
-- Billing Flow
-- Mermaid Diagrams
-
----
-
-## 🎬 GIF Demonstrations
-
-Animated product demonstrations can be stored in:
-
-```text
-docs/gifs/
-```
-
----
-
-## 🎨 README Assets
-
-Static assets used by the README:
-
-```text
-docs/README-assets/
-```
-
-This folder can contain:
-
-- GitHub Banner
-- Social Preview
-- Icons
-- SVG Assets
-- Diagrams
-
----
-
-## 📈 Project Statistics
-
-TalentMatch Pro is designed as a complete production-ready SaaS platform rather than a single-feature AI demo.
-
-| Category | Details |
-|----------|---------|
-| Project Type | AI SaaS Platform |
-| Status | Production |
-| Architecture | Full-Stack |
-| Frontend | Streamlit |
-| Backend | FastAPI |
-| Database | PostgreSQL |
-| Authentication | Firebase Authentication |
-| Storage | Firebase Storage |
-| AI Engine | OpenAI |
-| Billing | PayPal |
-| Deployment | Render |
-| Custom Domain | talentmatchcv.com |
-| Reports | PDF + TXT |
-| Capability | Status |
-|------------|--------|
-| Resume Analysis | Production |
-| ATS Checker | Production |
-| Semantic Matching | Production |
-| Recruiter Mode | Production |
-| PDF Reports | Production |
-| TXT Reports | Production |
-| Authentication | Production |
-| Subscription Billing | Production |
-
----
-
-## 🚀 Production Highlights
-
-TalentMatch Pro is not a prototype.
-
-It is a fully deployed SaaS application demonstrating modern AI-assisted recruitment workflows.
-
-### Highlights
-
-- Production deployment on Render
-- Custom production domain
-- Secure Firebase Authentication
-- PostgreSQL persistent storage
-- OpenAI-powered resume intelligence
-- PayPal subscription billing
-- AI Resume Analysis
-- ATS Optimization
-- Semantic Matching
-- Recruiter Candidate Ranking
-- Downloadable PDF Reports
-- Downloadable TXT Reports
-- Professional GitHub Documentation
-- Complete API Documentation
-- Mermaid Architecture Diagrams
-- Docker Support
-- Production Monitoring
-- Security Best Practices
-
----
-
-## ⭐ Project Showcase
-
-TalentMatch Pro demonstrates a complete end-to-end AI SaaS workflow, from authentication and subscription management to AI-powered resume analysis and professional report generation.
-
-## End-to-End User Journey
-
-```text
-User Registration
-        │
-        ▼
-Firebase Authentication
-        │
-        ▼
-Dashboard
-        │
-        ▼
-Upload Resume
-        │
-        ▼
-Paste Job Description
-        │
-        ▼
-Choose AI Workflow
-        │
-        ├── Resume Analysis
-        ├── ATS Checker
-        ├── CV Rewrite
-        ├── Semantic Match
-        └── Recruiter Mode
-        │
-        ▼
-OpenAI Processing
-        │
-        ▼
-Structured Analysis
-        │
-        ▼
-Save History
-        │
-        ▼
-Generate PDF / TXT Report
-        │
-        ▼
-Download Results
-```
-
----
-
-## Available AI Workflows
-
-| Workflow | Status |
-|----------|--------|
-| Resume Analysis | ✅ |
-| ATS Checker | ✅ |
-| CV Rewrite | ✅ |
-| Semantic Match | ✅ |
-| Recruiter Ranking | ✅ |
-| Report Generation | ✅ |
-| History | ✅ |
-| PayPal Billing | ✅ |
-
----
-
-## 📊 Repository Highlights
-
-TalentMatch Pro was built as a production-oriented software engineering project.
-
-### Highlights
-
-- Production SaaS Architecture
-- AI-Powered Resume Intelligence
-- FastAPI REST Backend
-- Streamlit Frontend
-- PostgreSQL Persistence
-- Firebase Authentication
-- Firebase Storage
-- OpenAI Integration
-- PayPal Subscription Billing
-- Docker Support
-- Render Deployment
-- Custom Domain
-- Professional Documentation
-- Architecture Diagrams
-- Sample Reports
-- Screenshot Gallery
-
----
-
-## 🌟 Why TalentMatch Pro?
-
-TalentMatch Pro was built to demonstrate how modern AI can support resume optimization and recruitment workflows in a practical, production-ready SaaS application.
-
-Unlike isolated AI demos, TalentMatch Pro combines:
-
-- AI-powered resume intelligence
-- ATS optimization
-- Semantic matching
-- Recruiter workflows
-- Subscription billing
-- Persistent history
-- Professional report generation
-- Secure authentication
-- Production deployment
-- Complete technical documentation
-
-The project emphasizes software architecture, maintainability, security, and user experience while providing realistic end-to-end workflows for both job seekers and recruiters.
-
----
-
-## 🎯 Project Goals
-
-- Deliver a production-ready AI SaaS platform.
-- Demonstrate modern full-stack Python architecture.
-- Showcase practical OpenAI integration.
-- Provide realistic recruiter and job seeker workflows.
-- Follow secure authentication and billing practices.
-- Maintain clean documentation and modular code.
-- Serve as a portfolio-grade engineering project.
-
----
-
-## ❤️ Built With Passion
-
-TalentMatch Pro is the result of continuous design, development, testing, deployment, and documentation.
-
-The project demonstrates not only technical implementation but also product thinking, production deployment, maintainability, and long-term scalability.
-
-Every major component—from authentication and AI processing to billing, reporting, and documentation—has been designed as part of a complete SaaS ecosystem.
-
----
-
-## ✨ Core Features
-
-### 📄 AI Resume Analysis
-
-Analyzes a resume against a job description and returns:
-
-- overall score,
-- recruiter-style summary,
-- matched strengths,
-- missing skills,
-- improvement recommendations,
-- exportable analysis report,
-- history record.
-
-### 🎯 ATS Checker
-
-Evaluates keyword coverage and ATS compatibility.
-
-Returns:
-
-- ATS score,
-- matched keywords,
-- missing keywords,
-- keyword coverage,
-- practical improvement advice.
-
-### ✍️ CV Rewrite
-
-Generates AI-assisted CV rewrite guidance.
-
-Focus areas:
-
-- stronger wording,
-- better role alignment,
-- improved ATS keyword usage,
-- truthful positioning,
-- clearer professional presentation.
-
-### 🧠 Semantic Match
-
-Compares resume meaning with job description meaning.
-
-This goes beyond exact keyword matching and evaluates contextual alignment.
-
-Returns:
-
-- combined score,
-- semantic score,
-- keyword score,
-- matched themes,
-- missing themes,
-- recruiter-style verdict.
-
-### 👥 Recruiter Mode
-
-Ranks multiple candidate CVs against one job description.
-
-Returns:
-
-- candidate ranking,
-- top candidate,
-- score per candidate,
-- semantic score,
-- keyword score,
-- recruiter summaries,
-- recommendations,
-- CSV export.
-
-### 📜 History
-
-Authenticated users can review previous analyses.
-
-History includes:
-
-- analysis type,
-- CV filename,
-- score,
-- summary,
-- recommendations,
-- creation date,
-- export actions.
-
-### 📄 Professional Reports
-
-TalentMatch Pro supports downloadable reports.
-
-Supported formats:
-
-- TXT reports,
-- PDF reports.
-
-PDF reports are generated through the backend and include structured analysis sections.
-
-### 💳 PayPal Billing
-
-TalentMatch Pro uses **PayPal** as the active production billing provider.
-
-The Pro plan unlocks premium workflows such as:
-
-- CV Rewrite,
-- Semantic Match,
-- Recruiter Mode,
-- PDF Reports,
-- extended SaaS workflows.
-
----
-
-## 🧑‍💼 User Workflows
-
-### Job Seeker Workflow
-
-```text
-Register / Login
-    ↓
-Upload CV
-    ↓
-Paste Job Description
-    ↓
-Run AI Resume Analysis
-    ↓
-Review Score and Recommendations
-    ↓
-Improve Resume
-    ↓
-Export Report
-```
-
-### ATS Optimization Workflow
-
-```text
-Upload CV
-    ↓
-Paste Job Description
-    ↓
-Run ATS Checker
-    ↓
-Review Matched Keywords
-    ↓
-Review Missing Keywords
-    ↓
-Improve CV Responsibly
-```
-
-### Recruiter Workflow
-
-```text
-Login
-    ↓
-Open Recruiter Mode
-    ↓
-Upload Multiple Candidate CVs
-    ↓
-Paste Job Description
-    ↓
-Rank Candidates
-    ↓
-Export Results
-```
-
-### Subscription Workflow
-
-```text
-Free User
-    ↓
-Pricing Page
-    ↓
-PayPal Checkout
-    ↓
-Subscription Approval
-    ↓
-Webhook Processing
-    ↓
-Pro Features Enabled
-```
+Operational and usage-oriented platform visibility.
 
 ---
 
@@ -786,16 +453,18 @@ Pro Features Enabled
 
 | Layer | Technology | Purpose |
 |---|---|---|
-| Frontend | Streamlit | SaaS UI and user workflows |
-| Backend | FastAPI | REST API and business logic |
-| AI Engine | OpenAI | Resume analysis and semantic intelligence |
-| Database | PostgreSQL | History, usage, and subscription state |
-| Authentication | Firebase Authentication | Secure login and identity |
-| Storage | Firebase Storage | Uploaded CV file handling |
-| Billing | PayPal | Subscription checkout and webhooks |
-| Hosting | Render | Production frontend/backend deployment |
-| Reports | ReportLab / backend report service | PDF export generation |
-| Language | Python | Main application language |
+| Frontend | Streamlit | SaaS UI and interactive workflows |
+| Backend | FastAPI | API, business logic, security, orchestration |
+| AI | OpenAI | Resume intelligence and semantic analysis |
+| Database | PostgreSQL | Production persistence |
+| Local Database | SQLite | Local development where configured |
+| Authentication | Firebase Authentication | User identity and protected access |
+| Storage | Firebase Storage | File-oriented storage workflows |
+| Billing | PayPal | Production subscriptions |
+| PDF | ReportLab | Professional report generation |
+| Containers | Docker | Reproducible local and production runtime |
+| Hosting | Render | Frontend, backend, managed PostgreSQL |
+| Language | Python 3.13 runtime | Main application language |
 
 ---
 
@@ -803,7 +472,7 @@ Pro Features Enabled
 
 ```mermaid
 flowchart LR
-    U[User] -->|Browser| FE[Streamlit Frontend]
+    U[User / Recruiter / Admin] --> FE[Streamlit Frontend]
 
     FE -->|HTTPS REST API| BE[FastAPI Backend]
 
@@ -811,82 +480,30 @@ flowchart LR
     BE --> STORAGE[Firebase Storage]
     BE --> DB[(PostgreSQL)]
     BE --> AI[OpenAI API]
-    BE --> PAYPAL[PayPal Subscriptions]
+    BE --> PP[PayPal]
+    BE --> OBS[Observability / Metrics]
 
-    BE --> REPORTS[PDF/TXT Report Service]
-    REPORTS --> FE
+    FE --> FPDF[Frontend PDF Engine]
+    BE --> BPDF[Backend PDF Engine]
 
-    PAYPAL -->|Webhook| BE
+    PP -->|Webhook| BE
 ```
 
-### Architecture Principles
+### Architectural principles
 
-- Frontend and backend are separated.
-- Backend owns business logic.
-- Authentication is validated server-side.
-- AI calls are controlled through backend services.
-- Billing state is updated through PayPal webhooks.
-- History is persisted in PostgreSQL.
-- Files are handled through Firebase Storage.
-- Secrets are managed through environment variables.
+- Frontend and backend remain separately deployable.
+- Backend owns protected business logic.
+- Firebase tokens are validated server-side.
+- AI calls are centralized through service-layer integrations.
+- PayPal is the only billing provider.
+- PostgreSQL stores production application state.
+- Candidate Database remains inside the recruiter domain.
+- Report generation uses shared, production-tested PDF infrastructure.
+- Configuration and secrets are environment-driven.
 
 ---
 
-## 🧩 C4 Container View
-
-```mermaid
-flowchart TB
-    Person[Person: Job Seeker / Recruiter]
-
-    subgraph TalentMatchPro[TalentMatch Pro SaaS]
-        Frontend[Container: Streamlit Frontend]
-        Backend[Container: FastAPI Backend]
-        Database[(Container: PostgreSQL Database)]
-    end
-
-    Firebase[External System: Firebase Auth & Storage]
-    OpenAI[External System: OpenAI]
-    PayPal[External System: PayPal]
-    Render[External System: Render Hosting]
-
-    Person --> Frontend
-    Frontend --> Backend
-    Backend --> Database
-    Backend --> Firebase
-    Backend --> OpenAI
-    Backend --> PayPal
-    Frontend --> Render
-    Backend --> Render
-```
-
----
-
-## ☁️ Deployment Architecture
-
-```mermaid
-flowchart LR
-    GitHub[GitHub Repository]
-    RenderFE[Render Frontend Service]
-    RenderBE[Render Backend Service]
-    Domain[Custom Domain: talentmatchcv.com]
-    Postgres[(PostgreSQL)]
-    Firebase[Firebase]
-    OpenAI[OpenAI]
-    PayPal[PayPal]
-
-    GitHub --> RenderFE
-    GitHub --> RenderBE
-    Domain --> RenderFE
-    RenderFE --> RenderBE
-    RenderBE --> Postgres
-    RenderBE --> Firebase
-    RenderBE --> OpenAI
-    RenderBE --> PayPal
-```
-
----
-
-## 🔐 Authentication Flow
+## 🔐 Authentication
 
 ```mermaid
 sequenceDiagram
@@ -895,34 +512,48 @@ sequenceDiagram
     participant Firebase
     participant Backend
 
-    User->>Frontend: Login / Register
-    Frontend->>Firebase: Authenticate user
-    Firebase-->>Frontend: Firebase JWT
-    Frontend->>Backend: Request with Authorization Bearer token
-    Backend->>Firebase: Validate token
-    Firebase-->>Backend: Token valid
+    User->>Frontend: Register / Login
+    Frontend->>Firebase: Authenticate
+    Firebase-->>Frontend: ID token
+    Frontend->>Backend: Authorization: Bearer <token>
+    Backend->>Firebase: Verify token
+    Firebase-->>Backend: Valid identity
     Backend-->>Frontend: Protected response
 ```
 
+Production authorization keeps standard user and admin capabilities separate, including admin-only analytics visibility.
+
 ---
 
-## 🧠 AI Processing Pipeline
+## 🧠 AI Processing
 
 ```mermaid
 flowchart TD
-    Upload[CV Upload] --> Extract[Text Extraction]
-    Extract --> JD[Job Description Input]
-    JD --> Prompt[Prompt Construction]
-    Prompt --> OpenAI[OpenAI Processing]
-    OpenAI --> Structured[Structured JSON Response]
-    Structured --> DB[(Save History)]
-    Structured --> UI[Display Results]
-    Structured --> Report[Generate Report]
+    CV[CV / Resume] --> Extract[Text Extraction]
+    JD[Job Description] --> Context[Analysis Context]
+    Extract --> Context
+    Context --> Service[AI / Semantic Service]
+    Service --> OpenAI[OpenAI]
+    OpenAI --> Structured[Structured Result]
+    Structured --> Score[Score / Status Logic]
+    Structured --> DB[(History / Candidate Data)]
+    Structured --> UI[Streamlit Results]
+    Structured --> Report[PDF / TXT / CSV Export]
 ```
+
+Production reliability controls include configurable timeouts, retries where appropriate, validation, observability, and circuit-breaker state for external services.
 
 ---
 
-## 💳 Billing Architecture
+## 💳 Billing
+
+TalentMatch Pro uses **PayPal only** for billing.
+
+### Production Pro plan
+
+**$19 / month**
+
+The production billing flow includes:
 
 ```mermaid
 sequenceDiagram
@@ -932,375 +563,351 @@ sequenceDiagram
     participant PayPal
     participant Database
 
-    User->>Frontend: Click Upgrade
-    Frontend->>Backend: Create checkout
-    Backend->>PayPal: Create subscription checkout
-    PayPal-->>Backend: Checkout URL
-    Backend-->>Frontend: Redirect URL
-    Frontend-->>User: Redirect to PayPal
+    User->>Frontend: Upgrade to Pro
+    Frontend->>Backend: Create subscription workflow
+    Backend->>PayPal: Create / manage subscription
+    PayPal-->>Frontend: Approval experience
     PayPal->>Backend: Webhook event
-    Backend->>Database: Update subscription status
-    Database-->>Backend: Saved
-    Backend-->>Frontend: Pro status available
+    Backend->>Database: Persist subscription state
+    Database-->>Backend: Updated
+    Backend-->>Frontend: Pro access state
 ```
 
-> **Billing Provider**
->
-> PayPal is the active production billing provider for TalentMatch Pro.
+Production readiness checks confirmed PayPal live configuration, plan configuration, webhook configuration, and closed circuit-breaker state.
 
 ---
 
-## 🗄️ Database Model
+## 🗄️ Data & Persistence
 
-```mermaid
-erDiagram
-    USERS ||--o{ ANALYSIS_HISTORY : owns
-    USERS ||--o{ USAGE_RECORDS : tracks
-    USERS ||--o{ SUBSCRIPTIONS : has
+PostgreSQL is the production database and stores application data used by authenticated workflows.
 
-    USERS {
-        string id
-        string email
-        boolean is_pro
-        boolean is_admin
-        datetime created_at
-    }
+Core persisted domains include:
 
-    ANALYSIS_HISTORY {
-        string id
-        string user_id
-        string analysis_type
-        string cv_filename
-        int score
-        text summary
-        text recommendations
-        datetime created_at
-    }
+- user state,
+- subscription state,
+- usage state,
+- analysis history,
+- recruiter/candidate data,
+- admin analytics inputs.
 
-    USAGE_RECORDS {
-        string id
-        string user_id
-        string feature_name
-        int usage_count
-        datetime updated_at
-    }
-
-    SUBSCRIPTIONS {
-        string id
-        string user_id
-        string provider
-        string status
-        string paypal_subscription_id
-        datetime updated_at
-    }
-```
+SQLite may be used for local development where configured, while production configuration validation requires PostgreSQL.
 
 ---
 
-## 📁 Project Folder Structure
+## 🐳 Docker Production Architecture
+
+TalentMatch Pro v3.0 FINAL uses Docker for both Render web services.
+
+### Backend runtime
+
+`backend/Dockerfile` provides:
+
+- Python 3.13 slim runtime,
+- production dependencies,
+- Noto / Droid fallback font installation,
+- non-root application user,
+- health check against `/healthz`,
+- Uvicorn production start command.
+
+### Frontend runtime
+
+`frontend/Dockerfile` provides:
+
+- Python 3.13 slim runtime,
+- Streamlit dependencies,
+- Noto / Droid fallback font installation,
+- non-root application user,
+- health check against `/_stcore/health`,
+- Streamlit production start command.
+
+### Local orchestration
+
+```bash
+docker compose up --build
+```
+
+Docker is also used as the final local verification layer before production deployment when runtime changes are introduced.
+
+---
+
+## ☁️ Render Deployment
+
+TalentMatch Pro uses separate Render services with service-specific root directories and Docker runtimes.
+
+### Frontend
+
+- Service: `talentmatch-frontend-dejan`
+- Root directory: `frontend`
+- Runtime: Docker
+- Custom domain: `https://talentmatchcv.com`
+
+### Backend
+
+- Service: `talentmatch-backend-1283`
+- Root directory: `backend`
+- Runtime: Docker
+- Custom API domain: `https://api.talentmatchcv.com`
+
+### Database
+
+- Managed PostgreSQL production database
+
+### Deployment flow
 
 ```text
-talentmatch-pro/
-├── backend/
-│   ├── billing/
-│   │   ├── __init__.py
-│   │   ├── factory.py
-│   │   ├── paypal_provider.py
-│   │   └── provider.py
-│   ├── scripts/
-│   │   ├── create_paypal_plan.py
-│   │   └── set_user_pro.py
-│   ├── static/
-│   │   ├── robots.txt
-│   │   └── sitemap.xml
-│   ├── auth.py
-│   ├── db.py
-│   ├── firebase.py
-│   ├── main.py
-│   ├── models.py
-│   ├── openai_service.py
-│   ├── pdf_report.py
-│   ├── pdf_utils.py
-│   ├── recruiter_service.py
-│   ├── schemas.py
-│   ├── semantic_service.py
-│   ├── storage.py
-│   └── usage_service.py
-│
-├── frontend/
-│   ├── assets/
-│   │   ├── favicon.png
-│   │   └── logo.png
-│   ├── components/
-│   │   ├── analytics.py
-│   │   ├── footer.py
-│   │   ├── sidebar.py
-│   │   └── ui.py
-│   ├── pages/
-│   │   ├── about.py
-│   │   ├── account.py
-│   │   ├── admin_analytics.py
-│   │   ├── ats_checker.py
-│   │   ├── contact.py
-│   │   ├── cv_analysis.py
-│   │   ├── cv_rewrite.py
-│   │   ├── history.py
-│   │   ├── landing.py
-│   │   ├── login.py
-│   │   ├── pricing.py
-│   │   ├── privacy.py
-│   │   ├── recruiter_mode.py
-│   │   ├── refund.py
-│   │   ├── register.py
-│   │   ├── semantic_match.py
-│   │   └── terms.py
-│   ├── .streamlit/
-│   │   ├── config.toml
-│   │   └── secrets.toml
-│   ├── app.py
-│   ├── auth_utils.py
-│   └── requirements.txt
-│
-├── docs/
-│   ├── architecture/
-│   │   └── architecture.md
-│   ├── gifs/
-│   ├── README-assets/
-│   ├── reports/
-│   │   ├── pdf/
-│   │   ├── txt/
-│   │   └── README.md
-│   ├── screenshots/
-│   └── README.md
-│
-├── .gitignore
-├── docker-compose.yml
-├── Dockerfile.backend
-├── Dockerfile.frontend
-├── get_token.py
-├── README.md
-└── requirements.txt
+Production-ready change
+        ↓
+Local validation
+        ↓
+Docker validation
+        ↓
+Git review
+        ↓
+Commit and push
+        ↓
+Render deploy
+        ↓
+Health / readiness verification
+        ↓
+Production smoke test
+        ↓
+Runtime log review
 ```
 
 ---
 
-## ⚡ API Reference
+## 🛡️ Security
 
-Base backend URL:
+Production hardening includes:
+
+- HTTPS redirect support,
+- HSTS,
+- Trusted Host validation,
+- Firebase token verification,
+- server-side authorization,
+- request IDs,
+- standardized JSON errors,
+- no stack traces returned to clients,
+- production exception handling,
+- rate limiting,
+- secret/configuration validation,
+- no secret logging,
+- secure billing webhook handling,
+- admin-only authorization boundaries,
+- security response headers.
+
+Verified production headers include:
+
+- `Content-Security-Policy`
+- `Strict-Transport-Security`
+- `X-Content-Type-Options`
+- `X-Frame-Options`
+- `Referrer-Policy`
+- `Permissions-Policy`
+- `Cross-Origin-Opener-Policy`
+- `Cross-Origin-Resource-Policy`
+
+---
+
+## ⚙️ Performance & Reliability
+
+Production performance and reliability features include:
+
+- GZip compression,
+- ETag generation,
+- conditional GET support,
+- `304 Not Modified` capability,
+- Cache-Control policies,
+- structured request timing,
+- database timeout protection,
+- transaction safety,
+- external-service retries where configured,
+- graceful degradation,
+- circuit breakers,
+- API reliability controls.
+
+Score/status logic is standardized across relevant product areas:
+
+- **75–100** → Strong
+- **50–74** → Competitive
+- **0–49** → Needs work
+
+---
+
+## 📊 Observability
+
+The backend exposes production observability features including:
+
+- uptime,
+- request counters,
+- success/error counters,
+- duration metrics,
+- AI service metrics,
+- database status,
+- runtime state,
+- external service circuit state,
+- structured request-completion logs,
+- request ID correlation.
+
+Production logs were reviewed after final frontend and backend smoke testing with no application `ERROR`, `CRITICAL`, traceback, unhandled exception, or PDF font failure in the accepted flows.
+
+---
+
+## ❤️ Health & Readiness
+
+### Frontend
 
 ```text
-https://talentmatch-backend-1283.onrender.com
+GET https://talentmatchcv.com/_stcore/health
 ```
 
-### Health Endpoints
+Expected accepted response:
 
-| Method | Endpoint | Description |
-|---|---|---|
-| GET | `/healthz` | Basic health check |
-| GET | `/readyz` | Readiness check |
+```text
+200 OK
+ok
+```
 
-> **Authentication**
->
-> All protected endpoints require a valid Firebase Bearer token supplied in the `Authorization` header.
->
-> Public endpoints such as `/healthz` and `/readyz` do not require authentication.
+### Backend health
 
-### Resume and AI Endpoints
+```text
+GET https://api.talentmatchcv.com/healthz
+```
 
-| Method | Endpoint | Description |
-|---|---|---|
-| POST | `/analyze-resume` | Analyze CV against job description |
-| POST | `/ats-check` | Check ATS keyword coverage |
-| POST | `/rewrite-cv` | Generate CV rewrite guidance |
-| POST | `/semantic-match` | Compare resume and job description semantically |
-| POST | `/recruiter/rank-candidates` | Rank multiple candidates |
+Expected accepted response:
 
-### History Endpoints
+```json
+{"status":"ok"}
+```
 
-| Method | Endpoint | Description |
-|---|---|---|
-| GET | `/history` | Get authenticated user history |
-| DELETE | `/history/{record_id}` | Delete one history record |
-| DELETE | `/history` | Delete all history records |
+### Backend readiness
 
-### Report Endpoints
+```text
+GET https://api.talentmatchcv.com/readyz
+```
 
-| Method | Endpoint | Description |
-|---|---|---|
-| POST | `/reports/analysis-pdf` | Generate PDF report |
-| POST | `/reports/analysis-txt` | Generate TXT report |
-
-### Billing Endpoints
-
-| Method | Endpoint | Description |
-|---|---|---|
-| POST | `/billing/create-checkout` | Create PayPal checkout |
-| POST | `/billing/create-portal` | Create billing portal |
-| POST | `/billing/webhook` | Generic billing webhook |
-| POST | `/paypal/webhook` | PayPal webhook |
+The readiness payload reports production configuration, database connectivity, external-service readiness, observability, security, billing, and reliability controls.
 
 ---
 
-## 🔁 Request and Response Examples
+## 🔎 SEO & Domain Configuration
 
-<details>
-<summary><strong>POST /analyze-resume</strong></summary>
+TalentMatch Pro uses a canonical production domain strategy.
 
-### Request
+### Canonical behavior
 
-```json
-{
-  "resume": "Experienced Python developer with FastAPI, PostgreSQL and cloud deployment experience.",
-  "job_description": "We are hiring a backend developer with Python, FastAPI, PostgreSQL, REST APIs and production deployment experience."
-}
+- `http://talentmatchcv.com/` → `301` → `https://talentmatchcv.com/`
+- `https://www.talentmatchcv.com/` → `301` → `https://talentmatchcv.com/`
+- `https://talentmatchcv.com/` → `200 OK`
+
+### DNS
+
+- Apex A record → `216.24.57.1`
+- `www` CNAME → frontend Render service
+- `api` CNAME → backend Render service
+- Porkbun MX records configured
+- SPF TXT record configured
+- Google Search Console verification TXT record configured
+
+### Sitemap
+
+`https://api.talentmatchcv.com/sitemap.xml`
+
+The production sitemap contains the public frontend routes:
+
+- `/`
+- `/pricing`
+- `/privacy`
+- `/terms`
+- `/refund`
+
+### robots.txt
+
+The production API `robots.txt` intentionally permits sitemap discovery while blocking general API crawling.
+
+---
+
+## ✅ Production Acceptance
+
+TalentMatch Pro v3.0 FINAL completed a full production acceptance cycle.
+
+| Area | Result |
+|---|---|
+| Frontend health | ✅ PASS |
+| Backend health | ✅ PASS |
+| Backend readiness | ✅ PASS |
+| PostgreSQL connectivity | ✅ PASS |
+| Firebase Authentication | ✅ PASS |
+| OpenAI integration | ✅ PASS |
+| OpenAI Semantic integration | ✅ PASS |
+| PayPal LIVE configuration | ✅ PASS |
+| 12 production locales | ✅ PASS |
+| Dark theme | ✅ PASS |
+| Light theme | ✅ PASS |
+| System theme | ✅ PASS |
+| CV Analysis PDF | ✅ PASS |
+| ATS Checker PDF | ✅ PASS |
+| CV Rewrite PDF | ✅ PASS |
+| Semantic Match PDF | ✅ PASS |
+| Recruiter Mode PDF | ✅ PASS |
+| History PDF | ✅ PASS |
+| Recruiter CSV export | ✅ PASS |
+| Recruiter TXT export | ✅ PASS |
+| Candidate Database save | ✅ PASS |
+| Frontend runtime logs | ✅ PASS |
+| Backend runtime logs | ✅ PASS |
+| Security headers | ✅ PASS |
+| HTTP → HTTPS | ✅ PASS |
+| WWW → apex | ✅ PASS |
+| robots.txt | ✅ PASS |
+| sitemap.xml | ✅ PASS |
+| DNS records | ✅ PASS |
+
+---
+
+## ⚡ API Overview
+
+Production API base URL:
+
+```text
+https://api.talentmatchcv.com
 ```
 
-### Response
+Public operational endpoints:
 
-```json
-{
-  "score": 92,
-  "summary": "The resume shows strong alignment with the target backend developer role.",
-  "strengths": [
-    "Python",
-    "FastAPI",
-    "PostgreSQL",
-    "REST API experience"
-  ],
-  "gaps": [
-    "Docker experience is not clearly described",
-    "CI/CD experience could be more visible"
-  ],
-  "recommendations": [
-    "Add one bullet describing production API deployment.",
-    "Mention Docker or containerized development if accurate.",
-    "Include measurable backend project outcomes."
-  ]
-}
-```
+| Method | Endpoint | Purpose |
+|---|---|---|
+| GET | `/healthz` | Basic service health |
+| GET | `/readyz` | Detailed production readiness |
+| GET | `/docs` | FastAPI API documentation |
+| GET | `/robots.txt` | Crawler policy |
+| GET | `/sitemap.xml` | Public sitemap |
 
-</details>
+Protected application workflows include resume analysis, ATS analysis, semantic matching, recruiter jobs, history, candidate management, account/usage workflows, and billing operations.
 
-<details>
-<summary><strong>POST /ats-check</strong></summary>
-
-### Request
-
-```json
-{
-  "resume": "Python developer experienced with APIs and databases.",
-  "job_description": "Python, FastAPI, PostgreSQL, Docker, REST API, cloud deployment."
-}
-```
-
-### Response
-
-```json
-{
-  "ats_score": 67,
-  "coverage_percentage": 67,
-  "matched_keywords": [
-    "Python",
-    "API",
-    "databases"
-  ],
-  "missing_keywords": [
-    "FastAPI",
-    "PostgreSQL",
-    "Docker",
-    "cloud deployment"
-  ],
-  "recommendations": [
-    "Add relevant missing keywords only where truthful.",
-    "Clarify database technology experience.",
-    "Mention deployment experience if applicable."
-  ]
-}
-```
-
-</details>
-
-<details>
-<summary><strong>POST /semantic-match</strong></summary>
-
-### Response
-
-```json
-{
-  "combined_score": 88,
-  "semantic_score": 91,
-  "keyword_score": 84,
-  "verdict": "Strong Match",
-  "summary": "The candidate profile is strongly aligned with the target role.",
-  "matched_themes": [
-    "Backend engineering",
-    "API development",
-    "Database experience"
-  ],
-  "missing_themes": [
-    "Containerized deployment"
-  ],
-  "recommendations": [
-    "Add specific production deployment details.",
-    "Make technical ownership more explicit."
-  ]
-}
-```
-
-</details>
-
-<details>
-<summary><strong>POST /recruiter/rank-candidates</strong></summary>
-
-### Response
-
-```json
-{
-  "ranking": [
-    {
-      "candidate": "candidate_1.pdf",
-      "score": 94,
-      "semantic_score": 96,
-      "keyword_score": 91,
-      "verdict": "Excellent Match"
-    },
-    {
-      "candidate": "candidate_2.pdf",
-      "score": 81,
-      "semantic_score": 84,
-      "keyword_score": 77,
-      "verdict": "Good Match"
-    }
-  ],
-  "top_candidate": "candidate_1.pdf"
-}
-```
-
-</details>
+Protected endpoints require authenticated application context and valid Firebase identity where applicable.
 
 ---
 
 ## 🧑‍💻 Local Development
 
-### Clone Repository
+### Clone
 
 ```bash
 git clone https://github.com/dejanjovic1283-ui/talentmatch-pro.git
 cd talentmatch-pro
 ```
 
-### Create Virtual Environment
+### Create a virtual environment
 
 ```bash
 python -m venv .venv
 ```
 
-### Activate Virtual Environment
-
 Windows:
 
-```bash
-.venv\Scripts\activate
+```powershell
+.\.venv\Scripts\Activate.ps1
 ```
 
 Linux/macOS:
@@ -1309,70 +916,32 @@ Linux/macOS:
 source .venv/bin/activate
 ```
 
-### Install Dependencies
+### Install dependencies
+
+Backend and frontend maintain their own production dependency files.
 
 ```bash
-pip install -r requirements.txt
+pip install -r backend/requirements.txt
+pip install -r frontend/requirements.txt
 ```
 
-### Run Backend
+### Run backend
 
 ```bash
-uvicorn backend.main:app --reload
+cd backend
+uvicorn main:app --host 0.0.0.0 --port 8000 --reload
 ```
 
-### Run Frontend
+### Run frontend
 
 ```bash
-streamlit run frontend/app.py
-```
-
----
-
-## 🔑 Environment Variables
-
-### Backend Environment
-
-```env
-DATABASE_URL=
-OPENAI_API_KEY=
-SECRET_KEY=
-FIREBASE_PROJECT_ID=
-FIREBASE_STORAGE_BUCKET=
-PAYPAL_CLIENT_ID=
-PAYPAL_CLIENT_SECRET=
-PAYPAL_WEBHOOK_ID=
-PAYPAL_ENV=live
-BILLING_PROVIDER=paypal
-```
-
-### Frontend Environment
-
-```env
-BACKEND_URL=https://talentmatch-backend-1283.onrender.com
-```
-
-> Never commit real secrets to GitHub.
-
----
-
-## 🐳 Docker
-
-### Backend
-
-```bash
-docker build -t talentmatch-backend ./backend
-docker run -p 8000:8000 talentmatch-backend
-```
-
-### Frontend
-
-```bash
-docker build -t talentmatch-frontend ./frontend
-docker run -p 8501:8501 talentmatch-frontend
+cd frontend
+streamlit run app.py --server.port 8501
 ```
 
 ### Docker Compose
+
+From repository root:
 
 ```bash
 docker compose up --build
@@ -1380,319 +949,164 @@ docker compose up --build
 
 ---
 
-## 🚀 Render Deployment
+## 🔑 Environment Configuration
 
-TalentMatch Pro uses separate Render services.
+Real secrets must never be committed to the repository.
 
-### Frontend Service
+### Backend variable categories
 
-- Type: Web Service
-- Runtime: Python
-- Framework: Streamlit
-- Public URL: `https://talentmatch-frontend-dejan.onrender.com`
-- Custom domain: `https://talentmatchcv.com`
+Typical backend configuration includes names such as:
 
-### Backend Service
+```env
+ENVIRONMENT=
+DATABASE_URL=
+OPENAI_API_KEY=
+FIREBASE_PROJECT_ID=
+FIREBASE_STORAGE_BUCKET=
+BILLING_PROVIDER=paypal
+PAYPAL_ENV=live
+PAYPAL_CLIENT_ID=
+PAYPAL_CLIENT_SECRET=
+PAYPAL_PLAN_ID=
+PAYPAL_WEBHOOK_ID=
+FRONTEND_URL=
+```
 
-- Type: Web Service
-- Runtime: Python
-- Framework: FastAPI
-- Public URL: `https://talentmatch-backend-1283.onrender.com`
+Additional Firebase credential configuration and production security settings are environment-managed.
 
-### Deployment Workflow
+### Frontend variable categories
+
+```env
+BACKEND_URL=
+```
+
+Local development may use additional non-production settings.
+
+---
+
+## 📁 Repository Structure
 
 ```text
-Local Development
-    ↓
-Git Commit
-    ↓
-GitHub Push
-    ↓
-Render Auto Deploy / Manual Deploy
-    ↓
-Health Check
-    ↓
-Production
+talentmatch-pro/
+├── backend/
+│   ├── billing/
+│   ├── static/
+│   │   ├── robots.txt
+│   │   └── sitemap.xml
+│   ├── Dockerfile
+│   ├── .dockerignore
+│   ├── main.py
+│   ├── models.py
+│   ├── schemas.py
+│   ├── openai_service.py
+│   ├── semantic_service.py
+│   ├── recruiter_service.py
+│   ├── pdf_report.py
+│   ├── auth.py
+│   ├── firebase.py
+│   ├── storage.py
+│   ├── usage_service.py
+│   └── requirements.txt
+│
+├── frontend/
+│   ├── components/
+│   │   ├── pdf_reports.py
+│   │   └── sidebar.py
+│   ├── i18n/
+│   │   └── locales/
+│   ├── pages/
+│   │   ├── account.py
+│   │   ├── admin_analytics.py
+│   │   ├── ats_checker.py
+│   │   ├── candidate_database.py
+│   │   ├── cv_analysis.py
+│   │   ├── cv_rewrite.py
+│   │   ├── history.py
+│   │   ├── landing.py
+│   │   ├── pricing.py
+│   │   ├── recruiter_mode.py
+│   │   └── semantic_match.py
+│   ├── Dockerfile
+│   ├── .dockerignore
+│   ├── app.py
+│   ├── auth_utils.py
+│   └── requirements.txt
+│
+├── docs/
+│   ├── architecture/
+│   │   └── architecture.md
+│   ├── README-assets/
+│   │   └── banner.png
+│   ├── reports/
+│   │   ├── pdf/
+│   │   └── txt/
+│   └── screenshots/
+│
+├── docker-compose.yml
+├── Dockerfile.backend
+├── Dockerfile.frontend
+└── README.md
 ```
 
----
-
-## 🛡️ Security
-
-TalentMatch Pro follows production-focused security practices:
-
-- HTTPS-only communication.
-- Firebase JWT validation.
-- Server-side authorization.
-- Protected billing webhooks.
-- Environment-managed secrets.
-- No hardcoded API keys.
-- No secrets committed to GitHub.
-- Backend validation for protected workflows.
-- Clear separation of user and admin access.
-- Admin Analytics hidden from non-admin users.
+The structure above focuses on the major production and portfolio components rather than every repository file.
 
 ---
 
-## ⚙️ Performance
+## 📑 Sample Reports
 
-Performance practices:
+Portfolio report samples are stored under:
 
-- Stateless backend design.
-- Managed PostgreSQL database.
-- Service-layer architecture.
-- Controlled AI request handling.
-- Efficient API request structure.
-- Lazy frontend workflows.
-- Report generation handled by backend.
+- [`docs/reports/pdf/`](docs/reports/pdf/)
+- [`docs/reports/txt/`](docs/reports/txt/)
 
-Potential future optimizations:
+Current repository samples include CV-oriented reports and a History export.
 
-- background jobs,
-- request caching,
-- async task queues,
-- CDN for static assets,
-- database indexes,
-- queue-based AI processing.
+The live application additionally supports production reports for all final accepted modules.
 
 ---
 
-## 📊 Monitoring and Logging
+## 🏗️ Architecture Documentation
 
-Recommended monitoring areas:
+Additional architecture documentation is available at:
 
-- frontend availability,
-- backend availability,
-- API response time,
-- `/healthz` status,
-- `/readyz` status,
-- OpenAI request errors,
-- PayPal webhook events,
-- PostgreSQL connectivity,
-- authentication failures,
-- report generation failures.
+[`docs/architecture/architecture.md`](docs/architecture/architecture.md)
 
-Recommended logging:
+It contains focused diagrams for:
 
-- request metadata,
-- errors and exceptions,
-- billing events,
-- authentication issues,
-- AI processing failures,
-- export/report errors.
-
-Sensitive data should never be logged.
+- system architecture,
+- deployment architecture,
+- PayPal billing flow.
 
 ---
 
-## 🧪 Testing Strategy
+## 🏁 Release Status
 
-Recommended test coverage:
+### TalentMatch Pro v3.0 FINAL
 
-- authentication validation,
-- API endpoints,
-- ATS scoring,
-- semantic matching,
-- recruiter ranking,
-- PayPal webhook handling,
-- history creation,
-- report generation,
-- account status,
-- protected feature access.
+**Status: Production acceptance complete.**
 
-Example:
+The final release includes completed product, runtime, security, reporting, internationalization, deployment, observability, SEO, and DNS verification.
 
-```bash
-pytest
-```
+The application is live at:
+
+**https://talentmatchcv.com**
 
 ---
 
-## ✅ Production Checklist
+## 🗺️ Future Development
 
-Before production deployment:
+TalentMatch Pro v3.0 FINAL is considered a completed production milestone.
 
-- [ ] Backend builds successfully.
-- [ ] Frontend builds successfully.
-- [ ] Environment variables are configured.
-- [ ] Firebase Authentication works.
-- [ ] Firebase Storage works.
-- [ ] PostgreSQL connection works.
-- [ ] OpenAI API key works.
-- [ ] PayPal live credentials are configured.
-- [ ] PayPal webhook is configured.
-- [ ] `/healthz` returns success.
-- [ ] `/readyz` returns success.
-- [ ] Free plan workflows work.
-- [ ] Pro plan workflows work.
-- [ ] PDF reports generate correctly.
-- [ ] TXT exports work.
-- [ ] History loads correctly.
-- [ ] Custom domain works.
-- [ ] HTTPS works.
-- [ ] Admin-only UI is hidden for standard users.
+Potential future work should be treated as a new planned release rather than unfinished v3 scope.
 
----
+Possible directions include:
 
-## 🧯 Troubleshooting
-
-<details>
-<summary><strong>429 Too Many Requests</strong></summary>
-
-Possible causes:
-
-- OpenAI usage limit,
-- backend rate limit,
-- repeated requests,
-- temporary provider restriction.
-
-Recommended actions:
-
-- check backend logs,
-- reduce repeated submissions,
-- verify API limits,
-- implement exponential backoff.
-
-</details>
-
-<details>
-<summary><strong>502 Bad Gateway</strong></summary>
-
-Possible causes:
-
-- backend service sleeping,
-- deployment failure,
-- startup exception,
-- missing environment variable.
-
-Recommended actions:
-
-- check Render logs,
-- verify environment variables,
-- restart backend service,
-- confirm `/healthz` and `/readyz`.
-
-</details>
-
-<details>
-<summary><strong>History returns HTML instead of JSON</strong></summary>
-
-Possible causes:
-
-- wrong backend URL,
-- frontend calling frontend route instead of API route,
-- backend service unavailable.
-
-Recommended actions:
-
-- confirm `BACKEND_URL`,
-- inspect network request,
-- verify backend endpoint response.
-
-</details>
-
-<details>
-<summary><strong>PayPal checkout does not open</strong></summary>
-
-Possible causes:
-
-- missing PayPal credentials,
-- invalid plan ID,
-- wrong environment,
-- webhook misconfiguration.
-
-Recommended actions:
-
-- verify `PAYPAL_ENV=live`,
-- check PayPal app credentials,
-- check subscription plan,
-- review backend billing logs.
-
-</details>
-
----
-
-## 🗺️ Roadmap
-
-```mermaid
-timeline
-    title TalentMatch Pro Roadmap
-    v1.0.0 : Production Release
-           : AI CV Analysis
-           : ATS Checker
-           : PayPal Billing
-           : PDF Reports
-    v1.x : Better Dashboard Metrics
-         : Enhanced Reports
-         : Recruiter Analytics
-    v2.x : Team Workspaces
-         : Role-Based Access
-         : Organization Accounts
-    Future : Interview Preparation
-           : Skills Gap Analysis
-           : Cover Letter Generator
-           : Internationalization
-```
-
----
-
-## 🧾 Architecture Decision Records
-
-### ADR-001: FastAPI Backend
-
-FastAPI was selected for the backend because it provides modern Python API development, strong typing support, automatic documentation, and excellent performance.
-
-### ADR-002: Streamlit Frontend
-
-Streamlit was selected for rapid SaaS interface development and efficient delivery of AI-powered workflows.
-
-### ADR-003: PostgreSQL Database
-
-PostgreSQL was selected for persistent storage of analysis history, user data, usage records, and subscription-related state.
-
-### ADR-004: Firebase Authentication
-
-Firebase Authentication was selected to provide secure and reliable user login/register flows.
-
-### ADR-005: OpenAI AI Engine
-
-OpenAI was selected as the AI provider for resume analysis, semantic matching, rewrite workflows, and recruiter-style summaries.
-
-### ADR-006: PayPal Billing
-
-PayPal was selected as the production billing provider for TalentMatch Pro subscriptions.
-
-### ADR-007: Render Deployment
-
-Render was selected for deploying separate frontend and backend production services with managed environment configuration.
-
----
-
-## 🤝 Contributing
-
-Contributions are welcome.
-
-Recommended workflow:
-
-```bash
-git checkout -b feature/your-feature-name
-git add .
-git commit -m "feat: add your feature"
-git push origin feature/your-feature-name
-```
-
-Then open a pull request with:
-
-- clear description,
-- screenshots if UI-related,
-- test notes,
-- migration notes if applicable.
-
----
-
-## 📜 License
-
-This project is distributed under the MIT License unless otherwise specified.
+- deeper recruiter workspace collaboration,
+- organization/team capabilities,
+- additional analytics,
+- interview-preparation workflows,
+- expanded career intelligence,
+- further product experiments driven by real user feedback.
 
 ---
 
@@ -1702,38 +1116,21 @@ This project is distributed under the MIT License unless otherwise specified.
 
 Founder and developer of TalentMatch Pro.
 
-TalentMatch Pro was created as a practical AI SaaS product and portfolio-grade engineering project focused on resume intelligence, recruitment workflows, and production deployment.
+TalentMatch Pro was built as a practical AI SaaS product and portfolio-grade engineering project focused on resume intelligence, recruiter workflows, production architecture, and end-to-end software delivery.
 
 ---
 
 ## 📬 Support
 
-For product support:
+Product support:
 
 ```text
 support@talentmatchcv.com
 ```
 
-For technical issues:
+Repository:
 
-- GitHub Issues
-- GitHub Discussions
-- Repository documentation
-
----
-
-## 🙏 Acknowledgements
-
-TalentMatch Pro is built with:
-
-- FastAPI
-- Streamlit
-- PostgreSQL
-- Firebase
-- OpenAI
-- PayPal
-- Render
-- Python ecosystem
+https://github.com/dejanjovic1283-ui/talentmatch-pro
 
 ---
 
@@ -1741,117 +1138,8 @@ TalentMatch Pro is built with:
 
 ## ⭐ TalentMatch Pro
 
-**AI-powered resume intelligence for job seekers, recruiters and hiring teams.**
+**Production AI resume intelligence for job seekers, recruiters, and hiring workflows.**
 
-If this project is useful or interesting, consider giving it a star on GitHub.
+🌐 https://talentmatchcv.com
 
 </div>
-
----
-
-## Appendix 1: Module Responsibility Matrix
-
-This matrix explains how responsibilities are separated across the frontend, backend, AI layer, billing layer, and persistence layer.
-
-### Checklist
-
-- Keep implementation modular.
-- Preserve API compatibility where possible.
-- Document important decisions.
-- Avoid committing secrets.
-- Validate production configuration.
-- Test critical user workflows.
-- Review logs after deployment.
-- Confirm billing and authentication flows.
-
-### Notes
-
-TalentMatch Pro should continue to evolve as a clean, explainable and production-ready SaaS system. Every new module should fit into the existing architecture instead of bypassing it.
-
-
----
-
-## Appendix 2: Operational Runbook
-
-This runbook describes practical production operations, including deployment checks, incident response, rollback thinking, and smoke testing.
-
-### Checklist
-
-- Keep implementation modular.
-- Preserve API compatibility where possible.
-- Document important decisions.
-- Avoid committing secrets.
-- Validate production configuration.
-- Test critical user workflows.
-- Review logs after deployment.
-- Confirm billing and authentication flows.
-
-### Notes
-
-TalentMatch Pro should continue to evolve as a clean, explainable and production-ready SaaS system. Every new module should fit into the existing architecture instead of bypassing it.
-
-
----
-
-## Appendix 3: Quality Standards
-
-These standards define how new features should be implemented, reviewed, tested, and documented before release.
-
-### Checklist
-
-- Keep implementation modular.
-- Preserve API compatibility where possible.
-- Document important decisions.
-- Avoid committing secrets.
-- Validate production configuration.
-- Test critical user workflows.
-- Review logs after deployment.
-- Confirm billing and authentication flows.
-
-### Notes
-
-TalentMatch Pro should continue to evolve as a clean, explainable and production-ready SaaS system. Every new module should fit into the existing architecture instead of bypassing it.
-
-
----
-
-## Appendix 4: Release Notes Policy
-
-Each production release should clearly document user-facing changes, backend changes, billing changes, and migration notes.
-
-### Checklist
-
-- Keep implementation modular.
-- Preserve API compatibility where possible.
-- Document important decisions.
-- Avoid committing secrets.
-- Validate production configuration.
-- Test critical user workflows.
-- Review logs after deployment.
-- Confirm billing and authentication flows.
-
-### Notes
-
-TalentMatch Pro should continue to evolve as a clean, explainable and production-ready SaaS system. Every new module should fit into the existing architecture instead of bypassing it.
-
-
----
-
-## Appendix 5: Portfolio Review Notes
-
-TalentMatch Pro is intentionally documented as a portfolio-grade SaaS application that demonstrates product thinking, technical architecture, and production deployment.
-
-### Checklist
-
-- Keep implementation modular.
-- Preserve API compatibility where possible.
-- Document important decisions.
-- Avoid committing secrets.
-- Validate production configuration.
-- Test critical user workflows.
-- Review logs after deployment.
-- Confirm billing and authentication flows.
-
-### Notes
-
-TalentMatch Pro should continue to evolve as a clean, explainable and production-ready SaaS system. Every new module should fit into the existing architecture instead of bypassing it.
