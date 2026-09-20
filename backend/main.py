@@ -20,7 +20,16 @@ from typing import NoReturn
 
 import certifi
 from dotenv import load_dotenv
-from fastapi import Depends, FastAPI, File, Form, HTTPException, Request, UploadFile
+from fastapi import (
+    Depends,
+    FastAPI,
+    File,
+    Form,
+    HTTPException,
+    Request,
+    Response,
+    UploadFile,
+)
 from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
 from starlette.middleware.gzip import GZipMiddleware
@@ -141,6 +150,7 @@ from db import (
     get_database_pool_status,
     get_database_reliability_status,
     get_db,
+    rollback_session_safely,
     SessionLocal,
 )
 from models import (
@@ -2344,28 +2354,78 @@ def readyz():
 
 @app.get("/me")
 def get_profile(
+    response: Response,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    db.expire_all()
-    user = db.query(User).filter(User.id == current_user.id).first()
+    response.headers["Cache-Control"] = "no-store"
 
-    if user is None:
-        raise HTTPException(status_code=404, detail="User not found.")
+    try:
+        # ``populate_existing`` refreshes only the canonical row needed by this
+        # request.  ``expire_all`` used to invalidate every object in the
+        # session, which made a cold/reconnecting database failure surface as a
+        # generic 500 before the frontend could preserve its last verified data.
+        user = (
+            db.query(User)
+            .populate_existing()
+            .filter(User.id == current_user.id)
+            .first()
+        )
 
-    usage = get_user_usage(db, user)
+        if user is None:
+            raise HTTPException(
+                status_code=404,
+                detail={
+                    "message": "User profile was not found.",
+                    "type": "profile_not_found",
+                },
+            )
+
+        usage = get_user_usage(db, user, sync_legacy_counter=False)
+    except HTTPException:
+        raise
+    except SQLAlchemyError as exc:
+        rollback_session_safely(db)
+        logger.exception(
+            "Authenticated profile query failed.",
+            extra={
+                "event": "profile_query_failed",
+                "user_id": getattr(current_user, "id", None),
+                "service": "PostgreSQL",
+                "retryable": True,
+                "retry_after_seconds": 5,
+            },
+        )
+        raise HTTPException(
+            status_code=503,
+            detail={
+                "message": "Profile is temporarily unavailable. Please retry.",
+                "type": "profile_unavailable",
+                "service": "PostgreSQL",
+                "retryable": True,
+                "retry_after_seconds": 5,
+            },
+            headers={"Retry-After": "5", "Cache-Control": "no-store"},
+        ) from exc
+
+    # ``is_pro`` is the single database-backed entitlement decision.  The
+    # textual plan column can contain legacy/stale values, so never let it
+    # override the boolean used by the frontend and API authorization checks.
+    is_pro = bool(user.is_pro)
+    response.headers["X-Profile-State"] = "verified"
 
     return {
+        **usage,
         "id": user.id,
         "email": user.email,
         "full_name": user.full_name,
-        "plan": user.plan,
-        "is_pro": bool(user.is_pro),
+        "created_at": user.created_at,
+        "plan": "pro" if is_pro else "free",
+        "is_pro": is_pro,
         "is_admin": is_admin_user(user),
         "paypal_customer_id": getattr(user, "paypal_customer_id", None),
         "paypal_subscription_id": getattr(user, "paypal_subscription_id", None),
         "paypal_subscription_status": getattr(user, "paypal_subscription_status", None),
-        **usage,
     }
 
 

@@ -7,9 +7,11 @@ import streamlit as st
 
 from auth_utils import (
     clear_auth,
+    get_cached_backend_readiness,
+    get_entitlement_state,
+    get_profile_state,
     is_admin_user,
     is_logged_in,
-    is_pro_user,
     refresh_profile,
 )
 from components.language_selector import render_language_selector
@@ -28,6 +30,9 @@ COPY: Final[dict[str, dict[str, str]]] = {
         "guest": "Guest",
         "premium": "Premium Member",
         "starter": "Starter Workspace",
+        "profile_syncing": "Profile syncing",
+        "unknown": "Unknown",
+        "waking": "Waking up",
         "create": "Create account",
         "signin": "Sign in",
         "sync": "Sync",
@@ -92,6 +97,9 @@ COPY: Final[dict[str, dict[str, str]]] = {
         "guest": "Gost",
         "premium": "Premium član",
         "starter": "Početni radni prostor",
+        "profile_syncing": "Sinhronizacija profila",
+        "unknown": "Nepoznato",
+        "waking": "Buđenje",
         "create": "Kreirajte nalog",
         "signin": "Prijavite se",
         "sync": "Sinhronizacija",
@@ -472,15 +480,51 @@ def _brand() -> None:
     )
 
 
+def _profile_sync_label() -> str:
+    """Show only the last verified sync time, never the current clock time."""
+    state = get_profile_state()
+    if state not in {"verified", "stale"}:
+        return "—"
+
+    raw_timestamp = st.session_state.get("profile_last_verified_at")
+    if raw_timestamp is None:
+        return "—"
+
+    try:
+        # Streamlit session state is dynamically typed; stringify the value
+        # before conversion so Pylance does not treat ``None``/``Any`` as a
+        # possible argument to ``float``.
+        timestamp = float(str(raw_timestamp))
+    except (TypeError, ValueError):
+        return "—"
+
+    return datetime.fromtimestamp(timestamp, timezone.utc).strftime("%H:%M UTC")
+
+
 def _user() -> None:
     logged = is_logged_in()
     name = get_display_name() if logged else c("guest")
     initials = get_initials(name) if logged else "TM"
-    membership = c("premium") if logged and is_pro_user() else (
-        c("starter") if logged else c("create")
+    entitlement = (
+        get_entitlement_state(load_if_missing=False)
+        if logged
+        else "signed_out"
     )
-    plan = "PRO" if logged and is_pro_user() else ("FREE" if logged else c("signin").upper())
-    sync = datetime.now(timezone.utc).strftime("%H:%M UTC") if logged else "—"
+
+    if not logged:
+        membership = c("create")
+        plan = c("signin").upper()
+    elif entitlement == "pro":
+        membership = c("premium")
+        plan = "PRO"
+    elif entitlement == "free":
+        membership = c("starter")
+        plan = "FREE"
+    else:
+        membership = c("profile_syncing")
+        plan = "SYNC"
+
+    sync = _profile_sync_label() if logged else "—"
 
     st.markdown(
         '<div class="tm-side-card"><div class="tm-side-row">'
@@ -528,6 +572,8 @@ def _preferences() -> None:
 
 
 def _nav() -> None:
+    pro_access = get_entitlement_state(load_if_missing=False) == "pro"
+
     _section(c("workspace"))
     st.page_link("app.py", label=f"🏠 {t('navigation.dashboard')}")
     st.page_link("pages/cv_analysis.py", label=f"📄 {t('navigation.cv_analysis')}")
@@ -535,13 +581,13 @@ def _nav() -> None:
     st.page_link("pages/cv_rewrite.py", label=f"✍ {t('navigation.cv_rewrite')}")
 
     _section(c("pro_tools"))
-    target = "pages/semantic_match.py" if is_pro_user() else "pages/pricing.py"
-    lock = "" if is_pro_user() else " 🔒"
+    target = "pages/semantic_match.py" if pro_access else "pages/pricing.py"
+    lock = "" if pro_access else " 🔒"
     st.page_link(target, label=f"🧠 {t('navigation.semantic_match')}{lock}")
 
     _section(c("recruiter"))
-    recruiter_target = "pages/recruiter_mode.py" if is_pro_user() else "pages/pricing.py"
-    database_target = "pages/candidate_database.py" if is_pro_user() else "pages/pricing.py"
+    recruiter_target = "pages/recruiter_mode.py" if pro_access else "pages/pricing.py"
+    database_target = "pages/candidate_database.py" if pro_access else "pages/pricing.py"
     st.page_link(recruiter_target, label=f"👥 {t('navigation.recruiter_mode')}{lock}")
     st.page_link(database_target, label=f"🗂 {t('navigation.candidate_database')}{lock}")
 
@@ -550,7 +596,7 @@ def _nav() -> None:
     st.page_link("pages/pricing.py", label=f"💳 {t('navigation.pricing')}")
     st.page_link("pages/account.py", label=f"⚙ {t('navigation.account')}")
 
-    if is_admin_user():
+    if is_admin_user(load_if_missing=False):
         _section(c("administration"))
         st.page_link(
             "pages/admin_analytics.py",
@@ -566,6 +612,7 @@ def _nav() -> None:
 
 
 def _quick_actions() -> None:
+    pro_access = get_entitlement_state(load_if_missing=False) == "pro"
     _section(f"⚡ {c('quick')}")
     left, right = st.columns(2)
 
@@ -587,7 +634,7 @@ def _quick_actions() -> None:
             label=f"📋 {c('ats')}",
             use_container_width=True,
         )
-        target = "pages/recruiter_mode.py" if is_pro_user() else "pages/pricing.py"
+        target = "pages/recruiter_mode.py" if pro_access else "pages/pricing.py"
         st.page_link(
             target,
             label=f"👥 {t('navigation.recruiter_mode')}",
@@ -600,7 +647,7 @@ def _auth() -> None:
 
     if is_logged_in():
         if st.button(f"🔄 {c('refresh')}", use_container_width=True):
-            refresh_profile()
+            refresh_profile(force=True)
             st.rerun()
 
         if st.button(f"🚪 {t('navigation.logout')}", use_container_width=True):
@@ -611,19 +658,73 @@ def _auth() -> None:
         st.page_link("pages/register.py", label=f"📝 {t('navigation.register')}")
 
 
+def _readiness_circuit(
+    readiness: dict[str, object],
+    service_name: str,
+    *,
+    live_label: bool = False,
+) -> tuple[str, str]:
+    circuits = readiness.get("external_service_circuits")
+    if not isinstance(circuits, dict):
+        return c("unknown"), "🟡"
+
+    service = circuits.get(service_name)
+    if not isinstance(service, dict):
+        return c("unknown"), "🟡"
+
+    state = str(service.get("state") or "").strip().lower()
+    if state == "closed":
+        return (c("live") if live_label else c("ready")), "🟢"
+    if state == "open":
+        return "Unavailable", "🔴"
+    return "Recovering", "🟡"
+
+
 def _health_and_footer() -> None:
-    ready = safe_html(c("ready"))
-    live = safe_html(c("live"))
+    readiness = get_cached_backend_readiness()
+    if not isinstance(readiness, dict):
+        unknown = (c("sync"), "🟡")
+        backend = database = firebase = paypal = openai = unknown
+    else:
+        readiness_status = str(readiness.get("status") or "").strip().lower()
+        backend = (
+            (c("ready"), "🟢")
+            if readiness_status == "ready"
+            else ("Not ready", "🟡")
+            if readiness_status
+            else (c("unknown"), "🟡")
+        )
+        database_value = readiness.get("database_connection_ok")
+        database = (
+            ("Connected", "🟢")
+            if database_value is True
+            else ("Unavailable", "🔴")
+            if database_value is False
+            else (c("unknown"), "🟡")
+        )
+        firebase = _readiness_circuit(readiness, "firebase_authentication")
+        paypal = _readiness_circuit(readiness, "paypal", live_label=True)
+        openai = _readiness_circuit(readiness, "openai")
+
+    statuses = (backend, database, firebase, paypal, openai)
+    healthy = all(icon == "🟢" for _, icon in statuses)
+
+    def row(label: str, status: tuple[str, str]) -> str:
+        value, icon = status
+        return (
+            f'<div class="tm-side-health"><span>{icon} {safe_html(label)}</span>'
+            f'<span>{safe_html(value)}</span></div>'
+        )
 
     st.markdown(
         '<div class="tm-side-card">'
         f'<div class="tm-side-title" style="font-size:.9rem" dir="auto">'
-        f'🟢 {safe_html(c("health"))}</div>'
-        f'<div class="tm-side-health"><span><span class="tm-side-dot"></span>Backend</span><span>{ready}</span></div>'
-        f'<div class="tm-side-health"><span><span class="tm-side-dot"></span>Frontend</span><span>{ready}</span></div>'
-        f'<div class="tm-side-health"><span><span class="tm-side-dot"></span>Firebase</span><span>{ready}</span></div>'
-        f'<div class="tm-side-health"><span><span class="tm-side-dot"></span>PayPal</span><span>{live}</span></div>'
-        f'<div class="tm-side-health"><span><span class="tm-side-dot"></span>OpenAI</span><span>{ready}</span></div>'
+        f'{"🟢" if healthy else "🟡"} {safe_html(c("health"))}</div>'
+        f'{row("Backend", backend)}'
+        f'{row("Frontend", (c("ready"), "🟢"))}'
+        f'{row("Firebase", firebase)}'
+        f'{row("PayPal", paypal)}'
+        f'{row("OpenAI", openai)}'
         '</div>'
         '<div class="tm-side-card tm-side-muted">'
         f'<b style="color:#f8fafc">TalentMatch Pro™ {APP_VERSION}</b><br>'

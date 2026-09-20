@@ -129,13 +129,19 @@ def _sync_legacy_cv_analysis_counter(
         )
 
 
-def get_user_usage(db: Session, user: User) -> dict:
+def get_user_usage(
+    db: Session,
+    user: User,
+    *,
+    sync_legacy_counter: bool = True,
+) -> dict:
     """
     Return authoritative lifetime usage for one TalentMatch Pro user.
 
     Free-plan enforcement applies only to persisted ``cv_analysis`` records.
     ATS Checker and the other analysis types remain visible in the usage
-    breakdown but do not consume the Free plan's CV Analysis allowance.
+    breakdown but do not consume the Free plan's CV Analysis allowance.  Read
+    endpoints can disable the legacy counter synchronization to stay read-only.
     """
     raw_counts = _analysis_counts_by_type(db, user.id)
     usage_by_type = _build_usage_by_type(raw_counts)
@@ -143,11 +149,12 @@ def get_user_usage(db: Session, user: User) -> dict:
     cv_analyses_used = int(usage_by_type.get(CV_ANALYSIS_TYPE, 0))
     total_analyses = sum(usage_by_type.values())
 
-    _sync_legacy_cv_analysis_counter(
-        db,
-        user,
-        cv_analyses_used,
-    )
+    if sync_legacy_counter:
+        _sync_legacy_cv_analysis_counter(
+            db,
+            user,
+            cv_analyses_used,
+        )
 
     is_pro = bool(user.is_pro)
     remaining = max(0, FREE_PLAN_ANALYSIS_LIMIT - cv_analyses_used)

@@ -60,6 +60,21 @@ BACKEND_URL = get_config(
 FIREBASE_API_KEY = get_config("FIREBASE_API_KEY")
 FIREBASE_TOKEN_REFRESH_LEEWAY_SECONDS = 120
 FIREBASE_TOKEN_REFRESH_TIMEOUT_SECONDS = 30
+PROFILE_REQUEST_TIMEOUT_SECONDS = 60
+PROFILE_REFRESH_COOLDOWN_SECONDS = 5
+PROFILE_RETRY_DELAY_SECONDS = 0.35
+BACKEND_READINESS_TIMEOUT_SECONDS = 12
+BACKEND_READINESS_CACHE_SECONDS = 20
+
+PROFILE_STATE_NOT_LOADED = "not_loaded"
+PROFILE_STATE_LOADING = "loading"
+PROFILE_STATE_VERIFIED = "verified"
+PROFILE_STATE_STALE = "stale"
+PROFILE_STATE_UNAVAILABLE = "unavailable"
+PROFILE_STATE_REAUTHENTICATION_REQUIRED = "reauthentication_required"
+PROFILE_STATE_NOT_AUTHENTICATED = "not_authenticated"
+
+TRANSIENT_PROFILE_STATUS_CODES = frozenset({408, 425, 429, 500, 502, 503, 504})
 
 
 # =========================
@@ -122,6 +137,12 @@ def _coerce_int(value: Any, default: int = 0) -> int:
 
 def _profile_has_pro_access(profile: Mapping[str, Any]) -> bool:
     """Return Pro access from backend-authoritative profile fields."""
+    # New `/me` responses always include ``is_pro``.  When that explicit
+    # decision is present it is the only entitlement signal we trust; a stale
+    # PayPal status or a client-crafted ``plan`` value must never grant access.
+    if "is_pro" in profile:
+        return profile.get("is_pro") is True
+
     plan = str(profile.get("plan") or "").strip().lower()
     subscription_status = str(
         profile.get("subscription_status") or ""
@@ -323,6 +344,13 @@ def save_auth(
         "profile_last_refresh_status",
         "profile_last_refresh_error",
         "profile_using_stale_cache",
+        "profile_availability",
+        "profile_last_attempt_at",
+        "profile_last_verified_at",
+        "backend_readiness",
+        "backend_readiness_status",
+        "backend_readiness_error",
+        "backend_readiness_checked_at",
         "refresh_token",
         "token_expires_at",
         "token_last_refresh_at",
@@ -347,6 +375,7 @@ def save_auth(
 
     st.session_state["token_refresh_status"] = "current"
     st.session_state["token_refresh_error"] = ""
+    st.session_state["profile_availability"] = PROFILE_STATE_NOT_LOADED
 
     st.session_state["email"] = clean_email
     st.session_state["user_email"] = clean_email
@@ -414,6 +443,13 @@ def clear_auth() -> None:
         "profile_last_refresh_status",
         "profile_last_refresh_error",
         "profile_using_stale_cache",
+        "profile_availability",
+        "profile_last_attempt_at",
+        "profile_last_verified_at",
+        "backend_readiness",
+        "backend_readiness_status",
+        "backend_readiness_error",
+        "backend_readiness_checked_at",
         "refresh_token",
         "token_expires_at",
         "token_last_refresh_at",
@@ -667,8 +703,16 @@ def api_get(
                     )
 
         return response
-    except Exception as exc:
-        return FakeResponse(500, str(exc))
+    except requests.RequestException:
+        return FakeResponse(
+            503,
+            "The backend is temporarily unavailable. Please try again.",
+        )
+    except Exception:
+        return FakeResponse(
+            503,
+            "The backend request could not be completed. Please try again.",
+        )
 
 
 def api_post(
@@ -721,8 +765,16 @@ def api_post(
                     )
 
         return response
-    except Exception as exc:
-        return FakeResponse(500, str(exc))
+    except requests.RequestException:
+        return FakeResponse(
+            503,
+            "The backend is temporarily unavailable. Please try again.",
+        )
+    except Exception:
+        return FakeResponse(
+            503,
+            "The backend request could not be completed. Please try again.",
+        )
 
 
 # =========================
@@ -734,6 +786,90 @@ def _cached_profile() -> dict[str, Any] | None:
     """Return the last successfully loaded profile without contacting the backend."""
     profile = st.session_state.get("profile")
     return profile if isinstance(profile, dict) and profile else None
+
+
+def get_profile_state() -> str:
+    """Return the local profile availability state without making a request."""
+    state = str(
+        st.session_state.get("profile_availability")
+        or PROFILE_STATE_NOT_LOADED
+    ).strip().lower()
+    return state or PROFILE_STATE_NOT_LOADED
+
+
+def get_cached_backend_readiness() -> dict[str, Any] | None:
+    """Return the last readiness payload without waking the backend."""
+    readiness = st.session_state.get("backend_readiness")
+    return readiness if isinstance(readiness, dict) and readiness else None
+
+
+def get_backend_readiness(
+    *,
+    force: bool = False,
+    timeout: int = BACKEND_READINESS_TIMEOUT_SECONDS,
+) -> dict[str, Any] | None:
+    """Read and cache the backend readiness contract safely.
+
+    A Render instance may be asleep while the browser session is still alive.
+    In that case the absence of a readiness response means *unknown*, not an
+    unconfigured database, Firebase project, or PayPal account.
+    """
+    cached = get_cached_backend_readiness()
+    checked_at = st.session_state.get("backend_readiness_checked_at")
+
+    try:
+        age = time.time() - float(checked_at or 0)
+    except (TypeError, ValueError):
+        age = float("inf")
+
+    if not force and age <= BACKEND_READINESS_CACHE_SECONDS:
+        # A recent failed check is also cached.  Returning ``None`` here keeps
+        # one Streamlit rerun from issuing the same cold-start request twice.
+        return cached
+
+    try:
+        response = requests.get(
+            _build_url("/readyz"),
+            timeout=timeout,
+        )
+    except requests.RequestException:
+        st.session_state["backend_readiness_status"] = "unavailable"
+        st.session_state["backend_readiness_error"] = (
+            "The backend readiness check is temporarily unavailable."
+        )
+        st.session_state["backend_readiness_checked_at"] = time.time()
+        return cached
+
+    try:
+        payload = response.json()
+    except (TypeError, ValueError):
+        payload = None
+
+    if not isinstance(payload, Mapping):
+        st.session_state["backend_readiness_status"] = "invalid_response"
+        st.session_state["backend_readiness_error"] = (
+            "The backend returned an invalid readiness response."
+        )
+        st.session_state["backend_readiness_checked_at"] = time.time()
+        return cached
+
+    readiness = dict(payload)
+    status = str(readiness.get("status") or "").strip().lower()
+    if response.status_code == 200 and status == "ready":
+        readiness_status = "ready"
+    elif response.status_code in TRANSIENT_PROFILE_STATUS_CODES or status in {
+        "not_ready",
+        "degraded",
+    }:
+        readiness_status = "not_ready"
+    else:
+        readiness_status = f"http_{response.status_code}"
+
+    st.session_state["backend_readiness"] = readiness
+    st.session_state["backend_readiness_status"] = readiness_status
+    st.session_state["backend_readiness_error"] = ""
+    st.session_state["backend_readiness_checked_at"] = time.time()
+    return readiness
 
 
 def _response_error_message(response: requests.Response | FakeResponse) -> str:
@@ -766,7 +902,7 @@ def _response_error_message(response: requests.Response | FakeResponse) -> str:
     return str(getattr(response, "text", "") or "Profile refresh failed.")[:500]
 
 
-def refresh_profile() -> dict[str, Any] | None:
+def refresh_profile(*, force: bool = False) -> dict[str, Any] | None:
     """
     Reload the authenticated profile and preserve verified data on transient failures.
 
@@ -774,16 +910,45 @@ def refresh_profile() -> dict[str, Any] | None:
     session when `/me` is temporarily unavailable, rate-limited, or returns a
     server-side error. Authentication failures invalidate the local session and
     require sign-in instead of silently presenting stale authenticated data.
+
+    ``force=True`` is used by an explicit Refresh Profile action. Normal page
+    rendering is cooldown-protected so one cold-start failure cannot trigger a
+    burst of identical `/me` requests from the sidebar and page components.
     """
     cached_profile = _cached_profile()
 
     if not is_logged_in():
         st.session_state["profile_last_refresh_status"] = "not_authenticated"
         st.session_state["profile_using_stale_cache"] = bool(cached_profile)
+        st.session_state["profile_availability"] = PROFILE_STATE_NOT_AUTHENTICATED
         return cached_profile
 
-    response = api_get("/me")
-    status_code = int(getattr(response, "status_code", 500) or 500)
+    now = time.time()
+    last_attempt_at = st.session_state.get("profile_last_attempt_at")
+    try:
+        attempt_age = now - float(last_attempt_at or 0)
+    except (TypeError, ValueError):
+        attempt_age = float("inf")
+
+    if not force and attempt_age < PROFILE_REFRESH_COOLDOWN_SECONDS:
+        return cached_profile
+
+    st.session_state["profile_last_attempt_at"] = now
+    st.session_state["profile_availability"] = PROFILE_STATE_LOADING
+
+    response = api_get("/me", timeout=PROFILE_REQUEST_TIMEOUT_SECONDS)
+    status_code = int(getattr(response, "status_code", 503) or 503)
+
+    # Retry an actual transient HTTP response once.  Transport failures are
+    # already represented by FakeResponse and are returned immediately so the
+    # UI does not wait through two full cold-start timeouts.
+    if (
+        status_code in TRANSIENT_PROFILE_STATUS_CODES
+        and not isinstance(response, FakeResponse)
+    ):
+        time.sleep(PROFILE_RETRY_DELAY_SECONDS)
+        response = api_get("/me", timeout=PROFILE_REQUEST_TIMEOUT_SECONDS)
+        status_code = int(getattr(response, "status_code", 503) or 503)
 
     if status_code != 200:
         st.session_state["profile_last_refresh_at"] = time.time()
@@ -793,14 +958,19 @@ def refresh_profile() -> dict[str, Any] | None:
         )
 
         if status_code in {401, 403}:
-            if status_code == 403:
-                _mark_auth_expired(
-                    "Your authentication session is no longer authorized. "
-                    "Please sign in again."
-                )
+            _mark_auth_expired(
+                "Your authentication session is no longer authorized. "
+                "Please sign in again."
+            )
+            st.session_state["profile_availability"] = (
+                PROFILE_STATE_REAUTHENTICATION_REQUIRED
+            )
             st.session_state["profile_using_stale_cache"] = False
             return None
 
+        st.session_state["profile_availability"] = (
+            PROFILE_STATE_STALE if cached_profile else PROFILE_STATE_UNAVAILABLE
+        )
         st.session_state["profile_using_stale_cache"] = bool(cached_profile)
         return cached_profile
 
@@ -812,6 +982,9 @@ def refresh_profile() -> dict[str, Any] | None:
         st.session_state["profile_last_refresh_error"] = (
             "Backend returned an invalid profile response."
         )
+        st.session_state["profile_availability"] = (
+            PROFILE_STATE_STALE if cached_profile else PROFILE_STATE_UNAVAILABLE
+        )
         st.session_state["profile_using_stale_cache"] = bool(cached_profile)
         return cached_profile
 
@@ -821,24 +994,37 @@ def refresh_profile() -> dict[str, Any] | None:
         st.session_state["profile_last_refresh_error"] = (
             "Backend returned an empty or invalid profile."
         )
+        st.session_state["profile_availability"] = (
+            PROFILE_STATE_STALE if cached_profile else PROFILE_STATE_UNAVAILABLE
+        )
         st.session_state["profile_using_stale_cache"] = bool(cached_profile)
         return cached_profile
 
     st.session_state["profile"] = profile
     st.session_state["profile_last_refresh_at"] = time.time()
+    st.session_state["profile_last_verified_at"] = time.time()
     st.session_state["profile_last_refresh_status"] = "ok"
     st.session_state["profile_last_refresh_error"] = ""
     st.session_state["profile_using_stale_cache"] = False
+    st.session_state["profile_availability"] = PROFILE_STATE_VERIFIED
     _sync_profile_to_session(profile)
     return profile
 
 
-def get_profile() -> dict[str, Any] | None:
-    """Return the cached profile, loading it once when no cache exists."""
+def get_profile(
+    *,
+    load_if_missing: bool = True,
+) -> dict[str, Any] | None:
+    """Return the cached profile, optionally loading it when no cache exists."""
     cached_profile = _cached_profile()
     if cached_profile is not None:
+        if get_profile_state() == PROFILE_STATE_NOT_LOADED:
+            st.session_state["profile_availability"] = PROFILE_STATE_VERIFIED
         _sync_profile_to_session(cached_profile)
         return cached_profile
+
+    if not load_if_missing:
+        return None
 
     return refresh_profile()
 
@@ -848,17 +1034,25 @@ def load_profile() -> dict[str, Any] | None:
     return get_profile()
 
 
-def is_pro_user() -> bool:
-    """Check Pro access from the last successfully validated profile."""
-    profile = get_profile()
+def get_entitlement_state(*, load_if_missing: bool = True) -> str:
+    """Return ``pro``, ``free``, ``unknown``, or ``signed_out`` safely."""
+    if not is_logged_in():
+        return "signed_out"
+
+    profile = get_profile(load_if_missing=load_if_missing)
 
     if not profile:
-        return False
+        return "unknown"
 
-    return _profile_has_pro_access(profile)
+    return "pro" if _profile_has_pro_access(profile) else "free"
 
 
-def is_admin_user() -> bool:
+def is_pro_user() -> bool:
+    """Check Pro access from the last successfully validated profile."""
+    return get_entitlement_state() == "pro"
+
+
+def is_admin_user(*, load_if_missing: bool = True) -> bool:
     """
     Check administrator access from the last backend-validated profile.
 
@@ -866,7 +1060,7 @@ def is_admin_user() -> bool:
     local session flag. The backend /me response is the authority and exposes
     only the boolean authorization decision.
     """
-    profile = get_profile()
+    profile = get_profile(load_if_missing=load_if_missing)
 
     if not profile:
         return False
