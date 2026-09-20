@@ -58,6 +58,8 @@ BACKEND_URL = get_config(
 ).rstrip("/")
 
 FIREBASE_API_KEY = get_config("FIREBASE_API_KEY")
+FIREBASE_TOKEN_REFRESH_LEEWAY_SECONDS = 120
+FIREBASE_TOKEN_REFRESH_TIMEOUT_SECONDS = 30
 
 
 # =========================
@@ -107,17 +109,66 @@ def _clean_display_name(value: Any) -> str:
         return ""
 
     parts = [part for part in raw.split() if part]
-    display_name = " ".join(part[:1].upper() + part[1:].lower() for part in parts[:3])
-    compact = re.sub(r"[^a-zA-Z]", "", display_name).lower()
+    return " ".join(part[:1].upper() + part[1:].lower() for part in parts[:3])
 
-    if "dejan" in compact and "jovic" in compact:
-        return "Dejan Jovic"
 
-    return display_name
+def _coerce_int(value: Any, default: int = 0) -> int:
+    """Return a safe integer for backend usage values."""
+    try:
+        return int(value)
+    except (TypeError, ValueError):
+        return default
+
+
+def _profile_has_pro_access(profile: Mapping[str, Any]) -> bool:
+    """Return Pro access from backend-authoritative profile fields."""
+    plan = str(profile.get("plan") or "").strip().lower()
+    subscription_status = str(
+        profile.get("subscription_status") or ""
+    ).strip().lower()
+    paypal_status = str(
+        profile.get("paypal_subscription_status") or ""
+    ).strip().lower()
+
+    return bool(
+        profile.get("is_pro") is True
+        or plan == "pro"
+        or subscription_status in {"active", "approved"}
+        or paypal_status in {"active", "approved"}
+    )
+
+
+def _profile_usage_by_type(profile: Mapping[str, Any]) -> dict[str, int]:
+    """Normalize the backend usage breakdown for frontend session consumers."""
+    raw_usage = profile.get("usage_by_type")
+    if not isinstance(raw_usage, Mapping):
+        raw_usage = {}
+
+    legacy_cv_count = _coerce_int(
+        profile.get("cv_analyses_used", profile.get("analyses_used", 0))
+    )
+
+    usage = {
+        "cv_analysis": _coerce_int(
+            raw_usage.get("cv_analysis"),
+            legacy_cv_count,
+        ),
+        "ats_checker": _coerce_int(raw_usage.get("ats_checker")),
+        "cv_rewrite": _coerce_int(raw_usage.get("cv_rewrite")),
+        "semantic_match": _coerce_int(raw_usage.get("semantic_match")),
+        "recruiter_mode": _coerce_int(raw_usage.get("recruiter_mode")),
+    }
+
+    for key, value in raw_usage.items():
+        normalized_key = str(key or "").strip().lower()
+        if normalized_key and normalized_key not in usage:
+            usage[normalized_key] = _coerce_int(value)
+
+    return usage
 
 
 def _sync_profile_to_session(profile: Mapping[str, Any]) -> None:
-    """Keep profile identity fields available for all frontend pages."""
+    """Synchronize the backend-validated profile into Streamlit session state."""
     if not isinstance(profile, Mapping):
         return
 
@@ -126,8 +177,61 @@ def _sync_profile_to_session(profile: Mapping[str, Any]) -> None:
         profile.get("full_name") or profile.get("display_name") or profile.get("name")
     )
     is_admin = profile.get("is_admin") is True
+    backend_plan = str(profile.get("plan") or "free").strip().lower() or "free"
+    is_pro = _profile_has_pro_access(profile)
+    plan = "pro" if is_pro else backend_plan
+    usage_by_type = _profile_usage_by_type(profile)
+
+    cv_analyses_used = _coerce_int(
+        profile.get("cv_analyses_used", profile.get("analyses_used", 0))
+    )
+    analyses_used = _coerce_int(profile.get("analyses_used", cv_analyses_used))
+    total_analyses = _coerce_int(
+        profile.get("total_analyses", sum(usage_by_type.values()))
+    )
+    free_limit = _coerce_int(profile.get("free_limit"), 3)
+
+    remaining_raw = profile.get("remaining")
+    remaining = None if remaining_raw is None else _coerce_int(remaining_raw)
+    upgrade_required = profile.get("upgrade_required") is True
+
+    if is_pro:
+        remaining = None
+        upgrade_required = False
+
+    usage_period = str(profile.get("usage_period") or "lifetime").strip().lower()
 
     st.session_state["is_admin"] = is_admin
+    st.session_state["plan"] = plan
+    st.session_state["is_pro"] = is_pro
+    st.session_state["analyses_used"] = analyses_used
+    st.session_state["cv_analyses_used"] = cv_analyses_used
+    st.session_state["total_analyses"] = total_analyses
+    st.session_state["usage_by_type"] = usage_by_type
+    st.session_state["usage_period"] = usage_period
+    st.session_state["free_limit"] = free_limit
+    st.session_state["remaining"] = remaining
+    st.session_state["upgrade_required"] = upgrade_required
+
+    user_id = profile.get("id")
+    if user_id is not None:
+        st.session_state["user_id"] = user_id
+
+    for key in (
+        "paypal_customer_id",
+        "paypal_subscription_id",
+        "paypal_subscription_status",
+        "subscription_status",
+        "created_at",
+    ):
+        if key in profile:
+            st.session_state[key] = profile.get(key)
+
+    st.session_state["usage_cv_analysis"] = usage_by_type["cv_analysis"]
+    st.session_state["usage_ats_checker"] = usage_by_type["ats_checker"]
+    st.session_state["usage_cv_rewrite"] = usage_by_type["cv_rewrite"]
+    st.session_state["usage_semantic_match"] = usage_by_type["semantic_match"]
+    st.session_state["usage_recruiter_mode"] = usage_by_type["recruiter_mode"]
 
     if email:
         st.session_state["email"] = email
@@ -142,6 +246,8 @@ def _sync_profile_to_session(profile: Mapping[str, Any]) -> None:
     if not isinstance(user_state, dict):
         user_state = {}
 
+    if user_id is not None:
+        user_state["id"] = user_id
     if email:
         user_state["email"] = email
     if full_name:
@@ -149,21 +255,98 @@ def _sync_profile_to_session(profile: Mapping[str, Any]) -> None:
         user_state["display_name"] = full_name
         user_state["name"] = full_name
 
-    user_state["is_admin"] = is_admin
+    user_state.update(
+        {
+            "is_admin": is_admin,
+            "plan": plan,
+            "is_pro": is_pro,
+            "analyses_used": analyses_used,
+            "cv_analyses_used": cv_analyses_used,
+            "total_analyses": total_analyses,
+            "usage_by_type": usage_by_type,
+            "usage_period": usage_period,
+            "free_limit": free_limit,
+            "remaining": remaining,
+            "upgrade_required": upgrade_required,
+        }
+    )
+
+    for key in (
+        "paypal_customer_id",
+        "paypal_subscription_id",
+        "paypal_subscription_status",
+        "subscription_status",
+        "created_at",
+    ):
+        if key in profile:
+            user_state[key] = profile.get(key)
+
     st.session_state["user"] = user_state
 
 
-def save_auth(token: str, email: str = "", full_name: str = "") -> None:
+def save_auth(
+    token: str,
+    email: str = "",
+    full_name: str = "",
+    refresh_token: str = "",
+    expires_in: Any = None,
+) -> None:
     """
     Save authentication data in Streamlit session state.
 
     Multiple keys are stored for compatibility across old and new frontend pages.
     """
+    for key in (
+        "profile",
+        "user_id",
+        "plan",
+        "is_pro",
+        "paypal_customer_id",
+        "paypal_subscription_id",
+        "paypal_subscription_status",
+        "subscription_status",
+        "created_at",
+        "analyses_used",
+        "cv_analyses_used",
+        "total_analyses",
+        "usage_by_type",
+        "usage_period",
+        "free_limit",
+        "remaining",
+        "upgrade_required",
+        "usage_cv_analysis",
+        "usage_ats_checker",
+        "usage_cv_rewrite",
+        "usage_semantic_match",
+        "usage_recruiter_mode",
+        "profile_last_refresh_at",
+        "profile_last_refresh_status",
+        "profile_last_refresh_error",
+        "profile_using_stale_cache",
+        "refresh_token",
+        "token_expires_at",
+        "token_last_refresh_at",
+        "token_refresh_status",
+        "token_refresh_error",
+    ):
+        st.session_state.pop(key, None)
+
     clean_email = str(email or "").strip().lower()
     clean_name = _clean_display_name(full_name)
 
     st.session_state["token"] = token
     st.session_state["id_token"] = token
+
+    clean_refresh_token = str(refresh_token or "").strip()
+    if clean_refresh_token:
+        st.session_state["refresh_token"] = clean_refresh_token
+
+    expires_in_seconds = _coerce_int(expires_in)
+    if expires_in_seconds > 0:
+        st.session_state["token_expires_at"] = time.time() + expires_in_seconds
+
+    st.session_state["token_refresh_status"] = "current"
+    st.session_state["token_refresh_error"] = ""
 
     st.session_state["email"] = clean_email
     st.session_state["user_email"] = clean_email
@@ -193,7 +376,7 @@ def save_auth(token: str, email: str = "", full_name: str = "") -> None:
 
 
 def clear_auth() -> None:
-    """Remove authentication state."""
+    """Remove authentication, profile, entitlement and usage state."""
     keys = [
         "token",
         "id_token",
@@ -203,27 +386,210 @@ def clear_auth() -> None:
         "is_admin",
         "profile",
         "user",
+        "user_id",
         "full_name",
         "display_name",
         "name",
+        "plan",
+        "is_pro",
+        "paypal_customer_id",
+        "paypal_subscription_id",
+        "paypal_subscription_status",
+        "subscription_status",
+        "created_at",
+        "analyses_used",
+        "cv_analyses_used",
+        "total_analyses",
+        "usage_by_type",
+        "usage_period",
+        "free_limit",
+        "remaining",
+        "upgrade_required",
+        "usage_cv_analysis",
+        "usage_ats_checker",
+        "usage_cv_rewrite",
+        "usage_semantic_match",
+        "usage_recruiter_mode",
         "profile_last_refresh_at",
         "profile_last_refresh_status",
         "profile_last_refresh_error",
         "profile_using_stale_cache",
+        "refresh_token",
+        "token_expires_at",
+        "token_last_refresh_at",
+        "token_refresh_status",
+        "token_refresh_error",
     ]
 
     for key in keys:
         st.session_state.pop(key, None)
 
 
+def _raw_token() -> str:
+    """Return the stored Firebase ID token without triggering a refresh."""
+    return str(st.session_state.get("token") or st.session_state.get("id_token") or "")
+
+
+def _firebase_refresh_error(response: requests.Response) -> str:
+    """Return a bounded Firebase refresh error without exposing credentials."""
+    try:
+        payload = response.json()
+    except Exception:
+        payload = None
+
+    if isinstance(payload, dict):
+        error = payload.get("error")
+        if isinstance(error, dict):
+            message = error.get("message")
+            if isinstance(message, str) and message.strip():
+                return message.strip()[:200]
+
+        if isinstance(error, str) and error.strip():
+            return error.strip()[:200]
+
+    return f"Firebase token refresh failed with HTTP {response.status_code}."
+
+
+def _mark_auth_expired(message: str) -> None:
+    """Fail closed when an authenticated session can no longer be renewed."""
+    clean_message = str(message or "Authentication session expired.").strip()[:500]
+    clear_auth()
+    st.session_state["authenticated"] = False
+    st.session_state["token_refresh_status"] = "reauthentication_required"
+    st.session_state["token_refresh_error"] = clean_message
+
+
+def refresh_firebase_token() -> bool:
+    """Exchange the stored Firebase refresh token for a fresh ID token."""
+    refresh_token = str(st.session_state.get("refresh_token") or "").strip()
+
+    if not FIREBASE_API_KEY or not refresh_token:
+        st.session_state["token_refresh_status"] = "unavailable"
+        st.session_state["token_refresh_error"] = (
+            "The session cannot be renewed. Please sign in again."
+        )
+        return False
+
+    url = f"https://securetoken.googleapis.com/v1/token?key={FIREBASE_API_KEY}"
+    payload = {
+        "grant_type": "refresh_token",
+        "refresh_token": refresh_token,
+    }
+
+    try:
+        response = requests.post(
+            url,
+            data=payload,
+            timeout=FIREBASE_TOKEN_REFRESH_TIMEOUT_SECONDS,
+        )
+    except requests.RequestException:
+        st.session_state["token_refresh_status"] = "temporarily_unavailable"
+        st.session_state["token_refresh_error"] = (
+            "Firebase session renewal is temporarily unavailable."
+        )
+        return False
+
+    if response.status_code != 200:
+        st.session_state["token_refresh_status"] = f"http_{response.status_code}"
+        st.session_state["token_refresh_error"] = _firebase_refresh_error(response)
+        return False
+
+    try:
+        data = response.json()
+    except Exception:
+        st.session_state["token_refresh_status"] = "invalid_json"
+        st.session_state["token_refresh_error"] = (
+            "Firebase returned an invalid session renewal response."
+        )
+        return False
+
+    if not isinstance(data, dict):
+        st.session_state["token_refresh_status"] = "invalid_response"
+        st.session_state["token_refresh_error"] = (
+            "Firebase returned an invalid session renewal response."
+        )
+        return False
+
+    new_token = str(data.get("id_token") or "").strip()
+    new_refresh_token = str(data.get("refresh_token") or refresh_token).strip()
+    expires_in_seconds = _coerce_int(data.get("expires_in"))
+
+    if not new_token or not new_refresh_token or expires_in_seconds <= 0:
+        st.session_state["token_refresh_status"] = "incomplete_response"
+        st.session_state["token_refresh_error"] = (
+            "Firebase returned an incomplete session renewal response."
+        )
+        return False
+
+    now = time.time()
+    st.session_state["token"] = new_token
+    st.session_state["id_token"] = new_token
+    st.session_state["refresh_token"] = new_refresh_token
+    st.session_state["token_expires_at"] = now + expires_in_seconds
+    st.session_state["token_last_refresh_at"] = now
+    st.session_state["token_refresh_status"] = "ok"
+    st.session_state["token_refresh_error"] = ""
+    st.session_state["authenticated"] = True
+    return True
+
+
+def _ensure_fresh_token() -> bool:
+    """Refresh a near-expiry Firebase ID token and fail closed once expired."""
+    token = _raw_token()
+    if not token:
+        return False
+
+    try:
+        expires_at = float(st.session_state.get("token_expires_at") or 0)
+    except (TypeError, ValueError):
+        expires_at = 0.0
+
+    if expires_at <= 0:
+        return True
+
+    now = time.time()
+    if now < expires_at - FIREBASE_TOKEN_REFRESH_LEEWAY_SECONDS:
+        return True
+
+    if refresh_firebase_token():
+        return True
+
+    if now < expires_at:
+        return True
+
+    _mark_auth_expired(
+        st.session_state.get("token_refresh_error")
+        or "Your authentication session expired. Please sign in again."
+    )
+    return False
+
+
+def _recover_from_unauthorized() -> bool:
+    """Attempt one forced token renewal after a backend 401 response."""
+    if refresh_firebase_token():
+        return True
+
+    _mark_auth_expired(
+        st.session_state.get("token_refresh_error")
+        or "Your authentication session expired. Please sign in again."
+    )
+    return False
+
+
 def restore_auth() -> bool:
     """Restore auth state from Streamlit session state."""
-    token = st.session_state.get("token") or st.session_state.get("id_token")
+    token = _raw_token()
 
-    if token:
-        st.session_state["token"] = token
-        st.session_state["id_token"] = token
+    if token and _ensure_fresh_token():
+        current_token = _raw_token()
+        st.session_state["token"] = current_token
+        st.session_state["id_token"] = current_token
         st.session_state["authenticated"] = True
+
+        cached_profile = _cached_profile()
+        if cached_profile is not None:
+            _sync_profile_to_session(cached_profile)
+
         return True
 
     st.session_state["authenticated"] = False
@@ -232,7 +598,9 @@ def restore_auth() -> bool:
 
 def get_token() -> str:
     """Return active auth token."""
-    return str(st.session_state.get("token") or st.session_state.get("id_token") or "")
+    if not _ensure_fresh_token():
+        return ""
+    return _raw_token()
 
 
 def is_logged_in() -> bool:
@@ -277,12 +645,28 @@ def api_get(
 ) -> requests.Response | FakeResponse:
     """Safe GET request helper."""
     try:
-        return requests.get(
+        response = requests.get(
             _build_url(endpoint),
             headers=get_auth_headers(),
             params=params,
             timeout=timeout,
         )
+
+        if response.status_code == 401 and _raw_token():
+            if _recover_from_unauthorized():
+                response = requests.get(
+                    _build_url(endpoint),
+                    headers=get_auth_headers(),
+                    params=params,
+                    timeout=timeout,
+                )
+                if response.status_code == 401:
+                    _mark_auth_expired(
+                        "Your authentication session is no longer valid. "
+                        "Please sign in again."
+                    )
+
+        return response
     except Exception as exc:
         return FakeResponse(500, str(exc))
 
@@ -312,7 +696,7 @@ def api_post(
     try:
         request_json = json if json is not None else payload
 
-        return requests.post(
+        response = requests.post(
             _build_url(endpoint),
             headers=get_auth_headers(),
             json=request_json if files is None else None,
@@ -320,6 +704,23 @@ def api_post(
             files=files,
             timeout=timeout,
         )
+
+        if response.status_code == 401 and _raw_token():
+            if _recover_from_unauthorized() and files is None:
+                response = requests.post(
+                    _build_url(endpoint),
+                    headers=get_auth_headers(),
+                    json=request_json,
+                    data=data,
+                    timeout=timeout,
+                )
+                if response.status_code == 401:
+                    _mark_auth_expired(
+                        "Your authentication session is no longer valid. "
+                        "Please sign in again."
+                    )
+
+        return response
     except Exception as exc:
         return FakeResponse(500, str(exc))
 
@@ -367,13 +768,12 @@ def _response_error_message(response: requests.Response | FakeResponse) -> str:
 
 def refresh_profile() -> dict[str, Any] | None:
     """
-    Reload the authenticated profile without degrading access on transient failures.
+    Reload the authenticated profile and preserve verified data on transient failures.
 
     A previously validated profile remains authoritative for the active Streamlit
     session when `/me` is temporarily unavailable, rate-limited, or returns a
-    server-side error. Authentication failures do not overwrite that cache, but
-    they are recorded so the UI can surface the condition without silently
-    changing a paid account to Free.
+    server-side error. Authentication failures invalidate the local session and
+    require sign-in instead of silently presenting stale authenticated data.
     """
     cached_profile = _cached_profile()
 
@@ -391,6 +791,16 @@ def refresh_profile() -> dict[str, Any] | None:
         st.session_state["profile_last_refresh_error"] = _response_error_message(
             response
         )
+
+        if status_code in {401, 403}:
+            if status_code == 403:
+                _mark_auth_expired(
+                    "Your authentication session is no longer authorized. "
+                    "Please sign in again."
+                )
+            st.session_state["profile_using_stale_cache"] = False
+            return None
+
         st.session_state["profile_using_stale_cache"] = bool(cached_profile)
         return cached_profile
 
@@ -427,6 +837,7 @@ def get_profile() -> dict[str, Any] | None:
     """Return the cached profile, loading it once when no cache exists."""
     cached_profile = _cached_profile()
     if cached_profile is not None:
+        _sync_profile_to_session(cached_profile)
         return cached_profile
 
     return refresh_profile()
@@ -444,20 +855,7 @@ def is_pro_user() -> bool:
     if not profile:
         return False
 
-    subscription_status = str(
-        profile.get("subscription_status") or ""
-    ).strip().lower()
-    paypal_status = str(
-        profile.get("paypal_subscription_status") or ""
-    ).strip().lower()
-    plan = str(profile.get("plan") or "").strip().lower()
-
-    return bool(
-        profile.get("is_pro")
-        or plan == "pro"
-        or subscription_status in {"active", "approved"}
-        or paypal_status in {"active", "approved"}
-    )
+    return _profile_has_pro_access(profile)
 
 
 def is_admin_user() -> bool:

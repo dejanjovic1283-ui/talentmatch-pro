@@ -123,13 +123,20 @@ with left:
                 st.error("Login failed. Empty Firebase response.")
                 st.stop()
 
-            token = data.get("idToken", "")
+            token = str(data.get("idToken") or "").strip()
+            refresh_token = str(data.get("refreshToken") or "").strip()
+            expires_in = data.get("expiresIn")
 
-            if not token:
-                st.error("Login failed. Firebase did not return idToken.")
+            if not token or not refresh_token or not expires_in:
+                st.error("Login failed. Firebase returned incomplete session data.")
                 st.stop()
 
-            save_auth(token=token, email=email_clean)
+            save_auth(
+                token=token,
+                email=email_clean,
+                refresh_token=refresh_token,
+                expires_in=expires_in,
+            )
 
             display_name = str(data.get("displayName") or "").strip()
             if display_name:

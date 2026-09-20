@@ -3,7 +3,7 @@ from __future__ import annotations
 import os
 from datetime import datetime, timezone
 from textwrap import dedent
-from typing import Any
+from typing import Any, Mapping
 
 import requests
 import streamlit as st
@@ -149,36 +149,138 @@ def get_user_id() -> str:
     )
 
 
-def check_backend_status() -> tuple[str, str]:
+def _coerce_int(value: Any, default: int = 0) -> int:
+    """Return a safe integer for backend/session usage values."""
     try:
-        response = requests.get(f"{BACKEND_URL}/healthz", timeout=6)
-        if response.status_code == 200:
-            return "Online", "✅"
-        return "Degraded", "⚠️"
+        return int(value)
+    except (TypeError, ValueError):
+        return default
+
+
+def _circuit_state(
+    readiness: Mapping[str, Any],
+    service_name: str,
+) -> str:
+    circuits = readiness.get("external_service_circuits")
+    if not isinstance(circuits, Mapping):
+        return ""
+
+    service = circuits.get(service_name)
+    if not isinstance(service, Mapping):
+        return ""
+
+    return str(service.get("state") or "").strip().lower()
+
+
+def _service_readiness(
+    readiness: Mapping[str, Any],
+    service_name: str,
+    *,
+    configured: bool,
+    ready_label: str = "Ready",
+) -> tuple[str, str]:
+    if not configured:
+        return "Not configured", "🟡"
+
+    state = _circuit_state(readiness, service_name)
+
+    if state == "closed":
+        return ready_label, "🟢"
+    if state == "open":
+        return "Unavailable", "🔴"
+    if state in {"half_open", "half-open", "half open"}:
+        return "Recovering", "🟡"
+
+    return "Unknown", "🟡"
+
+
+def check_system_status() -> dict[str, tuple[str, str]]:
+    """Return a live operational snapshot from the backend /readyz contract."""
+    fallback = {
+        "Backend": ("Offline", "🔴"),
+        "Database": ("Unknown", "🟡"),
+        "OpenAI": ("Unknown", "🟡"),
+        "Firebase": ("Unknown", "🟡"),
+        "PayPal": ("Unknown", "🟡"),
+    }
+
+    try:
+        response = requests.get(f"{BACKEND_URL}/readyz", timeout=6)
     except requests.RequestException:
-        return "Offline", "❌"
+        return fallback
 
+    try:
+        readiness = response.json()
+    except ValueError:
+        readiness = {}
 
-def get_usage_summary() -> dict[str, int]:
+    if not isinstance(readiness, Mapping):
+        readiness = {}
+
+    backend_ready = response.status_code == 200 and (
+        str(readiness.get("status") or "").strip().lower() == "ready"
+    )
+    database_ready = readiness.get("database_connection_ok") is True
+
+    openai_configured = readiness.get("openai_configured") is True
+    firebase_configured = readiness.get("firebase_project_configured") is True
+    paypal_configured = bool(
+        str(readiness.get("billing_provider") or "").strip().lower() == "paypal"
+        and readiness.get("paypal_client_configured") is True
+        and readiness.get("paypal_secret_configured") is True
+        and readiness.get("paypal_plan_configured") is True
+        and readiness.get("paypal_webhook_configured") is True
+    )
+
     return {
-        "CV Analysis": int(st.session_state.get("usage_cv_analysis", 0)),
-        "ATS Checker": int(st.session_state.get("usage_ats_checker", 0)),
-        "CV Rewrite": int(st.session_state.get("usage_cv_rewrite", 0)),
-        "Semantic Match": int(st.session_state.get("usage_semantic_match", 0)),
-        "Recruiter Mode": int(st.session_state.get("usage_recruiter_mode", 0)),
+        "Backend": ("Ready", "🟢") if backend_ready else ("Not ready", "🟡"),
+        "Database": ("Connected", "🟢") if database_ready else ("Unavailable", "🔴"),
+        "OpenAI": _service_readiness(
+            readiness,
+            "openai",
+            configured=openai_configured,
+        ),
+        "Firebase": _service_readiness(
+            readiness,
+            "firebase_authentication",
+            configured=firebase_configured,
+        ),
+        "PayPal": _service_readiness(
+            readiness,
+            "paypal",
+            configured=paypal_configured,
+            ready_label=(
+                "Live"
+                if str(readiness.get("paypal_environment") or "").strip().lower() == "live"
+                else "Ready"
+            ),
+        ),
     }
 
 
-def usage_limit_for_plan(pro_enabled: bool) -> int:
-    return 50 if pro_enabled else 3
+def get_usage_summary() -> dict[str, int]:
+    """Return the backend-synchronized lifetime usage breakdown."""
+    raw_usage = st.session_state.get("usage_by_type")
+    if not isinstance(raw_usage, Mapping):
+        raw_usage = {}
 
-
-def status_dot(status: str) -> str:
-    if status.lower() == "online":
-        return "🟢"
-    if status.lower() == "degraded":
-        return "🟡"
-    return "🔴"
+    return {
+        "CV Analysis": _coerce_int(
+            raw_usage.get("cv_analysis", st.session_state.get("usage_cv_analysis", 0))
+        ),
+        "ATS Checker": _coerce_int(
+            raw_usage.get("ats_checker", st.session_state.get("usage_ats_checker", 0))
+        ),
+        "CV Rewrite": _coerce_int(
+            raw_usage.get("cv_rewrite", st.session_state.get("usage_cv_rewrite", 0))
+        ),
+        "Semantic Match": _coerce_int(
+            raw_usage.get("semantic_match", st.session_state.get("usage_semantic_match", 0))
+        ),
+        "Recruiter Mode": _coerce_int(
+            raw_usage.get("recruiter_mode", st.session_state.get("usage_recruiter_mode", 0))
+        ),
+    }
 
 
 def render_account_css() -> None:
@@ -630,19 +732,21 @@ def render_membership_card(
     *,
     plan_name: str,
     access_status: str,
-    renewal_date: str,
     total_usage: int,
-    monthly_limit: int,
-    usage_percent: int,
+    cv_analyses_used: int,
+    free_limit: int,
+    pro_enabled: bool,
 ) -> str:
+    allowance = "Unlimited" if pro_enabled else f"{cv_analyses_used}/{free_limit}"
+
     return f"""
         <div class="tm-membership-card">
             <div class="tm-membership-title">💎 {safe_html(plan_name)} Member</div>
             <div class="tm-membership-plan">{safe_html(plan_name)} Plan</div>
             <div class="tm-membership-row"><span>Billing provider</span><span>PayPal</span></div>
             <div class="tm-membership-row"><span>Access status</span><span>{safe_html(access_status.title())}</span></div>
-            <div class="tm-membership-row"><span>Renewal date</span><span>{safe_html(renewal_date)}</span></div>
-            <div class="tm-membership-row"><span>Monthly usage</span><span>{total_usage}/{monthly_limit} • {usage_percent}%</span></div>
+            <div class="tm-membership-row"><span>CV Analysis allowance</span><span>{safe_html(allowance)}</span></div>
+            <div class="tm-membership-row"><span>Lifetime activity</span><span>{total_usage}</span></div>
         </div>
     """
 
@@ -650,8 +754,9 @@ def render_membership_card(
 def render_usage_card(
     usage: dict[str, int],
     total_usage: int,
-    monthly_limit: int,
-    usage_percent: int,
+    cv_analyses_used: int,
+    free_limit: int,
+    pro_enabled: bool,
 ) -> str:
     usage_rows = "".join(
         f"""
@@ -662,14 +767,35 @@ def render_usage_card(
         """
         for label, value in usage.items()
     )
+
+    if pro_enabled:
+        allowance_summary = "Unlimited CV Analysis access on the Pro plan."
+        progress_html = """
+            <div class="tm-progress-track">
+                <div class="tm-progress-fill" style="width:100%"></div>
+            </div>
+        """
+    else:
+        allowance_percent = (
+            min(int((cv_analyses_used / free_limit) * 100), 100)
+            if free_limit
+            else 0
+        )
+        allowance_summary = (
+            f"Free CV Analysis allowance: {cv_analyses_used}/{free_limit} used."
+        )
+        progress_html = f"""
+            <div class="tm-progress-track">
+                <div class="tm-progress-fill" style="width:{allowance_percent}%"></div>
+            </div>
+        """
+
     return f"""
         <div class="tm-premium-card">
-            <div class="tm-card-label">📊 Monthly usage</div>
-            <div class="tm-card-value">{total_usage} / {monthly_limit}</div>
-            <div class="tm-card-note">{usage_percent}% of your monthly workspace allowance used.</div>
-            <div class="tm-progress-track">
-                <div class="tm-progress-fill" style="width:{usage_percent}%"></div>
-            </div>
+            <div class="tm-card-label">📊 Lifetime usage</div>
+            <div class="tm-card-value">{total_usage} total reports</div>
+            <div class="tm-card-note">{safe_html(allowance_summary)}</div>
+            {progress_html}
             <div style="margin-top:.9rem">{usage_rows}</div>
         </div>
     """
@@ -679,8 +805,11 @@ def render_profile_card(email: str, user_id: str, registered_at: str) -> str:
     rows = [
         ("User email", email or "Not signed in"),
         ("User ID", user_id or "Not available"),
-        ("Registered", registered_at),
     ]
+
+    if registered_at and registered_at != "Not available":
+        rows.append(("Registered", registered_at))
+
     body = "".join(
         f"""
         <div class="tm-check-row">
@@ -700,16 +829,30 @@ def render_profile_card(email: str, user_id: str, registered_at: str) -> str:
     """
 
 
-def render_system_card(backend_status: str, backend_icon: str, today: str) -> str:
-    status_headline = "System Healthy" if backend_status == "Online" else "System Attention"
+def render_system_card(
+    system_status: Mapping[str, tuple[str, str]],
+    today: str,
+) -> str:
+    backend_status, backend_icon = system_status.get("Backend", ("Unknown", "🟡"))
+
+    healthy = all(
+        status in {"Ready", "Connected", "Live"}
+        for status, _ in system_status.values()
+    )
+    status_icon = "🟢" if healthy else "🟡"
+    status_headline = "System Healthy" if healthy else "System Attention"
+
     rows = [
         ("Frontend", "Online", "🟢"),
-        ("Backend", backend_status, backend_icon),
-        ("Database", "Connected", "🟢" if backend_status == "Online" else "🟡"),
-        ("OpenAI", "Ready", "🟢" if backend_status == "Online" else "🟡"),
+        ("Backend", *system_status.get("Backend", ("Unknown", "🟡"))),
+        ("Database", *system_status.get("Database", ("Unknown", "🟡"))),
+        ("OpenAI", *system_status.get("OpenAI", ("Unknown", "🟡"))),
+        ("Firebase", *system_status.get("Firebase", ("Unknown", "🟡"))),
+        ("PayPal", *system_status.get("PayPal", ("Unknown", "🟡"))),
         ("App version", APP_VERSION, "🚀"),
         ("Date", today, "📅"),
     ]
+
     body = "".join(
         f"""
         <div class="tm-check-row">
@@ -719,23 +862,29 @@ def render_system_card(backend_status: str, backend_icon: str, today: str) -> st
         """
         for label, value, icon in rows
     )
+
     return f"""
         <div class="tm-premium-card">
-            <div class="tm-card-label">{safe_html(status_dot(backend_status))} {safe_html(status_headline)}</div>
+            <div class="tm-card-label">{safe_html(status_icon)} {safe_html(status_headline)}</div>
             <div class="tm-card-value" style="font-size:1.35rem">System status</div>
-            <div class="tm-card-note">Live operational snapshot for TalentMatch Pro.</div>
+            <div class="tm-card-note">Live readiness snapshot for TalentMatch Pro.</div>
             <div class="tm-status-pill">{safe_html(backend_icon)} Backend {safe_html(backend_status)}</div>
             <div style="margin-top:.65rem">{body}</div>
         </div>
     """
 
 
-def render_security_card(is_signed_in: bool) -> str:
+def render_security_card(
+    is_signed_in: bool,
+    system_status: Mapping[str, tuple[str, str]],
+) -> str:
+    paypal_status, paypal_icon = system_status.get("PayPal", ("Unknown", "🟡"))
+
     rows = [
         ("Firebase Authentication", "Verified" if is_signed_in else "Login required", "✅" if is_signed_in else "🔐"),
         ("Secure JWT Session", "Active" if is_signed_in else "Inactive", "✅" if is_signed_in else "⚪"),
         ("HTTPS", "Enabled", "✅"),
-        ("PayPal Billing", "Ready", "✅"),
+        ("PayPal Billing", paypal_status, paypal_icon),
     ]
     body = "".join(
         f"""
@@ -763,12 +912,15 @@ def build_profile_export(
     user_id: str,
     plan_name: str,
     access_status: str,
-    renewal_date: str,
     total_usage: int,
-    monthly_limit: int,
+    cv_analyses_used: int,
+    free_limit: int,
+    pro_enabled: bool,
     backend_status: str,
 ) -> str:
     generated_at = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M UTC")
+    allowance = "Unlimited" if pro_enabled else f"{cv_analyses_used}/{free_limit}"
+
     return "\n".join(
         [
             "TalentMatch Pro - Account Profile",
@@ -786,11 +938,11 @@ def build_profile_export(
             f"Plan: {plan_name}",
             f"Status: {access_status}",
             "Billing: PayPal",
-            f"Renewal: {renewal_date}",
+            f"CV Analysis allowance: {allowance}",
             "",
             "Usage",
             "-" * 20,
-            f"Monthly usage: {total_usage}/{monthly_limit}",
+            f"Lifetime reports: {total_usage}",
             "",
             "System",
             "-" * 20,
@@ -802,8 +954,20 @@ def build_profile_export(
 
 if is_logged_in():
     refresh_profile()
+    if not is_logged_in():
+        st.session_state["account_session_notice"] = (
+            "Your authentication session expired and could not be renewed. "
+            "Please sign in again."
+        )
+        st.rerun()
 
 render_account_css()
+
+account_session_notice = str(
+    st.session_state.pop("account_session_notice", "") or ""
+).strip()
+if account_session_notice:
+    st.warning(account_session_notice)
 
 email = get_user_email()
 user_id = get_user_id()
@@ -812,22 +976,23 @@ initials = get_initials(display_name)
 pro_enabled = is_pro_user()
 plan_name = "Pro" if pro_enabled else "Free"
 access_status = "ACTIVE" if is_logged_in() else "NOT SIGNED IN"
-backend_status, backend_icon = check_backend_status()
+system_status = check_system_status()
+backend_status, _ = system_status["Backend"]
 usage = get_usage_summary()
-total_usage = sum(usage.values())
-monthly_limit = usage_limit_for_plan(pro_enabled)
-usage_percent = min(int((total_usage / monthly_limit) * 100), 100) if monthly_limit else 0
+total_usage = _coerce_int(
+    st.session_state.get("total_analyses"),
+    sum(usage.values()),
+)
+cv_analyses_used = _coerce_int(
+    st.session_state.get("cv_analyses_used"),
+    usage.get("CV Analysis", 0),
+)
+free_limit = _coerce_int(st.session_state.get("free_limit"), 3)
 
 registered_at = str(
     st.session_state.get("created_at")
     or st.session_state.get("registered_at")
     or st.session_state.get("profile", {}).get("created_at")
-    or "Not available"
-)
-renewal_date = str(
-    st.session_state.get("renewal_date")
-    or st.session_state.get("subscription_renewal_date")
-    or st.session_state.get("profile", {}).get("renewal_date")
     or "Not available"
 )
 today = datetime.now(timezone.utc).strftime("%Y-%m-%d")
@@ -861,10 +1026,10 @@ st.markdown(
         {render_membership_card(
             plan_name=plan_name,
             access_status=access_status,
-            renewal_date=renewal_date,
             total_usage=total_usage,
-            monthly_limit=monthly_limit,
-            usage_percent=usage_percent,
+            cv_analyses_used=cv_analyses_used,
+            free_limit=free_limit,
+            pro_enabled=pro_enabled,
         )}
         {render_profile_card(email, user_id, registered_at)}
     </div>
@@ -883,14 +1048,20 @@ else:
 render_section_heading(
     "Operations",
     "Usage and system health",
-    "Track monthly activity and confirm the current operational state of the platform.",
+    "Track lifetime activity and confirm the current operational state of the platform.",
 )
 st.markdown(
     _html(
         f"""
     <div class="tm-panel-grid">
-        {render_usage_card(usage, total_usage, monthly_limit, usage_percent)}
-        {render_system_card(backend_status, backend_icon, today)}
+        {render_usage_card(
+            usage,
+            total_usage,
+            cv_analyses_used,
+            free_limit,
+            pro_enabled,
+        )}
+        {render_system_card(system_status, today)}
     </div>
     """
     ),
@@ -902,7 +1073,7 @@ render_section_heading(
     "Security center",
     "Review authentication, session, HTTPS, and PayPal billing safeguards.",
 )
-st.markdown(_html(render_security_card(is_logged_in())), unsafe_allow_html=True)
+st.markdown(_html(render_security_card(is_logged_in(), system_status)), unsafe_allow_html=True)
 
 profile_export = build_profile_export(
     display_name=display_name,
@@ -910,9 +1081,10 @@ profile_export = build_profile_export(
     user_id=user_id,
     plan_name=plan_name,
     access_status=access_status,
-    renewal_date=renewal_date,
     total_usage=total_usage,
-    monthly_limit=monthly_limit,
+    cv_analyses_used=cv_analyses_used,
+    free_limit=free_limit,
+    pro_enabled=pro_enabled,
     backend_status=backend_status,
 )
 
@@ -949,8 +1121,26 @@ with st.container(key="tm_account_actions", border=False, width="stretch"):
             unsafe_allow_html=True,
         )
         if st.button("🔄 Refresh Profile", key="tm_account_refresh", width="stretch"):
-            refresh_profile()
-            st.success("Profile refreshed.")
+            refreshed_profile = refresh_profile()
+            refresh_status = str(
+                st.session_state.get("profile_last_refresh_status") or ""
+            ).strip().lower()
+
+            if not is_logged_in():
+                st.session_state["account_session_notice"] = (
+                    "Your authentication session expired and could not be renewed. "
+                    "Please sign in again."
+                )
+                st.rerun()
+            elif refresh_status == "ok" and refreshed_profile:
+                st.success("Profile refreshed.")
+            elif refreshed_profile:
+                st.warning(
+                    "The latest profile data is temporarily unavailable. "
+                    "Showing your last verified profile."
+                )
+            else:
+                st.error("Profile refresh failed. Please try again.")
 
     with action_cols[1]:
         st.markdown(

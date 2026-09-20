@@ -11,6 +11,7 @@ from typing import Any, Callable, Final, TypeAlias, TypeVar
 import requests
 from fastapi import Depends, HTTPException
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
+from sqlalchemy import func
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import Session
 
@@ -107,6 +108,22 @@ AUTH_ERRORS: Final[dict[str, AuthenticationErrorDefinition]] = {
         message="Firebase email address is invalid.",
         error_type="firebase_email_invalid",
     ),
+    "firebase_email_verification_required": AuthenticationErrorDefinition(
+        status_code=403,
+        message=(
+            "Verify your Firebase email address before linking it to an existing "
+            "TalentMatch Pro account."
+        ),
+        error_type="firebase_email_verification_required",
+    ),
+    "user_identity_conflict": AuthenticationErrorDefinition(
+        status_code=409,
+        message=(
+            "Multiple TalentMatch Pro accounts use this email address. "
+            "Automatic account linking was stopped for safety."
+        ),
+        error_type="user_identity_conflict",
+    ),
     "user_sync_failed": AuthenticationErrorDefinition(
         status_code=500,
         message="User account synchronization failed.",
@@ -131,6 +148,8 @@ _AUTH_METRICS: dict[str, int] = {
     "firebase_auth_failure": 0,
     "firebase_user_creations": 0,
     "firebase_user_updates": 0,
+    "firebase_user_relinks": 0,
+    "firebase_user_identity_conflicts": 0,
 }
 
 
@@ -273,11 +292,6 @@ def _clean_display_name(value: Any) -> str:
         part[:1].upper() + part[1:].lower()
         for part in parts[:3]
     )[:MAX_DISPLAY_NAME_LENGTH]
-
-    compact = re.sub(r"[^a-zA-Z]", "", display_name).lower()
-
-    if "dejan" in compact and "jovic" in compact:
-        return "Dejan Jovic"
 
     return display_name
 
@@ -608,6 +622,70 @@ def verify_firebase_token_with_rest(
     return first_user
 
 
+def _firebase_email_is_verified(firebase_user: FirebaseUser) -> bool:
+    """Return Firebase's authoritative email verification state."""
+    return firebase_user.get("emailVerified") is True
+
+
+def _users_with_email(db: Session, email: str) -> list[User]:
+    """Return all application users matching one normalized email address."""
+    if not email:
+        return []
+
+    return (
+        db.query(User)
+        .filter(func.lower(User.email) == email)
+        .order_by(User.id.asc())
+        .all()
+    )
+
+
+def _relink_authenticated_user(
+    db: Session,
+    user: User,
+    *,
+    firebase_uid: str,
+    email: str,
+    full_name: str,
+) -> User:
+    """
+    Link a verified Firebase identity to an existing application account.
+
+    The existing application row remains canonical so billing identifiers, Pro
+    entitlement, usage history and recruiter data keep the same ``users.id``.
+    Only identity/profile fields are synchronized here.
+    """
+    previous_uid = _clean_text(getattr(user, "firebase_uid", ""))
+
+    user.firebase_uid = firebase_uid
+
+    if email:
+        user.email = email
+
+    if full_name:
+        user.full_name = full_name
+
+    saved_user = _save_user(
+        db,
+        user,
+        event_name="firebase_user_relink_failed",
+        failure_message="Failed to relink authenticated user.",
+    )
+
+    _increment_auth_metric("firebase_user_relinks")
+
+    LOGGER.warning(
+        "Existing TalentMatch Pro account relinked to verified Firebase identity.",
+        extra={
+            "event": "firebase_user_relinked",
+            "user_id": saved_user.id,
+            "firebase_uid_changed": previous_uid != firebase_uid,
+        },
+    )
+
+    return saved_user
+
+
 def _save_user(
     db: Session,
     user: User,
@@ -762,17 +840,51 @@ def get_current_user(
         .first()
     )
 
-    if not user:
-        return _create_authenticated_user(
+    if user:
+        return _update_authenticated_user(
             db,
+            user,
+            email=email,
+            full_name=full_name,
+        )
+
+    email_matches = _users_with_email(db, email)
+
+    if len(email_matches) > 1:
+        _increment_auth_metric("firebase_user_identity_conflicts")
+        LOGGER.error(
+            "Multiple application users matched the authenticated Firebase email.",
+            extra={
+                "event": "firebase_user_identity_conflict",
+                "matched_user_count": len(email_matches),
+            },
+        )
+        raise _http_error("user_identity_conflict")
+
+    if len(email_matches) == 1:
+        existing_user = email_matches[0]
+
+        if not _firebase_email_is_verified(firebase_user):
+            LOGGER.warning(
+                "Verified-email requirement blocked automatic Firebase relink.",
+                extra={
+                    "event": "firebase_user_relink_requires_verified_email",
+                    "user_id": existing_user.id,
+                },
+            )
+            raise _http_error("firebase_email_verification_required")
+
+        return _relink_authenticated_user(
+            db,
+            existing_user,
             firebase_uid=firebase_uid,
             email=email,
             full_name=full_name,
         )
 
-    return _update_authenticated_user(
+    return _create_authenticated_user(
         db,
-        user,
+        firebase_uid=firebase_uid,
         email=email,
         full_name=full_name,
     )

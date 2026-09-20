@@ -221,13 +221,20 @@ with left:
                 st.error("Registration failed. Empty Firebase response.")
                 st.stop()
 
-            token = data.get("idToken", "")
+            token = str(data.get("idToken") or "").strip()
+            refresh_token = str(data.get("refreshToken") or "").strip()
+            expires_in = data.get("expiresIn")
 
-            if not token:
-                st.error("Registration failed. Firebase did not return idToken.")
+            if not token or not refresh_token or not expires_in:
+                st.error("Registration failed. Firebase returned incomplete session data.")
                 st.stop()
 
-            save_auth(token=token, email=email_clean)
+            save_auth(
+                token=token,
+                email=email_clean,
+                refresh_token=refresh_token,
+                expires_in=expires_in,
+            )
             st.session_state["full_name"] = full_name_clean
             user_state = st.session_state.get("user")
             if isinstance(user_state, dict):
