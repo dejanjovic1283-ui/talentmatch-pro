@@ -1,14 +1,15 @@
 from __future__ import annotations
 
-import time
+from html import escape
 
 import streamlit as st
 
 from auth_utils import (
     FIREBASE_API_KEY,
-    clear_auth,
+    begin_persistent_session,
     firebase_login,
     is_logged_in,
+    logout_and_redirect,
     save_auth,
 )
 from components.sidebar import render_sidebar
@@ -58,6 +59,9 @@ render_hero(
 
 if is_logged_in():
     email = _current_email()
+    persistent_session_notice = str(
+        st.session_state.pop("persistent_session_notice", "") or ""
+    ).strip()
 
     st.markdown(
         f"""
@@ -70,14 +74,16 @@ if is_logged_in():
         unsafe_allow_html=True,
     )
 
+    if persistent_session_notice:
+        st.warning(persistent_session_notice)
+
     col1, col2 = st.columns(2)
     with col1:
         if st.button("🏠 Go to Dashboard", use_container_width=True):
             st.switch_page("app.py")
     with col2:
         if st.button("🚪 Logout", use_container_width=True):
-            clear_auth()
-            st.rerun()
+            logout_and_redirect()
 
     st.stop()
 
@@ -99,7 +105,9 @@ with left:
             autocomplete="current-password",
         )
 
-        remember_note = st.caption("Your session is stored only in this browser session state.")
+        st.caption(
+            "After sign-in, you will confirm a secure browser session that can be restored automatically."
+        )
 
         if st.button("🔐 Login", use_container_width=True, type="primary"):
             email_clean = email.strip().lower()
@@ -146,8 +154,28 @@ with left:
                     user_state["full_name"] = display_name
                     st.session_state["user"] = user_state
 
-            st.success("Login successful.")
-            time.sleep(0.8)
+            activation_url, persistent_session_error = begin_persistent_session()
+            if activation_url:
+                safe_activation_url = escape(activation_url, quote=True)
+                st.success("Login successful. Confirm your secure browser session to continue.")
+                st.markdown(
+                    f"""
+                    <a href="{safe_activation_url}" target="_self" rel="noreferrer"
+                       style="display:block;text-align:center;padding:.8rem 1rem;border-radius:.7rem;background:#2563eb;color:#fff;font-weight:700;text-decoration:none;margin-top:.7rem">
+                        🔐 Continue securely
+                    </a>
+                    """,
+                    unsafe_allow_html=True,
+                )
+                st.caption(
+                    "This one-time confirmation finishes the secure sign-in and never exposes your Firebase refresh token."
+                )
+                st.stop()
+
+            st.session_state["persistent_session_notice"] = (
+                "Login succeeded for this open session, but durable session setup is unavailable: "
+                f"{persistent_session_error or 'please try again later.'}"
+            )
             st.rerun()
 
 with right:

@@ -1,111 +1,29 @@
 from __future__ import annotations
 
-import time
+from html import escape
 
-import requests
 import streamlit as st
 
-from auth_utils import FIREBASE_API_KEY, is_logged_in, save_auth
+from auth_utils import (
+    FIREBASE_API_KEY,
+    begin_persistent_session,
+    firebase_register,
+    is_logged_in,
+    logout_and_redirect,
+    save_auth,
+)
 from components.sidebar import render_sidebar
 from components.ui import apply_global_styles, render_hero, safe_html
 
 
 st.set_page_config(
-    page_title="Register • TalentMatch Pro",
-    page_icon="🚀",
+    page_title="Create Account • TalentMatch Pro",
+    page_icon="📝",
     layout="wide",
 )
 
 apply_global_styles()
 render_sidebar()
-
-
-def firebase_error_message(error: str) -> str:
-    """Translate Firebase REST error codes into user-friendly production messages."""
-    normalized_error = (error or "").strip().upper()
-
-    mapping = {
-        "EMAIL_EXISTS": (
-            "This email is already registered. "
-            "Please log in or use another email address."
-        ),
-        "INVALID_EMAIL": "Please enter a valid email address.",
-        "WEAK_PASSWORD": "Password is too weak. Please use at least 6 characters.",
-        "OPERATION_NOT_ALLOWED": "Email/password registration is currently unavailable.",
-        "TOO_MANY_ATTEMPTS_TRY_LATER": "Too many attempts. Please try again later.",
-        "USER_DISABLED": "This account has been disabled. Please contact support.",
-        "INVALID_PASSWORD": "The password is incorrect. Please try again.",
-        "USER_NOT_FOUND": "No account was found for this email address.",
-    }
-
-    if normalized_error.startswith("WEAK_PASSWORD"):
-        return mapping["WEAK_PASSWORD"]
-
-    return mapping.get(
-        normalized_error,
-        "Registration failed. Please check your details and try again.",
-    )
-
-
-def firebase_register(email: str, password: str, full_name: str = "") -> tuple[dict | None, str | None]:
-    """Create a Firebase account and optionally store displayName."""
-    if not FIREBASE_API_KEY:
-        return None, "FIREBASE_API_KEY is missing in Render Environment."
-
-    signup_url = (
-        "https://identitytoolkit.googleapis.com/v1/accounts:"
-        f"signUp?key={FIREBASE_API_KEY}"
-    )
-
-    signup_payload = {
-        "email": email,
-        "password": password,
-        "returnSecureToken": True,
-    }
-
-    try:
-        response = requests.post(signup_url, json=signup_payload, timeout=60)
-    except requests.RequestException as exc:
-        return None, f"Firebase request failed: {exc}"
-
-    if response.status_code != 200:
-        try:
-            firebase_error = response.json().get("error", {}).get("message", "")
-        except Exception:
-            firebase_error = ""
-
-        return None, firebase_error_message(firebase_error)
-
-    try:
-        data = response.json()
-    except Exception:
-        return None, "Firebase returned invalid JSON."
-
-    display_name = full_name.strip()
-    token = str(data.get("idToken") or "").strip()
-
-    if display_name and token:
-        update_url = (
-            "https://identitytoolkit.googleapis.com/v1/accounts:"
-            f"update?key={FIREBASE_API_KEY}"
-        )
-        update_payload = {
-            "idToken": token,
-            "displayName": display_name,
-            "returnSecureToken": True,
-        }
-
-        try:
-            update_response = requests.post(update_url, json=update_payload, timeout=60)
-            if update_response.status_code == 200:
-                updated_data = update_response.json()
-                if isinstance(updated_data, dict):
-                    data.update(updated_data)
-                    data["displayName"] = display_name
-        except Exception:
-            data["displayName"] = display_name
-
-    return data, None
 
 
 def _current_email() -> str:
@@ -119,11 +37,11 @@ def _current_email() -> str:
     ).strip()
 
 
-def _benefit_card(icon: str, title: str, body: str) -> None:
+def _auth_card(title: str, body: str, icon: str) -> None:
     st.markdown(
         f"""
         <div class="tm-card" style="height:100%">
-            <div style="font-size:1.8rem;margin-bottom:.4rem">{safe_html(icon)}</div>
+            <div class="tm-kicker">{safe_html(icon)} TalentMatch Pro</div>
             <div class="tm-card-title">{safe_html(title)}</div>
             <div class="tm-muted">{safe_html(body)}</div>
         </div>
@@ -133,19 +51,22 @@ def _benefit_card(icon: str, title: str, body: str) -> None:
 
 
 render_hero(
-    "Create your workspace",
-    "Start using TalentMatch Pro",
-    "Create a free account and get instant access to AI-powered CV analysis, ATS checks and your personal report history.",
+    "Create your account",
+    "Start your TalentMatch Pro workspace",
+    "Create a free account for ATS analysis, CV improvements, secure reports and a persistent browser session.",
     "🚀",
 )
 
 if is_logged_in():
     email = _current_email()
+    persistent_session_notice = str(
+        st.session_state.pop("persistent_session_notice", "") or ""
+    ).strip()
 
     st.markdown(
         f"""
         <div class="tm-card" style="margin-top:1rem">
-            <div class="tm-kicker">✅ Active account</div>
+            <div class="tm-kicker">✅ Active session</div>
             <div class="tm-card-title">You are already logged in</div>
             <div class="tm-muted">Signed in as <b>{safe_html(email or 'your TalentMatch account')}</b>.</div>
         </div>
@@ -153,20 +74,26 @@ if is_logged_in():
         unsafe_allow_html=True,
     )
 
+    if persistent_session_notice:
+        st.warning(persistent_session_notice)
+
     col1, col2 = st.columns(2)
     with col1:
         if st.button("🏠 Go to Dashboard", use_container_width=True):
             st.switch_page("app.py")
     with col2:
-        if st.button("💳 View Pricing", use_container_width=True):
-            st.switch_page("pages/pricing.py")
+        if st.button("🚪 Logout", use_container_width=True):
+            logout_and_redirect()
 
     st.stop()
 
 left, right = st.columns([1.05, 0.95])
 
 with left:
-    st.markdown('<div class="tm-section-title">Create account</div>', unsafe_allow_html=True)
+    st.markdown(
+        '<div class="tm-section-title">Create a free account</div>',
+        unsafe_allow_html=True,
+    )
 
     with st.container(border=True):
         full_name = st.text_input(
@@ -182,36 +109,46 @@ with left:
         password = st.text_input(
             "Password",
             type="password",
-            placeholder="Minimum 6 characters",
+            placeholder="At least 6 characters",
             autocomplete="new-password",
         )
-        confirm_password = st.text_input(
+        password_confirm = st.text_input(
             "Confirm password",
             type="password",
             placeholder="Repeat your password",
             autocomplete="new-password",
         )
 
-        st.caption("Your full name is used for a professional welcome message and account profile display.")
+        st.caption(
+            "After registration, confirm the secure browser session once. Your Firebase refresh token is stored only by the backend."
+        )
 
         if st.button("🚀 Create Account", use_container_width=True, type="primary"):
-            full_name_clean = full_name.strip()
+            name_clean = " ".join(full_name.split()).strip()
             email_clean = email.strip().lower()
 
-            if not full_name_clean or not email_clean or not password or not confirm_password:
-                st.error("Please fill all fields.")
+            if not FIREBASE_API_KEY:
+                st.error("FIREBASE_API_KEY is missing in the environment variables.")
                 st.stop()
-
-            if password != confirm_password:
+            if len(name_clean) < 2 or len(name_clean) > 120:
+                st.error("Enter your full name.")
+                st.stop()
+            if not email_clean or "@" not in email_clean:
+                st.error("Enter a valid email address.")
+                st.stop()
+            if len(password) < 6:
+                st.error("Password must contain at least 6 characters.")
+                st.stop()
+            if password != password_confirm:
                 st.error("Passwords do not match.")
                 st.stop()
 
-            if len(password) < 6:
-                st.error("Password must be at least 6 characters.")
-                st.stop()
-
-            with st.spinner("Creating your TalentMatch workspace..."):
-                data, error = firebase_register(email_clean, password, full_name_clean)
+            with st.spinner("Creating your account securely..."):
+                data, error = firebase_register(
+                    email_clean,
+                    password,
+                    name_clean,
+                )
 
             if error:
                 st.error(error)
@@ -232,33 +169,46 @@ with left:
             save_auth(
                 token=token,
                 email=email_clean,
+                full_name=name_clean,
                 refresh_token=refresh_token,
                 expires_in=expires_in,
             )
-            st.session_state["full_name"] = full_name_clean
-            user_state = st.session_state.get("user")
-            if isinstance(user_state, dict):
-                user_state["full_name"] = full_name_clean
-                st.session_state["user"] = user_state
 
-            st.success("Account created successfully.")
-            st.info("You can now use ATS Checker, CV Analysis and your personal History dashboard.")
-            time.sleep(0.8)
+            activation_url, persistent_session_error = begin_persistent_session()
+            if activation_url:
+                safe_activation_url = escape(activation_url, quote=True)
+                st.success("Account created. Confirm your secure browser session to continue.")
+                st.markdown(
+                    f"""
+                    <a href="{safe_activation_url}" target="_self" rel="noreferrer"
+                       style="display:block;text-align:center;padding:.8rem 1rem;border-radius:.7rem;background:#2563eb;color:#fff;font-weight:700;text-decoration:none;margin-top:.7rem">
+                        🔐 Continue securely
+                    </a>
+                    """,
+                    unsafe_allow_html=True,
+                )
+                st.caption(
+                    "This one-time confirmation finishes the secure sign-in and never exposes your Firebase refresh token."
+                )
+                st.stop()
+
+            st.session_state["persistent_session_notice"] = (
+                "Account created and signed in for this open session, but durable session setup is unavailable: "
+                f"{persistent_session_error or 'please try again later.'}"
+            )
             st.rerun()
 
 with right:
-    cols = st.columns(2)
-    with cols[0]:
-        _benefit_card("🎯", "ATS ready", "Check keyword coverage before applying.")
-    with cols[1]:
-        _benefit_card("🧠", "Semantic AI", "Compare CV meaning against real jobs.")
-
-    cols = st.columns(2)
-    with cols[0]:
-        _benefit_card("📜", "History", "Save and revisit previous analyses.")
-    with cols[1]:
-        _benefit_card("📄", "Reports", "Export polished TalentMatch PDF reports.")
-
+    _auth_card(
+        "A complete career workspace",
+        "Use ATS Checker, CV Rewrite, Semantic Match, Recruiter Mode, history and branded report exports from one account.",
+        "✨",
+    )
     st.write("")
-    if st.button("🔐 Already have an account? Login", use_container_width=True):
+    _auth_card(
+        "Already have an account?",
+        "Sign in securely and restore your browser session after closing Chrome.",
+        "🔐",
+    )
+    if st.button("🔐 Go to Login", use_container_width=True):
         st.switch_page("pages/login.py")

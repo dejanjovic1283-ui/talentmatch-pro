@@ -83,11 +83,88 @@ class User(Base):
         back_populates="user",
         cascade="all, delete-orphan",
     )
+    persistent_sessions: Mapped[list["PersistentAuthSession"]] = relationship(
+        "PersistentAuthSession",
+        back_populates="user",
+        cascade="all, delete-orphan",
+    )
 
     def __repr__(self) -> str:
         return (
             f"User(id={self.id!r}, plan={self.plan!r}, "
             f"is_pro={self.is_pro!r})"
+        )
+
+
+class PersistentAuthSession(Base):
+    """
+    Server-side browser session for durable Firebase authentication.
+
+    The browser receives only the opaque ``session_token`` in a Secure,
+    HttpOnly cookie.  Firebase refresh tokens are encrypted before they are
+    persisted and are never returned to the browser after activation.
+    """
+
+    __tablename__ = "persistent_auth_sessions"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    user_id: Mapped[int] = mapped_column(
+        ForeignKey("users.id", ondelete="CASCADE"),
+        index=True,
+        nullable=False,
+    )
+    session_token_hash: Mapped[str] = mapped_column(
+        String(64),
+        unique=True,
+        index=True,
+        nullable=False,
+    )
+    session_token_encrypted: Mapped[str] = mapped_column(Text, nullable=False)
+    refresh_token_encrypted: Mapped[str] = mapped_column(Text, nullable=False)
+    activation_code_hash: Mapped[str | None] = mapped_column(
+        String(64),
+        unique=True,
+        index=True,
+        nullable=True,
+    )
+    activation_expires_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True),
+        nullable=True,
+    )
+    activated_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True),
+        nullable=True,
+    )
+    expires_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        index=True,
+        nullable=False,
+    )
+    last_seen_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True),
+        nullable=True,
+    )
+    revoked_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True),
+        index=True,
+        nullable=True,
+    )
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        default=utc_now,
+        nullable=False,
+    )
+
+    user: Mapped["User"] = relationship(
+        "User",
+        back_populates="persistent_sessions",
+    )
+
+    def __repr__(self) -> str:
+        return (
+            "PersistentAuthSession("
+            f"id={self.id!r}, user_id={self.user_id!r}, "
+            f"revoked={self.revoked_at is not None!r})"
         )
 
 

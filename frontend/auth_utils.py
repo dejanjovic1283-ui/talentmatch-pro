@@ -1,12 +1,15 @@
 from __future__ import annotations
 
+import json
 import os
 import re
 import time
+from html import escape as html_escape
 from typing import IO, Any, Mapping, Optional, Sequence, TypeAlias
 
 import requests
 import streamlit as st
+import streamlit.components.v1 as components
 
 
 # =========================
@@ -58,6 +61,10 @@ BACKEND_URL = get_config(
 ).rstrip("/")
 
 FIREBASE_API_KEY = get_config("FIREBASE_API_KEY")
+PERSISTENT_SESSION_HEADER = "X-TalentMatch-Session"
+PERSISTENT_SESSION_COOKIE_NAME = get_config("AUTH_SESSION_COOKIE_NAME", "tm_session")
+PERSISTENT_SESSION_RESTORE_TIMEOUT_SECONDS = 35
+PERSISTENT_SESSION_BOOTSTRAP_TIMEOUT_SECONDS = 35
 FIREBASE_TOKEN_REFRESH_LEEWAY_SECONDS = 120
 FIREBASE_TOKEN_REFRESH_TIMEOUT_SECONDS = 30
 PROFILE_REQUEST_TIMEOUT_SECONDS = 60
@@ -311,6 +318,8 @@ def save_auth(
     full_name: str = "",
     refresh_token: str = "",
     expires_in: Any = None,
+    *,
+    persistent: bool = False,
 ) -> None:
     """
     Save authentication data in Streamlit session state.
@@ -356,6 +365,13 @@ def save_auth(
         "token_last_refresh_at",
         "token_refresh_status",
         "token_refresh_error",
+        "auth_mode",
+        "persistent_session_status",
+        "persistent_session_error",
+        "persistent_session_activation_url",
+        "persistent_session_restored_at",
+        "persistent_session_restore_last_attempt_at",
+        "persistent_session_revoke_attempted",
     ):
         st.session_state.pop(key, None)
 
@@ -366,7 +382,7 @@ def save_auth(
     st.session_state["id_token"] = token
 
     clean_refresh_token = str(refresh_token or "").strip()
-    if clean_refresh_token:
+    if clean_refresh_token and not persistent:
         st.session_state["refresh_token"] = clean_refresh_token
 
     expires_in_seconds = _coerce_int(expires_in)
@@ -376,6 +392,11 @@ def save_auth(
     st.session_state["token_refresh_status"] = "current"
     st.session_state["token_refresh_error"] = ""
     st.session_state["profile_availability"] = PROFILE_STATE_NOT_LOADED
+    st.session_state["auth_mode"] = "persistent" if persistent else "firebase"
+    if persistent:
+        st.session_state["persistent_session_status"] = "restored"
+        st.session_state["persistent_session_error"] = ""
+        st.session_state["persistent_session_restored_at"] = time.time()
 
     st.session_state["email"] = clean_email
     st.session_state["user_email"] = clean_email
@@ -404,8 +425,11 @@ def save_auth(
     st.session_state["user"] = user_state
 
 
-def clear_auth() -> None:
+def clear_auth(*, revoke_persistent_session: bool = True) -> None:
     """Remove authentication, profile, entitlement and usage state."""
+    if revoke_persistent_session:
+        _revoke_persistent_session_silently()
+
     keys = [
         "token",
         "id_token",
@@ -455,15 +479,222 @@ def clear_auth() -> None:
         "token_last_refresh_at",
         "token_refresh_status",
         "token_refresh_error",
+        "auth_mode",
+        "persistent_session_status",
+        "persistent_session_error",
+        "persistent_session_activation_url",
+        "persistent_session_restored_at",
+        "persistent_session_restore_last_attempt_at",
+        "persistent_session_revoke_attempted",
     ]
 
     for key in keys:
         st.session_state.pop(key, None)
 
 
+def logout_and_redirect() -> None:
+    """Clear local state, revoke server state, and delete the browser cookie.
+
+    Streamlit's backend-to-backend ``requests.post`` call cannot forward a
+    ``Set-Cookie`` response to the user's browser.  The browser must therefore
+    navigate directly to the API logout endpoint, which revokes the session
+    from the browser cookie and returns a matching expired cookie.
+    """
+    clear_auth()
+    logout_url = _build_url("/auth/session/logout")
+    script_url = json.dumps(logout_url)
+    link_url = html_escape(logout_url, quote=True)
+
+    components.html(
+        f"""
+        <script>
+        (() => {{
+            const target = {script_url};
+            try {{
+                window.top.location.replace(target);
+            }} catch (error) {{
+                window.parent.location.replace(target);
+            }}
+        }})();
+        </script>
+        <a href="{link_url}" target="_top" rel="noreferrer">Continue securely</a>
+        """,
+        height=1,
+        scrolling=False,
+    )
+    st.stop()
+
+
 def _raw_token() -> str:
     """Return the stored Firebase ID token without triggering a refresh."""
     return str(st.session_state.get("token") or st.session_state.get("id_token") or "")
+
+
+def _persistent_session_cookie() -> str:
+    """Read the opaque HttpOnly cookie exposed to Streamlit's server context."""
+    try:
+        cookies = st.context.cookies
+        raw_cookie = cookies.get(PERSISTENT_SESSION_COOKIE_NAME, "")
+    except Exception:
+        return ""
+
+    cookie = str(raw_cookie or "").strip()
+    return cookie if 20 <= len(cookie) <= 512 else ""
+
+
+def _persistent_session_headers() -> Headers:
+    """Return the internal server-to-server header for the opaque cookie value."""
+    cookie = _persistent_session_cookie()
+    return {PERSISTENT_SESSION_HEADER: cookie} if cookie else {}
+
+
+def _set_persistent_session_error(status: str, message: str) -> None:
+    st.session_state["persistent_session_status"] = status
+    st.session_state["persistent_session_error"] = str(message or "").strip()[:500]
+    st.session_state["persistent_session_restore_last_attempt_at"] = time.time()
+
+
+def _restore_persistent_session() -> bool:
+    """Restore a fresh Firebase ID token from the backend-held encrypted token."""
+    headers = _persistent_session_headers()
+    if not headers:
+        return False
+
+    try:
+        last_attempt_at = float(
+            st.session_state.get("persistent_session_restore_last_attempt_at") or 0
+        )
+    except (TypeError, ValueError):
+        last_attempt_at = 0.0
+
+    if time.time() - last_attempt_at < 5:
+        return False
+
+    try:
+        response = requests.post(
+            _build_url("/auth/session/restore"),
+            headers=headers,
+            timeout=PERSISTENT_SESSION_RESTORE_TIMEOUT_SECONDS,
+        )
+    except requests.RequestException:
+        _set_persistent_session_error(
+            "temporarily_unavailable",
+            "Secure session restoration is temporarily unavailable.",
+        )
+        return False
+
+    if response.status_code != 200:
+        if response.status_code in {401, 403}:
+            _set_persistent_session_error(
+                "reauthentication_required",
+                "Your secure session has expired. Please sign in again.",
+            )
+        else:
+            _set_persistent_session_error(
+                "temporarily_unavailable",
+                _response_error_message(response),
+            )
+        return False
+
+    try:
+        payload = response.json()
+    except (TypeError, ValueError):
+        payload = None
+
+    if not isinstance(payload, Mapping):
+        _set_persistent_session_error(
+            "invalid_response",
+            "The secure-session service returned an invalid response.",
+        )
+        return False
+
+    token = str(payload.get("id_token") or "").strip()
+    email = str(payload.get("email") or "").strip()
+    full_name = str(payload.get("full_name") or "").strip()
+    expires_in = _coerce_int(payload.get("expires_in"))
+
+    if not token or expires_in <= 0:
+        _set_persistent_session_error(
+            "invalid_response",
+            "The secure-session service returned incomplete credentials.",
+        )
+        return False
+
+    save_auth(
+        token=token,
+        email=email,
+        full_name=full_name,
+        expires_in=expires_in,
+        persistent=True,
+    )
+    return True
+
+
+def _revoke_persistent_session_silently() -> None:
+    """Invalidate the server-side session while keeping logout safe on failure."""
+    headers = _persistent_session_headers()
+    if not headers:
+        return
+
+    try:
+        requests.post(
+            _build_url("/auth/session/revoke"),
+            headers=headers,
+            timeout=PERSISTENT_SESSION_RESTORE_TIMEOUT_SECONDS,
+        )
+    except requests.RequestException:
+        # The local auth state is still cleared. The opaque server record will
+        # expire naturally if the backend cannot be reached at logout time.
+        pass
+
+
+def begin_persistent_session() -> tuple[str | None, str | None]:
+    """
+    Store a verified Firebase refresh token only on the backend.
+
+    The returned URL contains a short-lived, single-use activation code. The
+    next browser navigation receives an HttpOnly cookie; it never receives the
+    Firebase refresh token.
+    """
+    refresh_token = str(st.session_state.get("refresh_token") or "").strip()
+    token = get_token()
+
+    if not token or not refresh_token:
+        return None, "Your sign-in session is incomplete. Please try again."
+
+    try:
+        response = requests.post(
+            _build_url("/auth/session/bootstrap"),
+            headers={"Authorization": f"Bearer {token}"},
+            json={"refresh_token": refresh_token},
+            timeout=PERSISTENT_SESSION_BOOTSTRAP_TIMEOUT_SECONDS,
+        )
+    except requests.RequestException:
+        return None, "Secure session setup is temporarily unavailable. Please try again."
+
+    if response.status_code != 201:
+        return None, _response_error_message(response)
+
+    try:
+        payload = response.json()
+    except (TypeError, ValueError):
+        payload = None
+
+    if not isinstance(payload, Mapping):
+        return None, "Secure session setup returned an invalid response."
+
+    activation_url = str(payload.get("activation_url") or "").strip()
+    if not activation_url.startswith(("https://", "http://")):
+        return None, "Secure session setup returned an invalid activation link."
+
+    # The backend has stored an encrypted replacement. Do not keep the raw
+    # Firebase refresh token in this Streamlit session any longer than needed.
+    st.session_state.pop("refresh_token", None)
+    st.session_state["auth_mode"] = "persistent_pending_activation"
+    st.session_state["persistent_session_status"] = "activation_pending"
+    st.session_state["persistent_session_error"] = ""
+    st.session_state["persistent_session_activation_url"] = activation_url
+    return activation_url, None
 
 
 def _firebase_refresh_error(response: requests.Response) -> str:
@@ -489,14 +720,35 @@ def _firebase_refresh_error(response: requests.Response) -> str:
 def _mark_auth_expired(message: str) -> None:
     """Fail closed when an authenticated session can no longer be renewed."""
     clean_message = str(message or "Authentication session expired.").strip()[:500]
-    clear_auth()
+    # A transient backend outage must not revoke a server-side session simply
+    # because the current Firebase ID token reached its one-hour expiry.
+    clear_auth(revoke_persistent_session=False)
     st.session_state["authenticated"] = False
     st.session_state["token_refresh_status"] = "reauthentication_required"
     st.session_state["token_refresh_error"] = clean_message
 
 
 def refresh_firebase_token() -> bool:
-    """Exchange the stored Firebase refresh token for a fresh ID token."""
+    """Renew an ID token from the durable session or legacy in-memory token."""
+    auth_mode = str(st.session_state.get("auth_mode") or "").strip().lower()
+    if auth_mode == "persistent" or (
+        not st.session_state.get("refresh_token")
+        and bool(_persistent_session_cookie())
+    ):
+        if _restore_persistent_session():
+            st.session_state["token_refresh_status"] = "ok"
+            st.session_state["token_refresh_error"] = ""
+            return True
+
+        st.session_state["token_refresh_status"] = str(
+            st.session_state.get("persistent_session_status") or "unavailable"
+        )
+        st.session_state["token_refresh_error"] = str(
+            st.session_state.get("persistent_session_error")
+            or "The secure session cannot be renewed. Please sign in again."
+        )
+        return False
+
     refresh_token = str(st.session_state.get("refresh_token") or "").strip()
 
     if not FIREBASE_API_KEY or not refresh_token:
@@ -613,7 +865,7 @@ def _recover_from_unauthorized() -> bool:
 
 
 def restore_auth() -> bool:
-    """Restore auth state from Streamlit session state."""
+    """Restore auth from memory first, then from the HttpOnly browser session."""
     token = _raw_token()
 
     if token and _ensure_fresh_token():
@@ -628,12 +880,21 @@ def restore_auth() -> bool:
 
         return True
 
+    if _restore_persistent_session():
+        cached_profile = _cached_profile()
+        if cached_profile is not None:
+            _sync_profile_to_session(cached_profile)
+        return True
+
     st.session_state["authenticated"] = False
     return False
 
 
 def get_token() -> str:
     """Return active auth token."""
+    if not _raw_token() and not restore_auth():
+        return ""
+
     if not _ensure_fresh_token():
         return ""
     return _raw_token()
@@ -1119,3 +1380,73 @@ def firebase_login(email: str, password: str) -> tuple[dict[str, Any] | None, st
 
     except Exception as exc:
         return None, str(exc)
+
+
+def firebase_register(
+    email: str,
+    password: str,
+    full_name: str = "",
+) -> tuple[dict[str, Any] | None, str | None]:
+    """Create a Firebase email/password account and return secure credentials."""
+    if not FIREBASE_API_KEY:
+        return None, "Missing FIREBASE_API_KEY"
+
+    url = (
+        "https://identitytoolkit.googleapis.com/"
+        f"v1/accounts:signUp?key={FIREBASE_API_KEY}"
+    )
+    payload = {
+        "email": email,
+        "password": password,
+        "returnSecureToken": True,
+    }
+
+    try:
+        response = requests.post(url, json=payload, timeout=60)
+        if response.status_code != 200:
+            try:
+                error_data = response.json()
+                message = error_data.get("error", {}).get("message", response.text)
+            except Exception:
+                message = response.text
+            return None, str(message)
+
+        firebase_payload = response.json()
+        if not isinstance(firebase_payload, dict):
+            return None, "Firebase returned invalid registration data."
+
+        display_name = str(full_name or "").strip()
+        id_token = str(firebase_payload.get("idToken") or "").strip()
+        if display_name and id_token:
+            update_url = (
+                "https://identitytoolkit.googleapis.com/"
+                f"v1/accounts:update?key={FIREBASE_API_KEY}"
+            )
+            try:
+                update_response = requests.post(
+                    update_url,
+                    json={
+                        "idToken": id_token,
+                        "displayName": display_name,
+                        "returnSecureToken": True,
+                    },
+                    timeout=60,
+                )
+                if update_response.status_code == 200:
+                    updated_payload = update_response.json()
+                    if isinstance(updated_payload, dict):
+                        firebase_payload.update(updated_payload)
+                else:
+                    # Account creation already succeeded. Keep the local
+                    # display name for this session; the account remains valid.
+                    firebase_payload["displayName"] = display_name
+            except (requests.RequestException, TypeError, ValueError):
+                # Do not report a successful account creation as a failure just
+                # because the optional profile-name update was unavailable.
+                firebase_payload["displayName"] = display_name
+
+        return firebase_payload, None
+    except requests.RequestException:
+        return None, "Firebase registration is temporarily unavailable. Please try again."
+    except (TypeError, ValueError):
+        return None, "Firebase returned invalid registration data."

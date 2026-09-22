@@ -25,6 +25,7 @@ from fastapi import (
     FastAPI,
     File,
     Form,
+    Header,
     HTTPException,
     Request,
     Response,
@@ -37,7 +38,12 @@ from starlette.exceptions import HTTPException as StarletteHTTPException
 from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.middleware.httpsredirect import HTTPSRedirectMiddleware
 from starlette.middleware.trustedhost import TrustedHostMiddleware
-from fastapi.responses import FileResponse, JSONResponse, StreamingResponse
+from fastapi.responses import (
+    FileResponse,
+    JSONResponse,
+    RedirectResponse,
+    StreamingResponse,
+)
 from pydantic import BaseModel, Field
 from sqlalchemy import text
 from sqlalchemy.exc import SQLAlchemyError
@@ -181,6 +187,16 @@ from resilience import ExternalServiceError
 from semantic_service import (
     analyze_semantic_match,
     get_semantic_resilience_status,
+)
+from session_service import (
+    PERSISTENT_SESSION_HEADER,
+    activate_persistent_session,
+    create_persistent_session,
+    get_frontend_url,
+    get_public_api_url,
+    get_session_cookie_settings,
+    restore_persistent_session,
+    revoke_persistent_session,
 )
 from storage import upload_pdf_to_firebase
 from usage_service import ensure_analysis_allowed, get_user_usage
@@ -743,7 +759,13 @@ class SecurityHeadersMiddleware(BaseHTTPMiddleware):
 
         response.headers["X-Content-Type-Options"] = "nosniff"
         response.headers["X-Frame-Options"] = "DENY"
-        response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
+        # Keep the safe application-wide default while allowing a sensitive
+        # endpoint (for example, the one-time browser session activation
+        # redirect) to tighten the policy to ``no-referrer``.
+        response.headers.setdefault(
+            "Referrer-Policy",
+            "strict-origin-when-cross-origin",
+        )
         response.headers["Permissions-Policy"] = (
             "accelerometer=(), autoplay=(), camera=(), display-capture=(), "
             "encrypted-media=(), fullscreen=(), geolocation=(), gyroscope=(), "
@@ -1622,6 +1644,7 @@ app.add_middleware(
     allow_headers=[
         "Authorization",
         "Content-Type",
+        "X-TalentMatch-Session",
         "PAYPAL-TRANSMISSION-ID",
         "PAYPAL-TRANSMISSION-TIME",
         "PAYPAL-CERT-URL",
@@ -1709,6 +1732,9 @@ def config_status() -> dict:
         "firebase_project_configured": bool(os.getenv("FIREBASE_PROJECT_ID", "").strip()),
         "firebase_storage_configured": bool(os.getenv("FIREBASE_STORAGE_BUCKET", "").strip()),
         "firebase_credentials_configured": bool(firebase_credentials or google_credentials),
+        "persistent_sessions_configured": bool(
+            os.getenv("AUTH_SESSION_ENCRYPTION_KEY", "").strip()
+        ),
         "billing_provider": os.getenv("BILLING_PROVIDER", "paypal"),
         "paypal_client_configured": bool(os.getenv("PAYPAL_CLIENT_ID", "").strip()),
         "paypal_secret_configured": bool(os.getenv("PAYPAL_CLIENT_SECRET", "").strip()),
@@ -1752,6 +1778,12 @@ def raise_ai_http_exception(exc: AIServiceError) -> NoReturn:
         detail=detail,
         headers=headers,
     )
+
+
+class PersistentSessionBootstrapRequest(BaseModel):
+    """Firebase refresh token submitted only by the Streamlit server after login."""
+
+    refresh_token: str = Field(min_length=20, max_length=4096)
 
 
 class CandidateCreateRequest(BaseModel):
@@ -2350,6 +2382,176 @@ def readyz():
         status_code=503,
         content={"status": "not_ready", **checks},
     )
+
+
+@app.post("/auth/session/bootstrap", status_code=201)
+def bootstrap_persistent_session(
+    payload: PersistentSessionBootstrapRequest,
+    response: Response,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """
+    Create a short-lived browser activation link for a verified Firebase login.
+
+    The frontend sends this request server-to-server.  The Firebase refresh
+    token is encrypted in PostgreSQL; the returned browser link contains only
+    a single-use activation code and never the Firebase credential itself.
+    """
+
+    bootstrap = create_persistent_session(
+        db,
+        current_user=current_user,
+        firebase_refresh_token=payload.refresh_token,
+    )
+    response.headers["Cache-Control"] = "no-store"
+
+    return {
+        "activation_url": (
+            f"{get_public_api_url()}/auth/session/activate?code="
+            f"{bootstrap.activation_code}"
+        ),
+        "activation_expires_in_seconds": bootstrap.activation_expires_in_seconds,
+    }
+
+
+@app.get("/auth/session/activate", include_in_schema=False)
+def activate_browser_session(
+    code: str = "",
+    db: Session = Depends(get_db),
+):
+    """Set the HttpOnly browser cookie, scrub the code, then redirect home."""
+
+    try:
+        activation = activate_persistent_session(
+            db,
+            activation_code=code,
+        )
+    except HTTPException as exc:
+        if exc.status_code not in {400, 401, 403}:
+            raise
+
+        redirect = RedirectResponse(
+            url=f"{get_frontend_url()}/login?session=expired",
+            status_code=303,
+        )
+        redirect.headers["Cache-Control"] = "no-store"
+        redirect.headers["Referrer-Policy"] = "no-referrer"
+        return redirect
+
+    settings = get_session_cookie_settings()
+    redirect = RedirectResponse(
+        url=f"{get_frontend_url()}/account",
+        status_code=303,
+    )
+    redirect.headers["Cache-Control"] = "no-store"
+    redirect.headers["Referrer-Policy"] = "no-referrer"
+    redirect.set_cookie(
+        key=settings.name,
+        value=activation.session_token,
+        max_age=activation.max_age_seconds,
+        httponly=True,
+        secure=settings.secure,
+        samesite="lax",
+        domain=settings.domain,
+        path="/",
+    )
+    return redirect
+
+
+@app.get("/auth/session/logout", include_in_schema=False)
+def logout_browser_session(
+    request: Request,
+    db: Session = Depends(get_db),
+):
+    """Revoke the browser session and expire the cookie in the browser.
+
+    Streamlit cannot forward a backend ``Set-Cookie`` response from its
+    server-to-server logout request.  This browser-facing endpoint is the
+    authoritative final step: the browser sends its HttpOnly cookie directly
+    to the API, the matching database row is revoked, and the response sends
+    a deletion cookie before redirecting to the login page.
+    """
+    settings = get_session_cookie_settings()
+    browser_token = request.cookies.get(settings.name)
+
+    try:
+        revoke_persistent_session(
+            db,
+            session_token=browser_token,
+        )
+    except HTTPException as exc:
+        # Always expire the browser cookie, even if the database is temporarily
+        # unavailable.  A later request cannot use the deleted browser token,
+        # while the server-side row remains subject to its bounded expiry.
+        logger.warning(
+            "Browser persistent-session logout completed with a backend warning.",
+            extra={
+                "event": "persistent_session_browser_logout_warning",
+                "status_code": exc.status_code,
+                "retryable": exc.status_code >= 500,
+            },
+        )
+
+    redirect = RedirectResponse(
+        url=f"{get_frontend_url()}/login",
+        status_code=303,
+    )
+    redirect.headers["Cache-Control"] = "no-store"
+    redirect.headers["Referrer-Policy"] = "no-referrer"
+    redirect.delete_cookie(
+        key=settings.name,
+        domain=settings.domain,
+        path="/",
+        secure=settings.secure,
+        httponly=True,
+        samesite="lax",
+    )
+    return redirect
+
+
+@app.post("/auth/session/restore")
+def restore_browser_session(
+    response: Response,
+    session_token: str | None = Header(
+        default=None,
+        alias=PERSISTENT_SESSION_HEADER,
+    ),
+    db: Session = Depends(get_db),
+):
+    """Return a fresh Firebase ID token to the trusted Streamlit server."""
+
+    restored = restore_persistent_session(
+        db,
+        session_token=session_token,
+    )
+    response.headers["Cache-Control"] = "no-store"
+    return {
+        "id_token": restored.id_token,
+        "expires_in": restored.expires_in_seconds,
+        "email": restored.email,
+        "full_name": restored.full_name,
+    }
+
+
+@app.post("/auth/session/revoke", status_code=204)
+def revoke_browser_session(
+    response: Response,
+    session_token: str | None = Header(
+        default=None,
+        alias=PERSISTENT_SESSION_HEADER,
+    ),
+    db: Session = Depends(get_db),
+):
+    """Invalidate an opaque browser session without disclosing its state."""
+
+    revoke_persistent_session(
+        db,
+        session_token=session_token,
+    )
+    response.headers["Cache-Control"] = "no-store"
+    response.status_code = 204
+    return response
 
 
 @app.get("/me")

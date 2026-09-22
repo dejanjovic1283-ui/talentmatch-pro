@@ -7,12 +7,12 @@ from typing import Any, Mapping
 import streamlit as st
 
 from auth_utils import (
-    clear_auth,
     get_backend_readiness,
     get_entitlement_state,
     get_profile,
     get_profile_state,
     is_logged_in,
+    logout_and_redirect,
     refresh_profile,
 )
 from components.sidebar import render_sidebar
@@ -731,14 +731,24 @@ def render_premium_hero(
     plan_name: str,
     pro_enabled: bool,
     profile_available: bool,
+    is_signed_in: bool,
 ) -> None:
-    if not profile_available:
+    if not is_signed_in:
+        member_label = "Sign in required"
+        badge_label = "GUEST"
+    elif not profile_available:
         member_label = "Profile syncing"
         badge_label = "SYNC"
     else:
         member_label = "PRO Member" if pro_enabled else "Free Member"
         badge_label = "PRO" if pro_enabled else "FREE"
-    export_label = "📄 Export ready" if profile_available else "⏳ Profile sync pending"
+    export_label = (
+        "📄 Export ready"
+        if profile_available
+        else "🔐 Sign in to access account tools"
+        if not is_signed_in
+        else "⏳ Profile sync pending"
+    )
     st.markdown(
         _html(
             f"""
@@ -788,8 +798,14 @@ def render_membership_card(
     free_limit: int,
     pro_enabled: bool,
     profile_available: bool,
+    is_signed_in: bool,
 ) -> str:
-    if not profile_available:
+    if not is_signed_in:
+        allowance = "—"
+        display_plan_name = "Sign in required"
+        display_access_status = "NOT SIGNED IN"
+        display_total_usage = "—"
+    elif not profile_available:
         allowance = "—"
         display_plan_name = "Profile syncing"
         display_access_status = "SYNCING"
@@ -1046,6 +1062,7 @@ email = get_user_email()
 user_id = get_user_id()
 display_name = get_display_name()
 initials = get_initials(display_name)
+signed_in = is_logged_in()
 entitlement_state = get_entitlement_state(load_if_missing=False)
 profile_state = get_profile_state()
 profile = get_profile(load_if_missing=False)
@@ -1058,8 +1075,8 @@ plan_name = (
     if entitlement_state == "free"
     else "Checking"
 )
-access_status = "ACTIVE" if is_logged_in() else "NOT SIGNED IN"
-if is_logged_in() and not profile_available:
+access_status = "ACTIVE" if signed_in else "NOT SIGNED IN"
+if signed_in and not profile_available:
     access_status = "SYNCING"
 system_status = check_system_status()
 backend_status, _ = system_status["Backend"]
@@ -1074,12 +1091,12 @@ cv_analyses_used = _coerce_int(
 )
 free_limit = _coerce_int(st.session_state.get("free_limit"), 3)
 
-if is_logged_in() and profile_state == "stale":
+if signed_in and profile_state == "stale":
     st.warning(
         "The backend profile is temporarily unavailable. "
         "Showing your last verified profile; no plan change was made."
     )
-elif is_logged_in() and not profile_available:
+elif signed_in and not profile_available:
     st.info(
         "The backend is waking up or the profile is still syncing. "
         "No plan or usage change was made."
@@ -1099,6 +1116,7 @@ render_premium_hero(
     plan_name,
     pro_enabled,
     profile_available,
+    signed_in,
 )
 
 render_section_heading(
@@ -1133,6 +1151,7 @@ st.markdown(
             free_limit=free_limit,
             pro_enabled=pro_enabled,
             profile_available=profile_available,
+            is_signed_in=signed_in,
         )}
         {render_profile_card(email, user_id, registered_at)}
     </div>
@@ -1141,11 +1160,11 @@ st.markdown(
     unsafe_allow_html=True,
 )
 
-if is_logged_in() and pro_enabled:
+if signed_in and pro_enabled:
     st.success("💎 Pro plan is enabled for your account.")
-elif is_logged_in() and entitlement_state == "free":
+elif signed_in and entitlement_state == "free":
     st.page_link("pages/pricing.py", label="🚀 Upgrade to Pro", icon="💳")
-elif is_logged_in():
+elif signed_in:
     st.info("Plan access will appear after the backend profile is verified.")
 else:
     st.page_link("pages/login.py", label="Login", icon="🔐")
@@ -1179,7 +1198,7 @@ render_section_heading(
     "Security center",
     "Review authentication, session, HTTPS, and PayPal billing safeguards.",
 )
-st.markdown(_html(render_security_card(is_logged_in(), system_status)), unsafe_allow_html=True)
+st.markdown(_html(render_security_card(signed_in, system_status)), unsafe_allow_html=True)
 
 profile_export = build_profile_export(
     display_name=display_name,
@@ -1228,6 +1247,12 @@ with st.container(key="tm_account_actions", border=False, width="stretch"):
             unsafe_allow_html=True,
         )
         if st.button("🔄 Refresh Profile", key="tm_account_refresh", width="stretch"):
+            if not signed_in:
+                st.session_state["account_session_notice"] = (
+                    "Sign in before refreshing your account profile."
+                )
+                st.rerun()
+
             refreshed_profile = refresh_profile(force=True)
             refresh_status = str(
                 st.session_state.get("profile_last_refresh_status") or ""
@@ -1302,10 +1327,9 @@ with st.container(key="tm_account_actions", border=False, width="stretch"):
             ),
             unsafe_allow_html=True,
         )
-        if is_logged_in():
+        if signed_in:
             if st.button("🚪 Logout", key="tm_account_logout", width="stretch"):
-                clear_auth()
-                st.rerun()
+                logout_and_redirect()
         else:
             st.page_link(
                 "pages/login.py",

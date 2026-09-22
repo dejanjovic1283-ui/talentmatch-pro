@@ -6,12 +6,12 @@ from typing import Final
 import streamlit as st
 
 from auth_utils import (
-    clear_auth,
     get_cached_backend_readiness,
     get_entitlement_state,
     get_profile_state,
     is_admin_user,
     is_logged_in,
+    logout_and_redirect,
     refresh_profile,
 )
 from components.language_selector import render_language_selector
@@ -651,8 +651,7 @@ def _auth() -> None:
             st.rerun()
 
         if st.button(f"🚪 {t('navigation.logout')}", use_container_width=True):
-            clear_auth()
-            st.rerun()
+            logout_and_redirect()
     else:
         st.page_link("pages/login.py", label=f"🔐 {t('navigation.login')}")
         st.page_link("pages/register.py", label=f"📝 {t('navigation.register')}")
