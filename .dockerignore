@@ -30,14 +30,21 @@ env/
 *.log
 *.pid
 
+# Development credential helpers
+get_token.py
+**/get_token*.py
+
 # Secrets and local environment files
 .env
 .env.*
 **/.env
 **/.env.*
 **/.streamlit/secrets.toml
+**/serviceAccountKey.json
 **/service-account*.json
 **/*firebase*credentials*.json
+**/*firebase-adminsdk*.json
+**/*private*key*.json
 
 # OS files
 .DS_Store

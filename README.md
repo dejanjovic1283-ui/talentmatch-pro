@@ -76,8 +76,8 @@ The platform combines:
 | Frontend Health | https://talentmatchcv.com/_stcore/health |
 | Backend Health | https://api.talentmatchcv.com/healthz |
 | Backend Readiness | https://api.talentmatchcv.com/readyz |
-| Sitemap | https://api.talentmatchcv.com/sitemap.xml |
-| Robots | https://api.talentmatchcv.com/robots.txt |
+| Sitemap | https://talentmatchcv.com/sitemap.xml |
+| Robots | https://talentmatchcv.com/robots.txt |
 
 ---
 
@@ -331,8 +331,6 @@ TalentMatch Pro v3.0 FINAL ships with 12 active production locales:
 | 12 | العربية (UAE) | `ar_ae` |
 
 The multilingual system includes production UI translation coverage for the language selector, navigation, landing experience, and supporting locale infrastructure.
-
-Serbian Cyrillic is intentionally not part of the final active locale set.
 
 ---
 
@@ -811,9 +809,9 @@ TalentMatch Pro uses a canonical production domain strategy.
 
 ### Sitemap
 
-`https://api.talentmatchcv.com/sitemap.xml`
+`https://talentmatchcv.com/sitemap.xml`
 
-The production sitemap contains the public frontend routes:
+The canonical frontend sitemap contains the public application routes:
 
 - `/`
 - `/pricing`
@@ -823,7 +821,7 @@ The production sitemap contains the public frontend routes:
 
 ### robots.txt
 
-The production API `robots.txt` intentionally permits sitemap discovery while blocking general API crawling.
+The frontend `robots.txt` permits public page crawling and points to the canonical frontend sitemap. The API `robots.txt` remains available separately and blocks general API crawling.
 
 ---
 
@@ -860,7 +858,7 @@ TalentMatch Pro v3.0 FINAL completed a full production acceptance cycle.
 | HTTP → HTTPS | ✅ PASS |
 | WWW → apex | ✅ PASS |
 | robots.txt | ✅ PASS |
-| sitemap.xml | ✅ PASS |
+| sitemap.xml | ⏳ Verify after the SEO route is deployed |
 | DNS records | ✅ PASS |
 
 ---
@@ -881,7 +879,7 @@ Public operational endpoints:
 | GET | `/readyz` | Detailed production readiness |
 | GET | `/docs` | FastAPI API documentation |
 | GET | `/robots.txt` | Crawler policy |
-| GET | `/sitemap.xml` | Public sitemap |
+| GET | `/sitemap.xml` | API compatibility sitemap |
 
 Protected application workflows include resume analysis, ATS analysis, semantic matching, recruiter jobs, history, candidate management, account/usage workflows, and billing operations.
 
@@ -1009,6 +1007,8 @@ talentmatch-pro/
 │   └── requirements.txt
 │
 ├── frontend/
+│   ├── static/
+│   │   └── sitemap.xml
 │   ├── components/
 │   │   ├── pdf_reports.py
 │   │   └── sidebar.py
@@ -1029,6 +1029,7 @@ talentmatch-pro/
 │   ├── Dockerfile
 │   ├── .dockerignore
 │   ├── app.py
+│   ├── asgi.py
 │   ├── auth_utils.py
 │   └── requirements.txt
 │
