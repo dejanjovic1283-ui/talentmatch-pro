@@ -63,14 +63,14 @@ BACKEND_URL = get_config(
 FIREBASE_API_KEY = get_config("FIREBASE_API_KEY")
 PERSISTENT_SESSION_HEADER = "X-TalentMatch-Session"
 PERSISTENT_SESSION_COOKIE_NAME = get_config("AUTH_SESSION_COOKIE_NAME", "tm_session")
-PERSISTENT_SESSION_RESTORE_TIMEOUT_SECONDS = 35
-PERSISTENT_SESSION_BOOTSTRAP_TIMEOUT_SECONDS = 35
+PERSISTENT_SESSION_RESTORE_TIMEOUT_SECONDS = 70
+PERSISTENT_SESSION_BOOTSTRAP_TIMEOUT_SECONDS = 70
 FIREBASE_TOKEN_REFRESH_LEEWAY_SECONDS = 120
 FIREBASE_TOKEN_REFRESH_TIMEOUT_SECONDS = 30
-PROFILE_REQUEST_TIMEOUT_SECONDS = 60
+PROFILE_REQUEST_TIMEOUT_SECONDS = 75
 PROFILE_REFRESH_COOLDOWN_SECONDS = 5
-PROFILE_RETRY_DELAY_SECONDS = 0.35
-BACKEND_READINESS_TIMEOUT_SECONDS = 12
+PROFILE_RETRY_DELAY_SECONDS = 1.5
+BACKEND_READINESS_TIMEOUT_SECONDS = 45
 BACKEND_READINESS_CACHE_SECONDS = 20
 
 PROFILE_STATE_NOT_LOADED = "not_loaded"
@@ -82,6 +82,7 @@ PROFILE_STATE_REAUTHENTICATION_REQUIRED = "reauthentication_required"
 PROFILE_STATE_NOT_AUTHENTICATED = "not_authenticated"
 
 TRANSIENT_PROFILE_STATUS_CODES = frozenset({408, 425, 429, 500, 502, 503, 504})
+PROFILE_RETRYABLE_STATUS_CODES = frozenset({408, 425, 500, 502, 503, 504})
 
 
 # =========================
@@ -1200,11 +1201,12 @@ def refresh_profile(*, force: bool = False) -> dict[str, Any] | None:
     response = api_get("/me", timeout=PROFILE_REQUEST_TIMEOUT_SECONDS)
     status_code = int(getattr(response, "status_code", 503) or 503)
 
-    # Retry an actual transient HTTP response once.  Transport failures are
-    # already represented by FakeResponse and are returned immediately so the
-    # UI does not wait through two full cold-start timeouts.
+    # Respect a server-side 429 instead of immediately sending a second
+    # request and turning a temporary limit into a longer block. The other
+    # transient responses can benefit from one bounded retry after a Render
+    # cold start has completed.
     if (
-        status_code in TRANSIENT_PROFILE_STATUS_CODES
+        status_code in PROFILE_RETRYABLE_STATUS_CODES
         and not isinstance(response, FakeResponse)
     ):
         time.sleep(PROFILE_RETRY_DELAY_SECONDS)

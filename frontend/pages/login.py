@@ -77,6 +77,38 @@ if is_logged_in():
     if persistent_session_notice:
         st.warning(persistent_session_notice)
 
+        if st.button("🔄 Retry secure session", use_container_width=True):
+            with st.spinner("Retrying secure session..."):
+                retry_activation_url, retry_error = begin_persistent_session()
+
+            if retry_activation_url:
+                safe_activation_url = escape(
+                    retry_activation_url,
+                    quote=True,
+                )
+                st.success(
+                    "Secure session setup is ready. Confirm it to continue."
+                )
+                st.markdown(
+                    f"""
+                    <a href="{safe_activation_url}" target="_self" rel="noreferrer"
+                       style="display:block;text-align:center;padding:.8rem 1rem;border-radius:.7rem;background:#2563eb;color:#fff;font-weight:700;text-decoration:none;margin-top:.7rem">
+                        🔐 Continue securely
+                    </a>
+                    """,
+                    unsafe_allow_html=True,
+                )
+                st.caption(
+                    "This one-time confirmation finishes the secure sign-in and never exposes your Firebase refresh token."
+                )
+                st.stop()
+
+            st.session_state["persistent_session_notice"] = (
+                "Secure session setup is still unavailable: "
+                f"{retry_error or 'please try again later.'}"
+            )
+            st.rerun()
+
     col1, col2 = st.columns(2)
     with col1:
         if st.button("🏠 Go to Dashboard", use_container_width=True):

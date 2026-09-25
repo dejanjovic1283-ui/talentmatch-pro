@@ -928,6 +928,32 @@ def get_client_ip(request: Request) -> str:
     return "unknown"
 
 
+def get_rate_limit_identity(request: Request) -> str:
+    """Return a non-secret identity for server-to-server rate limiting.
+
+    The Streamlit frontend calls this API from its own server process. An
+    IP-only key would therefore put every browser user behind the same
+    frontend egress address into one bucket. Use a digest of the bearer or
+    persistent-session credential when present, and keep the proxy-aware IP
+    as the fallback for anonymous traffic. Raw credentials are never used as
+    the in-memory key or written to logs.
+    """
+    session_token = request.headers.get(PERSISTENT_SESSION_HEADER, "").strip()
+    if session_token:
+        digest = hashlib.sha256(session_token.encode("utf-8")).hexdigest()
+        return f"session:{digest}"
+
+    authorization = request.headers.get("authorization", "").strip()
+    scheme, _, bearer_token = authorization.partition(" ")
+    if scheme.lower() == "bearer" and bearer_token.strip():
+        digest = hashlib.sha256(
+            bearer_token.strip().encode("utf-8")
+        ).hexdigest()
+        return f"bearer:{digest}"
+
+    return f"ip:{get_client_ip(request)}"
+
+
 def get_rate_limit_rule(path: str, method: str) -> RateLimitRule | None:
     public_unlimited_paths = {
         "/healthz",
@@ -984,6 +1010,23 @@ def get_rate_limit_rule(path: str, method: str) -> RateLimitRule | None:
             window_seconds=get_positive_int_env("RATE_LIMIT_BILLING_WINDOW_SECONDS", 60),
         )
 
+    if path in {
+        "/auth/session/bootstrap",
+        "/auth/session/restore",
+        "/auth/session/revoke",
+    }:
+        return RateLimitRule(
+            name="auth_session",
+            requests=get_positive_int_env(
+                "RATE_LIMIT_AUTH_SESSION_REQUESTS",
+                30,
+            ),
+            window_seconds=get_positive_int_env(
+                "RATE_LIMIT_AUTH_SESSION_WINDOW_SECONDS",
+                60,
+            ),
+        )
+
     if method.upper() in {"POST", "PUT", "PATCH", "DELETE"}:
         return RateLimitRule(
             name="write",
@@ -1007,8 +1050,8 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
         if rule is None:
             return await call_next(request)
 
-        client_ip = get_client_ip(request)
-        rate_limit_key = f"{client_ip}:{rule.name}"
+        rate_limit_identity = get_rate_limit_identity(request)
+        rate_limit_key = f"{rate_limit_identity}:{rule.name}"
 
         allowed, remaining, retry_after, blocked = await RATE_LIMIT_STORE.check(
             key=rate_limit_key,
@@ -1720,6 +1763,14 @@ def config_status() -> dict:
         "rate_limit_ai_requests": get_positive_int_env("RATE_LIMIT_AI_REQUESTS", 20),
         "rate_limit_ai_window_seconds": get_positive_int_env(
             "RATE_LIMIT_AI_WINDOW_SECONDS",
+            60,
+        ),
+        "rate_limit_auth_session_requests": get_positive_int_env(
+            "RATE_LIMIT_AUTH_SESSION_REQUESTS",
+            30,
+        ),
+        "rate_limit_auth_session_window_seconds": get_positive_int_env(
+            "RATE_LIMIT_AUTH_SESSION_WINDOW_SECONDS",
             60,
         ),
         "rate_limit_block_seconds": get_positive_int_env(
