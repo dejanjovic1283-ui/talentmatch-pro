@@ -8,7 +8,7 @@ v3.0 FINAL — Production & Portfolio README
 # 🚀 TalentMatch Pro
 
 <p align="center">
-  <img src="docs/README-assets/banner.png" alt="TalentMatch Pro Banner" width="100%">
+  <img src="docs/README-assets/banner.png" alt="TalentMatch Pro production banner" width="100%">
 </p>
 
 ### AI-Powered Resume Intelligence & Recruitment Platform
@@ -391,59 +391,27 @@ The Docker runtime installs required system fonts directly so PDF generation is 
 
 ## 📸 Application Showcase
 
+The public showcase uses only screenshots captured from the current production UI.
+
 ### Dashboard
 
-![Dashboard Overview](docs/screenshots/01_dashboard_overview.png)
+![Dashboard](docs/screenshots/01_dashboard.png)
 
 Production workspace overview with user context, feature access, and navigation.
 
+### CV Analysis
+
+![CV Analysis](docs/screenshots/02_cv_analysis.png)
+
+Resume analysis workflow with score, findings, and export-ready results.
+
 ### ATS Checker
 
-![ATS Checker Results](docs/screenshots/04_ats_checker_results.png)
+![ATS Checker](docs/screenshots/03_ats_checker.png)
 
 ATS-oriented score, matched keywords, missing keywords, and recommendations.
 
-### CV Rewrite
-
-![CV Rewrite Results](docs/screenshots/06_cv_rewrite_results.png)
-
-AI-assisted rewrite guidance for stronger role alignment and clearer resume positioning.
-
-### Semantic Match
-
-![Semantic Match Results](docs/screenshots/08_semantic_match_results.png)
-
-Contextual matching that combines semantic and keyword signals.
-
-### Recruiter Mode
-
-![Recruiter Ranking](docs/screenshots/10_recruiter_mode_ranking.png)
-
-Candidate ranking, scoring, recruiter verdicts, and hiring intelligence.
-
-### History
-
-![History](docs/screenshots/11_reports_history_overview.png)
-
-Persistent analysis history with filtering, export, and report management.
-
-### Pricing
-
-![Pricing](docs/screenshots/13_pricing_overview.png)
-
-Production pricing and PayPal-backed Pro upgrade workflow.
-
-### Account
-
-![Account](docs/screenshots/15_account_overview.png)
-
-Profile, subscription, and account status experience.
-
-### System Health / Usage
-
-![System Health](docs/screenshots/16_usage_and_system_health.png)
-
-Operational and usage-oriented platform visibility.
+Older screenshot names are intentionally not used in the public showcase. Legacy captures, if retained for internal history, must not be presented as the current production UI.
 
 ---
 
@@ -821,13 +789,13 @@ The canonical frontend sitemap contains the public application routes:
 
 ### robots.txt
 
-The frontend `robots.txt` permits public page crawling and points to the canonical frontend sitemap. The API `robots.txt` remains available separately and blocks general API crawling.
+The frontend `robots.txt` permits public page crawling and points to the canonical frontend sitemap. The source files are `frontend/static/robots.txt` and `frontend/static/sitemap.xml`. The API `robots.txt` remains available separately and blocks general API crawling; `backend/static/` is a compatibility layer rather than the primary SEO source.
 
 ---
 
 ## ✅ Production Acceptance
 
-TalentMatch Pro v3.0 FINAL completed a full production acceptance cycle.
+The production baseline is live and the completed runtime, security, billing, reporting, and deployment checks are recorded below. The public sitemap is valid and available; Google Search Console processing remains an external PENDING status until Google completes its crawl.
 
 | Area | Result |
 |---|---|
@@ -858,8 +826,11 @@ TalentMatch Pro v3.0 FINAL completed a full production acceptance cycle.
 | HTTP → HTTPS | ✅ PASS |
 | WWW → apex | ✅ PASS |
 | robots.txt | ✅ PASS |
-| sitemap.xml | ⏳ Verify after the SEO route is deployed |
+| sitemap.xml | ✅ PASS public route; ⏳ Search Console processing |
 | DNS records | ✅ PASS |
+| Documentation assets | ⏳ OPEN — final alignment in progress |
+| Current screenshot package | PASS - final production capture package added |
+| Production banner | ⏳ OPEN — replacement pending |
 
 ---
 
@@ -1072,6 +1043,11 @@ Additional architecture documentation is available at:
 
 [`docs/architecture/architecture.md`](docs/architecture/architecture.md)
 
+Documentation indexes:
+
+- [`docs/README.md`](docs/README.md)
+- [`docs/reports/README.md`](docs/reports/README.md)
+
 It contains focused diagrams for:
 
 - system architecture,
@@ -1084,9 +1060,9 @@ It contains focused diagrams for:
 
 ### TalentMatch Pro v3.0 FINAL
 
-**Status: Production acceptance complete.**
+**Status: Production baseline live; documentation and visual release close-out in progress.**
 
-The final release includes completed product, runtime, security, reporting, internationalization, deployment, observability, SEO, and DNS verification.
+The application, runtime, security, reporting, internationalization, deployment, observability, and public SEO routes are live. The final close-out still requires the documentation assets, fresh production screenshot set, banner replacement, and the remaining acceptance record to be aligned before the v3.0 release is declared fully closed.
 
 The application is live at:
 
@@ -1096,9 +1072,7 @@ The application is live at:
 
 ## 🗺️ Future Development
 
-TalentMatch Pro v3.0 FINAL is considered a completed production milestone.
-
-Potential future work should be treated as a new planned release rather than unfinished v3 scope.
+After the v3.0 close-out is approved, potential future work should be treated as a new planned release rather than unfinished v3 scope.
 
 Possible directions include:
 
