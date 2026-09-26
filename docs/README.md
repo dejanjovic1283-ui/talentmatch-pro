@@ -1,50 +1,76 @@
-# TalentMatch Pro — Documentation Index
+# TalentMatch Pro — Documentation Assets
 
-This directory contains the public documentation and portfolio assets for TalentMatch Pro. Every link must point to a file that exists in the repository and must not expose local paths, secrets, or private user data.
+This folder contains the documentation assets used for the GitHub portfolio presentation.
 
 ## Structure
 
 ```text
 docs/
-├── README.md
-├── architecture/
-│   └── architecture.md
-├── README-assets/
-│   └── banner.png
-├── reports/
+├── screenshots/
+│   ├── 01_dashboard.png
+│   ├── 02_cv_analysis.png
+│   ├── 03_ats_checker.png
+│   ├── 04_cv_rewrite.png
+│   ├── 05_semantic_match.png
+│   ├── 06_recruiter_mode.png
+│   ├── 07_candidate_database.png
+│   ├── 08_history.png
+│   ├── 09_pricing.png
+│   ├── 10_account.png
+│   ├── 11_login_secure_session.png
+│   ├── 12_seo_indexing.png
 │   ├── README.md
+│   └── source/
+│       ├── 01_dashboard/
+│       ├── 02_cv_analysis/
+│       ├── 03_ats_checker/
+│       ├── 04_cv_rewrite/
+│       ├── 05_semantic_match/
+│       ├── 06_recruiter_mode/
+│       ├── 07_candidate_database/
+│       ├── 08_history/
+│       ├── 09_pricing/
+│       ├── 10_account/
+│       ├── 11_login_secure_session/
+│       └── 12_seo_indexing/
+├── reports/
 │   ├── pdf/
 │   └── txt/
-└── screenshots/
-    ├── 01_dashboard.png
-    ├── 02_cv_analysis.png
-    └── 03_ats_checker.png
+├── architecture/
+├── gifs/
+└── README-assets/
 ```
 
-## Current public screenshots
+The twelve root-level PNGs are the public showcase composites used by `README.md`. The organized `screenshots/source/` folders retain every supplied source capture, grouped by workflow rather than flattened into one directory.
 
-The root `README.md` uses screenshots captured from the current production UI:
+## Product Screenshots
 
-- [Dashboard](screenshots/01_dashboard.png)
-- [CV Analysis](screenshots/02_cv_analysis.png)
-- [ATS Checker](screenshots/03_ats_checker.png)
+```markdown
+![Dashboard](docs/screenshots/01_dashboard.png)
+![CV Analysis](docs/screenshots/02_cv_analysis.png)
+![ATS Checker](docs/screenshots/03_ats_checker.png)
+![CV Rewrite](docs/screenshots/04_cv_rewrite.png)
+![Semantic Match](docs/screenshots/05_semantic_match.png)
+![Recruiter Mode](docs/screenshots/06_recruiter_mode.png)
+![Candidate Database](docs/screenshots/07_candidate_database.png)
+![History](docs/screenshots/08_history.png)
+![Pricing](docs/screenshots/09_pricing.png)
+![Account](docs/screenshots/10_account.png)
+![Secure Login Session](docs/screenshots/11_login_secure_session.png)
+![SEO Indexing](docs/screenshots/12_seo_indexing.png)
+```
 
-Older screenshots may remain in an internal archive, but they must not be presented as the current production interface.
+See [`docs/screenshots/README.md`](screenshots/README.md) for the public gallery and the complete source-capture index.
 
-## Documentation
+## Recommended Report Links
 
-- [System architecture](architecture/architecture.md)
-- [Reports index](reports/README.md)
-- [Root README](../README.md)
+```markdown
+## Sample Reports
 
-## Banner
+- [PDF Reports](docs/reports/pdf/)
+- [TXT Reports](docs/reports/txt/)
+```
 
-The root README uses `docs/README-assets/banner.png`. The file at that path must represent the current production UI, final pricing, active product capabilities, and current product name. Older banners with outdated screens or pricing do not belong in the public showcase.
+## Architecture
 
-## Public asset rules
-
-- Never add `.env` values, API keys, passwords, Firebase private JSON files, or tokens.
-- Never add private CV documents or personal user data.
-- Do not use legacy screenshots as evidence of the current production state.
-- Before Git staging, verify that every link and referenced path exists.
-- Canonical SEO files belong to the frontend layer: `frontend/static/robots.txt` and `frontend/static/sitemap.xml`.
+See [`docs/architecture/architecture.md`](architecture/architecture.md).

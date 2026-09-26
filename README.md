@@ -391,7 +391,9 @@ The Docker runtime installs required system fonts directly so PDF generation is 
 
 ## 📸 Application Showcase
 
-The public showcase uses only screenshots captured from the current production UI.
+The public showcase uses the final 12 screenshots captured from the current production UI.
+
+The complete source capture set is also retained under `docs/screenshots/source/`, organized by workflow. The source panels support the visual handoff and are not presented as the public showcase.
 
 ### Dashboard
 
@@ -411,7 +413,61 @@ Resume analysis workflow with score, findings, and export-ready results.
 
 ATS-oriented score, matched keywords, missing keywords, and recommendations.
 
-Older screenshot names are intentionally not used in the public showcase. Legacy captures, if retained for internal history, must not be presented as the current production UI.
+### CV Rewrite
+
+![CV Rewrite](docs/screenshots/04_cv_rewrite.png)
+
+Role-aligned CV rewriting workflow with ATS enrichment, cautions, and export-ready output.
+
+### Semantic Match
+
+![Semantic Match](docs/screenshots/05_semantic_match.png)
+
+Semantic, keyword, and overall-match intelligence for role and candidate relevance.
+
+### Recruiter Mode
+
+![Recruiter Mode](docs/screenshots/06_recruiter_mode.png)
+
+Candidate ranking, strengths, gaps, leaderboard, and recruiter report exports.
+
+### Candidate Database
+
+![Candidate Database](docs/screenshots/07_candidate_database.png)
+
+Recruiter candidate pipeline, candidate intelligence, evidence, notes, and controls.
+
+### History
+
+![History](docs/screenshots/08_history.png)
+
+Saved report history with filtering, exports, report detail, and retention controls.
+
+### Pricing
+
+![Pricing](docs/screenshots/09_pricing.png)
+
+Free and Pro plan comparison, $19/month PayPal subscription, value estimator, and trust details.
+
+### Account
+
+![Account](docs/screenshots/10_account.png)
+
+Account workspace with Pro membership, usage, system health, security, and session controls.
+
+### Secure Login Session
+
+![Secure Login Session](docs/screenshots/11_login_secure_session.png)
+
+Login, active secure session, Pro dashboard access, and verified account state.
+
+### SEO Indexing
+
+![SEO Indexing](docs/screenshots/12_seo_indexing.png)
+
+Public robots.txt and sitemap.xml routes used for crawl and indexing readiness.
+
+All 12 files are current production captures. Legacy screenshot names are intentionally excluded. The complete current source set is retained in the organized `docs/screenshots/source/` folders.
 
 ---
 
@@ -828,8 +884,8 @@ The production baseline is live and the completed runtime, security, billing, re
 | robots.txt | ✅ PASS |
 | sitemap.xml | ✅ PASS public route; ⏳ Search Console processing |
 | DNS records | ✅ PASS |
-| Documentation assets | ⏳ OPEN — final alignment in progress |
-| Current screenshot package | PASS - final production capture package added |
+| Documentation assets | ✅ PASS — README, docs README, gallery, and source capture folders aligned |
+| Current screenshot package | ✅ PASS — 12 final captures plus 138 organized source captures |
 | Production banner | ⏳ OPEN — replacement pending |
 
 ---
@@ -1062,7 +1118,7 @@ It contains focused diagrams for:
 
 **Status: Production baseline live; documentation and visual release close-out in progress.**
 
-The application, runtime, security, reporting, internationalization, deployment, observability, and public SEO routes are live. The final close-out still requires the documentation assets, fresh production screenshot set, banner replacement, and the remaining acceptance record to be aligned before the v3.0 release is declared fully closed.
+The application, runtime, security, reporting, internationalization, deployment, observability, public SEO routes, final screenshot package, and documentation assets are aligned. The remaining visual close-out is the banner replacement and the remaining acceptance record before the v3.0 release is declared fully closed.
 
 The application is live at:
 
