@@ -13,24 +13,27 @@ st.caption("TalentMatch Pro support, billing, account assistance, and general in
 
 st.markdown(
     """
-# TalentMatch Pro – Contact Us
+## How Can We Help?
 
-Need help with TalentMatch Pro?  
-You can contact us for technical support, billing questions, refund requests, account issues, partnership opportunities, or general product questions.
+**Last Updated: September 2026**
+
+Contact TalentMatch Pro for technical support, billing questions, refund requests, account issues, partnership opportunities, or general product questions.
 
 ---
 
 ## 📩 Support Email
 
-**Email:** support@talentmatchcv.com
+**Email:** [support@talentmatchcv.com](mailto:support@talentmatchcv.com)
+
+Please include enough information to understand the issue, but do not send passwords, payment card details, or unnecessary sensitive personal information.
 
 ---
 
-## 💳 Pro Plan & Billing
+## 💳 Pro Plan and Billing
 
-TalentMatch Pro is available for **$19/month** as a recurring **PayPal** subscription.
+The Pro plan is currently available for **$19 USD per month** as a recurring subscription billed and managed through **PayPal**.
 
-Use the Pricing page to review the plan, subscribe, or check your current Pro access. Existing subscriptions are managed through PayPal.
+Use the Pricing page to review the plan and check the current subscription options. Existing recurring subscriptions are managed through PayPal.
 """
 )
 
@@ -52,33 +55,22 @@ Response time may be longer during weekends or holidays.
 
 ## 🏢 Business Information
 
-**Project:** TalentMatch Pro  
-**Owner:** Dejan Jovic  
-**Country:** Serbia  
-**Email:** support@talentmatchcv.com
+**Project:** TalentMatch Pro<br>
+**Owner:** Dejan Jović<br>
+**Country:** Serbia<br>
+**Email:** [support@talentmatchcv.com](mailto:support@talentmatchcv.com)
 
 ---
 
 ## 🛠️ Topics We Can Help With
 
 - Technical support
-- Account issues
-- Login or registration issues
-- Billing questions
-- Subscription status questions
+- Account, login, or registration issues
+- Billing and subscription status questions
 - Refund requests
-- CV analysis questions
-- Report export questions
+- CV analysis and report export questions
 - Partnership opportunities
-- General questions
-
----
-
-## 🔐 Important Note
-
-Please do not send sensitive personal information by email unless it is necessary for support.
-
-For CV-related support, describe the issue clearly and include only the information needed to understand the problem.
+- General product questions
 
 ---
 

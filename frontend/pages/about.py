@@ -3,110 +3,97 @@ import streamlit as st
 from components.footer import render_footer
 from components.sidebar import render_sidebar
 
+
 st.set_page_config(page_title="About Us", page_icon="🏢", layout="wide")
 
 render_sidebar()
 
 st.title("🏢 About Us")
-st.caption("TalentMatch Pro – AI-powered CV analysis and ATS optimization platform")
+st.caption("TalentMatch Pro – AI-powered CV analysis, ATS optimization, and recruiter tools")
 
-st.markdown("""
-# TalentMatch Pro – About Us
+st.markdown(
+    """
+## TalentMatch Pro
 
-TalentMatch Pro is an AI-powered platform built to help job seekers improve their CVs, understand how well they match job descriptions, and prepare stronger job applications.
+**Last Updated: September 2026**
 
-Our goal is simple: make professional CV analysis, ATS checking, semantic matching, and recruiter-style insights more accessible, faster, and easier to use.
+TalentMatch Pro is an AI-powered SaaS platform built to help job seekers, professionals, recruiters, and small teams work with CVs and job descriptions more effectively.
 
----
-
-## 🚀 Mission
-
-Our mission is to help job seekers increase their interview chances by giving them clear, practical, and AI-powered feedback about their CV.
-
-TalentMatch Pro focuses on:
-
-- CV analysis
-- ATS keyword checking
-- CV rewriting support
-- Semantic job matching
-- Recruiter-style evaluation
-- Candidate ranking insights
-- Downloadable reports
+The platform combines structured CV analysis, ATS checking, CV rewriting support, semantic job matching, recruiter-style evaluation, candidate ranking, Candidate Database workflows, saved history, and downloadable reports in one focused workspace.
 
 ---
 
-## 🎯 Vision
+## Mission
 
-Our vision is to become a practical AI career assistant for modern job seekers and recruiters.
+Our mission is to give users clear, practical, and structured feedback before they apply for a role or review a candidate.
 
-We want TalentMatch Pro to help users understand:
-
-- What is strong in their CV
-- What is missing
-- Which keywords matter
-- How well their CV matches a job description
-- What they should improve before applying
+TalentMatch Pro helps users identify strengths, missing skills, important keywords, relevance gaps, and practical next steps without presenting AI output as a guaranteed hiring decision.
 
 ---
 
-## 🤖 What We Do
+## Core Capabilities
 
-TalentMatch Pro uses AI technology to compare CVs with job descriptions and provide structured feedback.
-
-The platform can help users:
-
-- Identify missing skills and keywords
-- Improve ATS compatibility
-- Rewrite CV sections
-- Compare CVs with job descriptions
-- Generate recruiter-ready summaries
-- Rank multiple candidates for a role
+- CV analysis and structured recommendations
+- ATS keyword and compatibility checking
+- CV rewriting assistance
+- Semantic matching between CVs and job descriptions
+- Recruiter Mode with candidate comparison and ranking
+- Candidate Database workflows for recruiter use
+- Saved history and downloadable TXT, PDF, and CSV reports
 
 ---
 
-## 🧠 AI-Powered Technology
+## How It Works
 
-TalentMatch Pro is built with modern technologies including:
+Users provide a CV, resume, job description, or candidate information relevant to the selected workflow. TalentMatch Pro processes the submitted information and returns structured analysis, scores, recommendations, summaries, or reports.
+
+AI-generated results should be reviewed by the user and treated as decision-support information rather than as a guarantee of interviews, employment, ATS acceptance, or recruiter approval.
+
+---
+
+## Technology
+
+TalentMatch Pro is built with:
 
 - Python
 - FastAPI
 - Streamlit
 - OpenAI APIs
-- Firebase Authentication
-- Firebase Storage
-- SQL / PostgreSQL-ready architecture
+- Firebase Authentication and Storage
+- PostgreSQL
+- PayPal recurring billing
 - Render cloud deployment
 
-The system is designed to be simple, fast, and useful for real-world CV and recruitment workflows.
+The production architecture is designed for secure authentication, controlled access to paid features, report generation, and reliable CV and recruitment workflows.
 
 ---
 
-## 💼 Who It Is For
+## Plans and Billing
+
+TalentMatch Pro includes a Free workspace and a Pro plan currently offered for **$19 USD per month** as a recurring subscription billed and managed through **PayPal**.
+
+Current plan details are available on the Pricing page.
+
+---
+
+## Who It Is For
 
 TalentMatch Pro is designed for:
 
-- Job seekers
-- Students
-- Junior developers
-- Career changers
-- Recruiters
-- HR teams
+- Job seekers and career changers
+- Students and junior professionals
+- Recruiters and HR teams
 - Small businesses
-- Anyone who wants better CV and job matching insights
+- Anyone who wants clearer CV and job-matching insights
 
 ---
 
-## ⭐ Why TalentMatch Pro
+## Contact
 
-TalentMatch Pro combines CV analysis, ATS checking, semantic matching, and recruiter-style feedback in one place.
+For technical support, billing questions, refund requests, partnership opportunities, or general product questions:
 
-Instead of only checking keywords, the platform also looks at meaning, relevance, skills, gaps, and overall job fit.
+**Email:** [support@talentmatchcv.com](mailto:support@talentmatchcv.com)
+"""
+)
 
----
-
-## 📬 Contact
-
-For support, billing questions, refund requests, partnership opportunities, or Pro plan requests, please contact us:
-
-**Email:** support@talentmatchcv.com
-""")
+render_footer()

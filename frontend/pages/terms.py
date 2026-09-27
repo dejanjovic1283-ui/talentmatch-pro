@@ -10,16 +10,13 @@ st.set_page_config(
     layout="wide",
 )
 
-
 render_sidebar()
 
 st.title("📃 Terms of Service")
 
 st.markdown(
     """
-# TalentMatch Pro – Terms of Service
-
-Last Updated: August 2026
+**Last Updated: September 2026**
 
 ## 1. Acceptance of Terms
 
@@ -29,7 +26,7 @@ If you do not agree with these Terms, you should not use the platform.
 
 ## 2. Description of Service
 
-TalentMatch Pro is an AI-powered SaaS platform that provides tools for job seekers, professionals, and recruiters.
+TalentMatch Pro is an AI-powered SaaS platform that provides tools for job seekers, professionals, recruiters, and small teams.
 
 The platform may include:
 
@@ -37,9 +34,10 @@ The platform may include:
 - ATS compatibility checking
 - CV rewriting assistance
 - Semantic job matching
-- Recruiter mode
-- Candidate ranking
-- PDF and TXT reports
+- Recruiter Mode
+- Candidate Database workflows
+- Candidate comparison and ranking
+- PDF, TXT, and CSV reports
 - Saved history
 - AI-generated recommendations and insights
 
@@ -49,7 +47,7 @@ Users may need to create an account to access certain features.
 
 You agree to provide accurate account information and keep your login credentials secure.
 
-You are responsible for all activity that occurs under your account.
+You are responsible for activity that occurs under your account and should notify us if you believe that your account has been accessed without authorization.
 
 ## 4. User Responsibilities
 
@@ -65,29 +63,27 @@ You agree:
 
 ## 5. Uploaded Content
 
-Users may upload CVs, resumes, job descriptions, and related documents.
+Users may upload CVs, resumes, job descriptions, and related candidate documents.
 
-You remain responsible for the content you upload.
+You remain responsible for the content you upload and for ensuring that you have the right to use it.
 
-By uploading content, you grant TalentMatch Pro permission to process that content for the purpose of providing analysis, reports, recommendations, and related platform features.
+By uploading content, you grant TalentMatch Pro permission to process that content for the purpose of providing analysis, reports, recommendations, matching, ranking, and related platform features.
 
 ## 6. AI-Generated Results
 
 TalentMatch Pro uses AI systems to generate analysis, summaries, scores, recommendations, and insights.
 
-AI-generated results may contain errors, omissions, or subjective interpretations.
-
-Users should review all outputs carefully before relying on them.
+AI-generated results may contain errors, omissions, or subjective interpretations. Users should review all outputs carefully before relying on them.
 
 TalentMatch Pro does not guarantee that any analysis result will be accepted by employers, recruiters, ATS systems, or hiring platforms.
 
 ## 7. Subscriptions and Paid Features
 
-TalentMatch Pro may offer free and paid plans.
+TalentMatch Pro offers a Free workspace and a Pro plan.
 
-The TalentMatch Pro plan is currently offered for **$19 per month** as a recurring subscription.
+The Pro plan is currently offered for **$19 USD per month** as a recurring subscription. Unless expressly stated on the Pricing page, the plan does not include a free trial or setup fee.
 
-Paid subscription billing, approval, recurring payment processing, and subscription management are handled through **PayPal**.
+Paid subscription billing, recurring payment processing, and subscription management are handled through **PayPal**. The subscription renews automatically until canceled through the available PayPal subscription management process.
 
 Paid features may include unlimited analyses, PDF reports, CV Rewrite AI, Semantic Match, Recruiter Mode, Candidate Database access, candidate ranking, saved history, and recruiter-ready reports.
 
@@ -97,15 +93,13 @@ TalentMatch Pro may change plan features or pricing in the future. Any updated p
 
 ## 8. Refunds and Cancellations
 
-Refunds and cancellations are governed by our Refund Policy.
+Refunds and cancellations are governed by the Refund Policy.
 
 Users may cancel an active TalentMatch Pro subscription through the available PayPal subscription management process.
 
-Cancellation prevents future recurring billing in accordance with the subscription status processed by PayPal.
+Cancellation prevents future recurring billing in accordance with the subscription status processed by PayPal. Cancellation does not automatically guarantee a refund for the current or any previous billing period.
 
-Cancellation does not automatically guarantee a refund for the current or any previous billing period.
-
-Any refund request is evaluated under the Refund Policy applicable at the time of the request.
+Any refund request is evaluated under the Refund Policy applicable at the time of the request and subject to applicable law.
 
 ## 9. Intellectual Property
 
@@ -123,7 +117,7 @@ We do not guarantee continuous availability.
 
 ## 11. Third-Party Services
 
-TalentMatch Pro may rely on third-party services for hosting, AI processing, authentication, storage, analytics, payments, and infrastructure.
+TalentMatch Pro may rely on third-party services for hosting, AI processing, authentication, storage, payments, and infrastructure, including Render, OpenAI, Firebase, PostgreSQL-related infrastructure, and PayPal.
 
 We are not responsible for third-party service interruptions, policy changes, failures, delays, or data processing practices.
 
@@ -143,6 +137,8 @@ To the maximum extent permitted by law, TalentMatch Pro is not responsible for:
 - Temporary service interruptions
 - Indirect, incidental, or consequential damages
 
+Nothing in these Terms excludes or limits liability that cannot lawfully be excluded or limited.
+
 ## 13. No Employment Guarantee
 
 TalentMatch Pro helps users improve CVs, analyze job descriptions, and understand skill gaps.
@@ -153,24 +149,26 @@ The platform does not guarantee job offers, interviews, employment, recruiter re
 
 We may suspend or terminate access if a user violates these Terms, misuses the platform, attempts unauthorized access, uploads harmful content, or abuses free or paid features.
 
+Where appropriate, we may take reasonable steps to protect users, the platform, and third-party services.
+
 ## 15. Changes to Terms
 
-We may update these Terms of Service at any time.
+We may update these Terms of Service from time to time.
 
-Continued use of TalentMatch Pro after updates means you accept the revised Terms.
+The updated version will be published on this page with a revised update date. Continued use of TalentMatch Pro after an update means that you acknowledge the revised Terms, to the extent permitted by applicable law.
 
 ## 16. Business Information
 
-TalentMatch Pro  
-Owner: Dejan Jovic  
-Country: Serbia  
-Business Email: support@talentmatchcv.com
+TalentMatch Pro<br>
+Owner: Dejan Jović<br>
+Country: Serbia<br>
+Business Email: [support@talentmatchcv.com](mailto:support@talentmatchcv.com)
 
 ## 17. Contact
 
 For questions regarding these Terms:
 
-Email: support@talentmatchcv.com
+Email: [support@talentmatchcv.com](mailto:support@talentmatchcv.com)
 """
 )
 
