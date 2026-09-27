@@ -41,6 +41,11 @@ FRONTEND_URL = os.getenv(
     "https://talentmatchcv.com",
 ).rstrip("/")
 
+PAYPAL_SUBSCRIPTION_SETTINGS_URL = os.getenv(
+    "PAYPAL_SUBSCRIPTION_SETTINGS_URL",
+    "https://www.paypal.com/myaccount/autopay/",
+).strip()
+
 PAYPAL_RESILIENCE = build_resilience_executor(
     service=PAYPAL_SERVICE_NAME,
     prefix=PAYPAL_CONFIGURATION_PREFIX,
@@ -481,7 +486,16 @@ class PayPalBillingProvider(BillingProvider):
         return approve_url
 
     def create_customer_portal_url(self, user: User) -> str:
-        return f"{FRONTEND_URL}/customer-portal"
+        """Return PayPal's customer-facing recurring-payment settings page.
+
+        PayPal does not provide a Stripe-style customer portal session URL
+        through the subscription creation response. The previous
+        implementation returned ``FRONTEND_URL/customer-portal``, but that
+        route does not exist in the Streamlit application and produced a
+        misleading Page not found screen.
+        """
+        del user
+        return PAYPAL_SUBSCRIPTION_SETTINGS_URL
 
     def _verify_webhook_signature(self, body: bytes, headers: dict) -> None:
         if not PAYPAL_WEBHOOK_ID:
