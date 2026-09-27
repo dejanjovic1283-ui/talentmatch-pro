@@ -543,10 +543,139 @@ def _firebase_error_to_http_exception(
     )
 
 
+def _firebase_admin_credentials_configured() -> bool:
+    """Return whether production has credentials for local token verification."""
+    return bool(
+        os.getenv("FIREBASE_CREDENTIALS", "").strip()
+        or os.getenv("GOOGLE_APPLICATION_CREDENTIALS", "").strip()
+    )
+
+
+def _verify_firebase_token_with_admin(
+    token: str,
+) -> FirebaseUser | None:
+    """Verify an ID token locally when the Firebase Admin SDK is configured.
+
+    ``accounts:lookup`` is a quota-limited REST call.  Production already has
+    Firebase Admin credentials for storage, so use the SDK's cached public-key
+    verification for every authenticated request.  A ``None`` result means
+    that the local Admin SDK is unavailable in a development environment and
+    the existing REST verifier should be used as a compatibility fallback.
+    """
+    if not _firebase_admin_credentials_configured():
+        return None
+
+    try:
+        from firebase_admin import auth as firebase_admin_auth
+        from firebase import init_firebase
+
+        init_firebase()
+    except (ImportError, ModuleNotFoundError, OSError, RuntimeError, ValueError) as exc:
+        LOGGER.warning(
+            "Firebase Admin SDK is unavailable; falling back to REST token verification.",
+            extra={
+                "event": "firebase_admin_verifier_unavailable",
+                "error_type": type(exc).__name__,
+                "retryable": True,
+            },
+        )
+        return None
+
+    try:
+        decoded = firebase_admin_auth.verify_id_token(
+            token,
+            check_revoked=False,
+        )
+    except Exception as exc:
+        error_type = type(exc).__name__
+        normalized_message = str(exc).strip().lower()
+
+        if error_type in {
+            "ExpiredIdTokenError",
+            "InvalidIdTokenError",
+            "InvalidArgumentError",
+            "RevokedIdTokenError",
+            "UserDisabledError",
+        } or isinstance(exc, (TypeError, ValueError)):
+            raise FirebaseServiceError(
+                "Invalid Firebase token.",
+                status_code=401,
+                error_code="firebase_invalid_token",
+                retryable=False,
+            ) from exc
+
+        if (
+            error_type in {"CertificateFetchError", "ConnectionError", "TimeoutError"}
+            or "certificate" in normalized_message
+            or "network" in normalized_message
+            or "timed out" in normalized_message
+        ):
+            raise FirebaseServiceError(
+                "Firebase token verification is temporarily unavailable. Please try again.",
+                status_code=503,
+                error_code="firebase_verification_unavailable",
+                retryable=True,
+            ) from exc
+
+        raise FirebaseServiceError(
+            "Firebase token verification failed. Please try again.",
+            status_code=503,
+            error_code="firebase_verification_failed",
+            retryable=True,
+        ) from exc
+
+    if not isinstance(decoded, dict):
+        raise FirebaseServiceError(
+            "Firebase returned an invalid verification payload.",
+            status_code=502,
+            error_code="firebase_invalid_payload",
+            retryable=True,
+        )
+
+    firebase_uid = _clean_text(decoded.get("uid"))
+    if not firebase_uid:
+        raise FirebaseServiceError(
+            "Firebase returned an invalid verification payload.",
+            status_code=502,
+            error_code="firebase_invalid_payload",
+            retryable=True,
+        )
+
+    return {
+        "localId": firebase_uid,
+        "email": decoded.get("email"),
+        "displayName": decoded.get("name") or decoded.get("display_name"),
+        "emailVerified": decoded.get("email_verified") is True,
+        "photoUrl": decoded.get("picture"),
+    }
+
+
 def verify_firebase_token_with_rest(
     token: str,
 ) -> FirebaseUser:
     _increment_auth_metric("firebase_auth_requests")
+
+    try:
+        admin_verified = _verify_firebase_token_with_admin(token)
+    except ExternalServiceError as exc:
+        _increment_auth_metric("firebase_auth_failure")
+        LOGGER.warning(
+            "Firebase token verification failed.",
+            extra={
+                "event": "firebase_login_failed",
+                "error_type": exc.error_code,
+                "retryable": exc.retryable,
+            },
+        )
+        raise _firebase_error_to_http_exception(exc) from exc
+
+    if admin_verified is not None:
+        _increment_auth_metric("firebase_auth_success")
+        LOGGER.info(
+            "Firebase token verified with the Admin SDK.",
+            extra={"event": "firebase_admin_token_verified"},
+        )
+        return admin_verified
 
     api_key = os.getenv("FIREBASE_API_KEY", "").strip()
 

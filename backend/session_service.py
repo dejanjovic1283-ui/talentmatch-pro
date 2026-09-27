@@ -509,17 +509,16 @@ def create_persistent_session(
     current_user: User,
     firebase_refresh_token: str,
 ) -> PersistentSessionBootstrap:
-    """Create an encrypted server-side session from a verified Firebase login."""
+    """Create an encrypted server-side session from a verified Firebase login.
+
+    The bearer ID token has already been verified by ``get_current_user``.  Do
+    not perform a second Firebase Secure Token exchange during bootstrap: that
+    extra quota-limited request made repeated logins fail with HTTP 429 before
+    the durable session could be created.  The refresh token is encrypted now,
+    then exchanged and identity-checked when the browser session is restored.
+    """
 
     refresh_token = _clean_refresh_token(firebase_refresh_token)
-    refreshed = _refresh_firebase_credentials(refresh_token)
-
-    if refreshed.firebase_uid != str(current_user.firebase_uid or "").strip():
-        raise _session_error(
-            403,
-            "persistent_session_identity_mismatch",
-            "The authentication session does not match this account. Please sign in again.",
-        )
 
     now = utc_now()
     cookie_settings = get_session_cookie_settings()
@@ -549,9 +548,7 @@ def create_persistent_session(
                 user_id=current_user.id,
                 session_token_hash=_hash_secret(session_token),
                 session_token_encrypted=_encrypt_refresh_token(session_token),
-                refresh_token_encrypted=_encrypt_refresh_token(
-                    refreshed.refresh_token
-                ),
+                refresh_token_encrypted=_encrypt_refresh_token(refresh_token),
                 activation_code_hash=_hash_secret(activation_code),
                 activation_expires_at=(
                     now + timedelta(seconds=activation_ttl_seconds)
