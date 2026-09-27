@@ -5,7 +5,7 @@ v3.0 FINAL — Production & Portfolio README
 
 <div align="center">
 
-# 🚀 TalentMatch Pro
+# 🚀 TalentMatch Pro™
 
 <p align="center">
   <img src="docs/README-assets/banner.png" alt="TalentMatch Pro production banner" width="100%">
@@ -38,6 +38,9 @@ v3.0 FINAL — Production & Portfolio README
 ![Runtime](https://img.shields.io/badge/runtime-Docker-2496ED)
 
 </div>
+
+> 🔒 **Proprietary project — © 2026 Dejan Jović · TalentMatch Pro™ · All rights reserved.**<br />
+> This repository is public for portfolio and evaluation purposes only. No license is granted to copy, redistribute, modify, commercialise, or reuse the source code, product design, branding, screenshots, reports, or documentation without prior written permission.
 
 ---
 
@@ -875,6 +878,9 @@ The production baseline is live and the completed runtime, security, billing, re
 | Recruiter CSV export | ✅ PASS |
 | Recruiter TXT export | ✅ PASS |
 | Candidate Database save | ✅ PASS |
+| Pro entitlement persistence | ✅ PASS |
+| Unlimited Pro CV Analysis | ✅ PASS |
+| PostgreSQL-backed persistent sessions | ✅ PASS |
 | Frontend runtime logs | ✅ PASS |
 | Backend runtime logs | ✅ PASS |
 | Security headers | ✅ PASS |
@@ -994,9 +1000,17 @@ PAYPAL_CLIENT_SECRET=
 PAYPAL_PLAN_ID=
 PAYPAL_WEBHOOK_ID=
 FRONTEND_URL=
+AUTH_SESSION_COOKIE_NAME=
+AUTH_SESSION_COOKIE_DOMAIN=
+AUTH_SESSION_COOKIE_SECURE=true
+AUTH_SESSION_TTL_SECONDS=
+AUTH_SESSION_ACTIVATION_TTL_SECONDS=60
+RATE_LIMIT_AUTH_SESSION_REQUESTS=
 ```
 
-Additional Firebase credential configuration and production security settings are environment-managed.
+Additional Firebase credential configuration, persistent-session encryption,
+production security settings, and any operator-only entitlement controls are
+environment-managed and are never committed to the repository.
 
 ### Frontend variable categories
 
@@ -1014,68 +1028,133 @@ Local development may use additional non-production settings.
 talentmatch-pro/
 ├── backend/
 │   ├── billing/
+│   │   ├── __init__.py
+│   │   ├── factory.py
+│   │   ├── paypal_provider.py
+│   │   └── provider.py
+│   ├── scripts/
+│   │   ├── create_paypal_plan.py
+│   │   └── set_user_pro.py
 │   ├── static/
+│   │   ├── googlecf17c88318ff3341.html
 │   │   ├── robots.txt
 │   │   └── sitemap.xml
-│   ├── Dockerfile
 │   ├── .dockerignore
+│   ├── auth.py
+│   ├── config_validation.py
+│   ├── db.py
+│   ├── entitlements.py
+│   ├── firebase.py
 │   ├── main.py
 │   ├── models.py
-│   ├── schemas.py
+│   ├── observability.py
 │   ├── openai_service.py
-│   ├── semantic_service.py
-│   ├── recruiter_service.py
 │   ├── pdf_report.py
-│   ├── auth.py
-│   ├── firebase.py
+│   ├── pdf_utils.py
+│   ├── recruiter_service.py
+│   ├── resilience.py
+│   ├── schemas.py
+│   ├── semantic_service.py
+│   ├── session_service.py
 │   ├── storage.py
 │   ├── usage_service.py
+│   ├── Dockerfile
 │   └── requirements.txt
 │
 ├── frontend/
+│   ├── .streamlit/
+│   │   └── config.toml
+│   ├── assets/
+│   │   ├── favicon.png
+│   │   └── logo.png
+│   ├── components/
+│   │   ├── analytics.py
+│   │   ├── footer.py
+│   │   ├── language_selector.py
+│   │   ├── pdf_reports.py
+│   │   ├── sidebar.py
+│   │   └── ui.py
+│   ├── i18n/
+│   │   ├── __init__.py
+│   │   ├── config.py
+│   │   ├── locales/
+│   │   │   ├── __init__.py
+│   │   │   ├── ar_ae.py
+│   │   │   ├── de.py
+│   │   │   ├── en.py
+│   │   │   ├── en_us.py
+│   │   │   ├── es.py
+│   │   │   ├── fr.py
+│   │   │   ├── it.py
+│   │   │   ├── nl.py
+│   │   │   ├── pt_br.py
+│   │   │   ├── ru.py
+│   │   │   ├── sr_latn.py
+│   │   │   └── zh_cn.py
+│   │   └── translator.py
 │   ├── static/
 │   │   └── sitemap.xml
-│   ├── components/
-│   │   ├── pdf_reports.py
-│   │   └── sidebar.py
-│   ├── i18n/
-│   │   └── locales/
 │   ├── pages/
+│   │   ├── about.py
 │   │   ├── account.py
 │   │   ├── admin_analytics.py
 │   │   ├── ats_checker.py
 │   │   ├── candidate_database.py
+│   │   ├── contact.py
 │   │   ├── cv_analysis.py
 │   │   ├── cv_rewrite.py
 │   │   ├── history.py
 │   │   ├── landing.py
+│   │   ├── login.py
 │   │   ├── pricing.py
+│   │   ├── privacy.py
 │   │   ├── recruiter_mode.py
-│   │   └── semantic_match.py
-│   ├── Dockerfile
+│   │   ├── refund.py
+│   │   ├── register.py
+│   │   ├── semantic_match.py
+│   │   └── terms.py
 │   ├── .dockerignore
+│   ├── Dockerfile
 │   ├── app.py
 │   ├── asgi.py
 │   ├── auth_utils.py
 │   └── requirements.txt
 │
 ├── docs/
+│   ├── README.md
 │   ├── architecture/
 │   │   └── architecture.md
 │   ├── README-assets/
 │   │   └── banner.png
 │   ├── reports/
+│   │   ├── README.md
 │   │   ├── pdf/
 │   │   └── txt/
 │   └── screenshots/
+│       ├── README.md
+│       ├── 01_dashboard.png
+│       ├── 02_cv_analysis.png
+│       ├── 03_ats_checker.png
+│       ├── 04_cv_rewrite.png
+│       ├── 05_semantic_match.png
+│       ├── 06_recruiter_mode.png
+│       ├── 07_candidate_database.png
+│       ├── 08_history.png
+│       ├── 09_pricing.png
+│       ├── 10_account.png
+│       ├── 11_login_secure_session.png
+│       ├── 12_seo_indexing.png
+│       └── source/ (12 organized workflow folders)
 │
+├── .dockerignore
+├── .gitignore
 ├── docker-compose.yml
 ├── Dockerfile.backend
 ├── Dockerfile.frontend
 └── README.md
 ```
 
-The structure above focuses on the major production and portfolio components rather than every repository file.
+The tree lists the tracked production and portfolio components; the 138 source captures are summarized under `source/` rather than expanded file by file.
 
 ---
 
