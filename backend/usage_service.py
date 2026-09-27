@@ -6,6 +6,7 @@ from fastapi import HTTPException
 from sqlalchemy import func
 from sqlalchemy.orm import Session
 
+from entitlements import has_pro_access
 from models import AnalysisRecord, User
 
 LOGGER = logging.getLogger(__name__)
@@ -156,11 +157,11 @@ def get_user_usage(
             cv_analyses_used,
         )
 
-    is_pro = bool(user.is_pro)
+    is_pro = has_pro_access(user)
     remaining = max(0, FREE_PLAN_ANALYSIS_LIMIT - cv_analyses_used)
 
     return {
-        "plan": user.plan,
+        "plan": "pro" if is_pro else user.plan,
         "is_pro": is_pro,
         "analyses_used": cv_analyses_used,
         "cv_analyses_used": cv_analyses_used,
@@ -178,7 +179,7 @@ def get_user_usage(
 
 def ensure_analysis_allowed(db: Session, user: User) -> None:
     """Enforce the Free plan limit for CV Analysis only."""
-    if bool(user.is_pro):
+    if has_pro_access(user):
         return
 
     usage = get_user_usage(db, user)

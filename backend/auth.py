@@ -16,6 +16,7 @@ from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import Session
 
 from db import get_db, rollback_session_safely
+from entitlements import apply_pro_access_override
 from models import User
 from resilience import (
     CircuitBreakerOpenError,
@@ -841,12 +842,13 @@ def get_current_user(
     )
 
     if user:
-        return _update_authenticated_user(
+        synchronized_user = _update_authenticated_user(
             db,
             user,
             email=email,
             full_name=full_name,
         )
+        return apply_pro_access_override(db, synchronized_user)
 
     email_matches = _users_with_email(db, email)
 
@@ -874,20 +876,22 @@ def get_current_user(
             )
             raise _http_error("firebase_email_verification_required")
 
-        return _relink_authenticated_user(
+        relinked_user = _relink_authenticated_user(
             db,
             existing_user,
             firebase_uid=firebase_uid,
             email=email,
             full_name=full_name,
         )
+        return apply_pro_access_override(db, relinked_user)
 
-    return _create_authenticated_user(
+    created_user = _create_authenticated_user(
         db,
         firebase_uid=firebase_uid,
         email=email,
         full_name=full_name,
     )
+    return apply_pro_access_override(db, created_user)
 
 
 def get_current_admin(

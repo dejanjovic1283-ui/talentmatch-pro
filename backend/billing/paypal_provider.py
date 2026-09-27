@@ -9,6 +9,7 @@ import httpx
 from fastapi import HTTPException
 from sqlalchemy.orm import Session
 
+from entitlements import is_pro_access_override
 from models import User
 from resilience import (
     CircuitBreakerOpenError,
@@ -699,6 +700,42 @@ class PayPalBillingProvider(BillingProvider):
         resource: dict[str, Any],
     ) -> dict:
         status = resource.get("status") or "inactive"
+
+        # A configured owner/manual override is deliberately independent from
+        # PayPal subscription lifecycle events. Record the PayPal status for
+        # diagnostics, but never remove the explicit server-side Pro access.
+        if is_pro_access_override(user):
+            user.plan = "pro"
+            user.is_pro = True
+
+            _safe_setattr(
+                user,
+                "paypal_subscription_status",
+                str(status),
+            )
+
+            db.add(user)
+            db.commit()
+            db.refresh(user)
+
+            LOGGER.info(
+                "PayPal downgrade recorded; configured Pro override kept active.",
+                extra={
+                    "event": "paypal_user_downgrade_override_kept",
+                    "user_id": user.id,
+                },
+            )
+
+            return {
+                "status": "ok",
+                "message": "PayPal status recorded; configured Pro access remains active.",
+                "user_id": user.id,
+                "email": user.email,
+                "plan": user.plan,
+                "is_pro": True,
+                "paypal_subscription_status": str(status),
+                "pro_access_override": True,
+            }
 
         user.plan = "free"
         user.is_pro = False

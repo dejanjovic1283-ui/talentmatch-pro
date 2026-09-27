@@ -28,7 +28,10 @@ FIREBASE_TOKEN_REFRESH_ENDPOINT: Final[str] = (
 )
 PERSISTENT_SESSION_HEADER: Final[str] = "X-TalentMatch-Session"
 DEFAULT_COOKIE_NAME: Final[str] = "tm_session"
-DEFAULT_SESSION_TTL_SECONDS: Final[int] = 7 * 24 * 60 * 60
+# Keep the browser session convenient for normal use while retaining a bounded
+# security lifetime. The Render environment can explicitly lower this value;
+# the backend never permits an unbounded persistent credential.
+DEFAULT_SESSION_TTL_SECONDS: Final[int] = 31 * 24 * 60 * 60
 DEFAULT_ACTIVATION_TTL_SECONDS: Final[int] = 60
 DEFAULT_FIREBASE_TIMEOUT_SECONDS: Final[float] = 30.0
 
@@ -768,6 +771,11 @@ def restore_persistent_session(
     # never needs it, so clean it opportunistically while the row is locked.
     session.session_token_encrypted = ""
     session.last_seen_at = now
+    # Sliding server-side expiry: an actively used session gets another full
+    # configured lifetime. The browser cookie itself remains bounded by its
+    # original Max-Age for security.
+    cookie_settings = get_session_cookie_settings()
+    session.expires_at = now + timedelta(seconds=cookie_settings.max_age_seconds)
     _commit_or_raise(
         db,
         event="persistent_session_restore_failed",

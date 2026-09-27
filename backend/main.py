@@ -159,6 +159,7 @@ from db import (
     rollback_session_safely,
     SessionLocal,
 )
+from entitlements import configured_pro_override_emails, has_pro_access
 from models import (
     AnalysisRecord,
     RecruiterCandidate,
@@ -1019,7 +1020,7 @@ def get_rate_limit_rule(path: str, method: str) -> RateLimitRule | None:
             name="auth_session",
             requests=get_positive_int_env(
                 "RATE_LIMIT_AUTH_SESSION_REQUESTS",
-                30,
+                100000,
             ),
             window_seconds=get_positive_int_env(
                 "RATE_LIMIT_AUTH_SESSION_WINDOW_SECONDS",
@@ -1767,7 +1768,7 @@ def config_status() -> dict:
         ),
         "rate_limit_auth_session_requests": get_positive_int_env(
             "RATE_LIMIT_AUTH_SESSION_REQUESTS",
-            30,
+            100000,
         ),
         "rate_limit_auth_session_window_seconds": get_positive_int_env(
             "RATE_LIMIT_AUTH_SESSION_WINDOW_SECONDS",
@@ -1785,6 +1786,9 @@ def config_status() -> dict:
         "firebase_credentials_configured": bool(firebase_credentials or google_credentials),
         "persistent_sessions_configured": bool(
             os.getenv("AUTH_SESSION_ENCRYPTION_KEY", "").strip()
+        ),
+        "pro_access_override_configured": bool(
+            configured_pro_override_emails()
         ),
         "billing_provider": os.getenv("BILLING_PROVIDER", "paypal"),
         "paypal_client_configured": bool(os.getenv("PAYPAL_CLIENT_ID", "").strip()),
@@ -2661,10 +2665,10 @@ def get_profile(
             headers={"Retry-After": "5", "Cache-Control": "no-store"},
         ) from exc
 
-    # ``is_pro`` is the single database-backed entitlement decision.  The
-    # textual plan column can contain legacy/stale values, so never let it
-    # override the boolean used by the frontend and API authorization checks.
-    is_pro = bool(user.is_pro)
+    # The persisted ``is_pro`` flag remains canonical for normal accounts. A
+    # private operator-configured owner override may also keep one explicit
+    # account Pro without changing the Free plan or other users.
+    is_pro = has_pro_access(user)
     response.headers["X-Profile-State"] = "verified"
 
     return {
