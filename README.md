@@ -853,7 +853,7 @@ The frontend `robots.txt` permits public page crawling and points to the canonic
 
 ## ✅ Production Acceptance
 
-The production baseline is live and the completed runtime, security, billing, reporting, and deployment checks are recorded below. The public sitemap is valid and available; Google Search Console processing remains an external PENDING status until Google completes its crawl.
+The production baseline is live and the completed runtime, security, billing, reporting, and deployment checks are recorded below. The public sitemap is valid and available, and Google Search Console successfully read the canonical frontend sitemap on 29 September 2026.
 
 | Area | Result |
 |---|---|
@@ -887,7 +887,7 @@ The production baseline is live and the completed runtime, security, billing, re
 | HTTP → HTTPS | ✅ PASS |
 | WWW → apex | ✅ PASS |
 | robots.txt | ✅ PASS |
-| sitemap.xml | ✅ PASS public route; ⏳ Search Console processing |
+| sitemap.xml | ✅ PASS public route; ✅ Search Console processed (29 Sep 2026) |
 | DNS records | ✅ PASS |
 | Documentation assets | ✅ PASS — README, docs README, gallery, and source capture folders aligned |
 | Current screenshot package | ✅ PASS — 12 final captures plus 138 organized source captures |
