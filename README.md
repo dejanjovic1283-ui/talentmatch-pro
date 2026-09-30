@@ -851,6 +851,14 @@ The frontend `robots.txt` permits public page crawling and points to the canonic
 
 ---
 
+## 🎬 Product Demo
+
+[Watch the full 4:16 TalentMatch Pro product demo](docs/portfolio/assets/TalentMatch_Pro_Demo.mp4)
+
+This product-only walkthrough covers the core TalentMatch Pro workflow: Dashboard, CV Analysis, ATS Checker, CV Rewrite, Semantic Match, Recruiter Mode, Candidate Database, History, Pricing, System Health, and the founder CTA.
+
+> Product-only recording: browser UI and live narration, with no webcam or private desktop capture.
+
 ## ✅ Production Acceptance
 
 The production baseline is live and the completed runtime, security, billing, reporting, and deployment checks are recorded below. The public sitemap is valid and available, and Google Search Console successfully read the canonical frontend sitemap on 29 September 2026.
