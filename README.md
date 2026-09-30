@@ -1138,22 +1138,41 @@ talentmatch-pro/
 │   │   ├── README.md
 │   │   ├── pdf/
 │   │   └── txt/
-│   └── screenshots/
-│       ├── README.md
-│       ├── 01_dashboard.png
-│       ├── 02_cv_analysis.png
-│       ├── 03_ats_checker.png
-│       ├── 04_cv_rewrite.png
-│       ├── 05_semantic_match.png
-│       ├── 06_recruiter_mode.png
-│       ├── 07_candidate_database.png
-│       ├── 08_history.png
-│       ├── 09_pricing.png
-│       ├── 10_account.png
-│       ├── 11_login_secure_session.png
-│       ├── 12_seo_indexing.png
-│       └── source/ (12 organized workflow folders)
+│   ├── screenshots/
+│   │   ├── README.md
+│   │   ├── 01_dashboard.png
+│   │   ├── 02_cv_analysis.png
+│   │   ├── 03_ats_checker.png
+│   │   ├── 04_cv_rewrite.png
+│   │   ├── 05_semantic_match.png
+│   │   ├── 06_recruiter_mode.png
+│   │   ├── 07_candidate_database.png
+│   │   ├── 08_history.png
+│   │   ├── 09_pricing.png
+│   │   ├── 10_account.png
+│   │   ├── 11_login_secure_session.png
+│   │   ├── 12_seo_indexing.png
+│   │   └── source/ (12 organized workflow folders)
 │
+│   └── portfolio/
+│       ├── GITHUB_PORTFOLIO.md
+│       ├── SCREENSHOT_INDEX.md
+│       └── assets/
+│           ├── 01-dashboard.png
+│           ├── 02-cv-analysis.png
+│           ├── 03-ats-checker.png
+│           ├── 04-cv-rewrite.png
+│           ├── 05-semantic-match.png
+│           ├── 06-recruiter-mode.png
+│           ├── 07-candidate-database.png
+│           ├── 08-history.png
+│           ├── 09-pricing.png
+│           ├── 10-account.png
+│           ├── 11-secure-login-session.png
+│           ├── 12-seo-indexing.png
+│           ├── dejan-jovic-portfolio.jpg
+│           ├── talentmatch-pro-banner.png
+│           └── TalentMatch_Pro_Demo.mp4
 ├── .dockerignore
 ├── .gitignore
 ├── docker-compose.yml
