@@ -1101,6 +1101,7 @@ talentmatch-pro/
 │   │   │   └── zh_cn.py
 │   │   └── translator.py
 │   ├── static/
+│   │   ├── public.css
 │   │   └── sitemap.xml
 │   ├── pages/
 │   │   ├── about.py
@@ -1126,6 +1127,7 @@ talentmatch-pro/
 │   ├── app.py
 │   ├── asgi.py
 │   ├── auth_utils.py
+│   ├── seo_pages.py
 │   └── requirements.txt
 │
 ├── docs/
