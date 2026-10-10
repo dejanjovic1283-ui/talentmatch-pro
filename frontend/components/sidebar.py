@@ -1,9 +1,12 @@
 from __future__ import annotations
 
+import json
+import time
 from datetime import datetime, timezone
 from typing import Final
 
 import streamlit as st
+import streamlit.components.v1 as components
 
 from auth_utils import (
     get_cached_backend_readiness,
@@ -14,6 +17,7 @@ from auth_utils import (
     is_session_recovery_pending,
     logout_and_redirect,
     refresh_profile,
+    restore_auth,
 )
 from components.language_selector import render_language_selector
 from components.ui import apply_theme_overrides, get_display_name, get_initials, safe_html
@@ -23,6 +27,8 @@ from i18n import get_locale, t
 APP_VERSION: Final[str] = "v3.0 FINAL"
 THEME_KEY: Final[str] = "tm_theme"
 THEMES: Final[tuple[str, ...]] = ("system", "light", "dark")
+PUBLIC_API_WAKE_URL: Final[str] = "https://api.talentmatchcv.com/readyz"
+AUTOMATIC_RECOVERY_WINDOW_SECONDS: Final[int] = 360
 
 
 COPY: Final[dict[str, dict[str, str]]] = {
@@ -665,10 +671,94 @@ def _auth() -> None:
     elif is_session_recovery_pending():
         if st.button(f"🔄 {c('refresh')}", use_container_width=True):
             st.session_state.pop("persistent_session_restore_last_attempt_at", None)
+            st.session_state.pop("session_recovery_started_at", None)
             st.rerun()
     else:
         st.page_link("pages/login.py", label=f"🔐 {t('navigation.login')}")
         st.page_link("pages/register.py", label=f"📝 {t('navigation.register')}")
+
+
+@st.fragment(run_every="15s")
+def _retry_session_restore() -> None:
+    """Retry only while a valid browser cookie is awaiting API recovery."""
+    st.empty()
+    if not is_session_recovery_pending():
+        return
+
+    now = time.time()
+    try:
+        started_at = float(st.session_state.get("session_recovery_started_at") or now)
+        last_attempt_at = float(
+            st.session_state.get("persistent_session_restore_last_attempt_at") or 0
+        )
+    except (TypeError, ValueError):
+        return
+
+    if now - started_at >= AUTOMATIC_RECOVERY_WINDOW_SECONDS:
+        return
+    if now - last_attempt_at < 10:
+        return
+
+    if restore_auth():
+        st.session_state.pop("session_recovery_started_at", None)
+        st.rerun()
+
+
+def _render_browser_api_wake() -> None:
+    """Make the same public readiness request that recovers an idle API tab.
+
+    This runs in the visitor's browser without credentials or session data.
+    Streamlit's server-side recovery fragment then restores the HttpOnly session.
+    """
+    if not is_session_recovery_pending():
+        st.session_state.pop("session_recovery_started_at", None)
+        return
+
+    now = time.time()
+    try:
+        started_at = float(st.session_state.get("session_recovery_started_at") or now)
+    except (TypeError, ValueError):
+        started_at = now
+    st.session_state["session_recovery_started_at"] = started_at
+    if now - started_at >= AUTOMATIC_RECOVERY_WINDOW_SECONDS:
+        return
+
+    components.html(
+        f"""
+        <script>
+        (() => {{
+            const endpoint = {json.dumps(PUBLIC_API_WAKE_URL)};
+            const deadline = Date.now() + 360000;
+            const pause = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+            const wake = async () => {{
+                while (Date.now() < deadline) {{
+                    const controller = new AbortController();
+                    const timer = setTimeout(() => controller.abort(), 80000);
+                    try {{
+                        await fetch(endpoint, {{
+                            method: "GET",
+                            mode: "no-cors",
+                            credentials: "omit",
+                            cache: "no-store",
+                            signal: controller.signal
+                        }});
+                    }} catch (_error) {{
+                        // The server-side retry determines whether auth recovered.
+                    }} finally {{
+                        clearTimeout(timer);
+                    }}
+                    await pause(12000);
+                }}
+            }};
+            wake();
+        }})();
+        </script>
+        """,
+        width=1,
+        height=1,
+        scrolling=False,
+    )
+    _retry_session_restore()
 
 
 def _readiness_circuit(
@@ -761,3 +851,4 @@ def render_sidebar() -> None:
         _nav()
         _auth()
         _health_and_footer()
+        _render_browser_api_wake()

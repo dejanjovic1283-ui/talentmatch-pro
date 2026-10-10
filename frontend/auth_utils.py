@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import logging
 import os
 import re
 import time
@@ -10,6 +11,9 @@ from typing import IO, Any, Mapping, Optional, Sequence, TypeAlias
 import requests
 import streamlit as st
 import streamlit.components.v1 as components
+
+
+AUTH_LOGGER = logging.getLogger("talentmatch.frontend.auth")
 
 
 # =========================
@@ -567,10 +571,17 @@ def _wake_backend_for_session_restore() -> bool:
     server-held Firebase refresh token and must only be sent once.
     """
     deadline = time.monotonic() + PERSISTENT_SESSION_WAKE_BUDGET_SECONDS
+    last_status: int | None = None
+    last_error_type = ""
 
     while True:
         remaining = deadline - time.monotonic()
         if remaining <= 0:
+            AUTH_LOGGER.warning(
+                "API wake did not complete; last_status=%s error_type=%s",
+                last_status,
+                last_error_type or "none",
+            )
             return False
 
         try:
@@ -578,19 +589,29 @@ def _wake_backend_for_session_restore() -> bool:
                 _build_url("/readyz"),
                 timeout=min(PERSISTENT_SESSION_WAKE_REQUEST_TIMEOUT_SECONDS, remaining),
             )
-        except requests.RequestException:
+        except requests.RequestException as exc:
+            last_error_type = type(exc).__name__
             response = None
 
         if response is not None:
+            last_status = response.status_code
             if response.status_code == 200:
                 return True
             # Configuration/authentication errors and rate limiting are not
             # signs of a sleeping instance; do not poll through them.
             if response.status_code in {400, 401, 403, 404, 429}:
+                AUTH_LOGGER.warning(
+                    "API wake rejected; status=%s", response.status_code
+                )
                 return False
 
         remaining = deadline - time.monotonic()
         if remaining <= 0:
+            AUTH_LOGGER.warning(
+                "API wake did not complete; last_status=%s error_type=%s",
+                last_status,
+                last_error_type or "none",
+            )
             return False
         time.sleep(min(PERSISTENT_SESSION_WAKE_RETRY_DELAY_SECONDS, remaining))
 
@@ -624,7 +645,12 @@ def _restore_persistent_session() -> bool:
                 else PERSISTENT_SESSION_COLD_RESTORE_TIMEOUT_SECONDS
             ),
         )
-    except requests.RequestException:
+    except requests.RequestException as exc:
+        AUTH_LOGGER.warning(
+            "Persistent session restore transport failed; error_type=%s backend_ready=%s",
+            type(exc).__name__,
+            backend_ready,
+        )
         _set_persistent_session_error(
             "temporarily_unavailable",
             "Secure session restoration is temporarily unavailable.",
@@ -632,6 +658,11 @@ def _restore_persistent_session() -> bool:
         return False
 
     if response.status_code != 200:
+        AUTH_LOGGER.warning(
+            "Persistent session restore rejected; status=%s backend_ready=%s",
+            response.status_code,
+            backend_ready,
+        )
         if response.status_code in {401, 403}:
             _set_persistent_session_error(
                 "reauthentication_required",
