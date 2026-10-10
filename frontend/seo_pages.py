@@ -149,7 +149,7 @@ def _page(path: str, title: str, description: str, body: str) -> str:
   <header class="site-header">
     <div class="container header-row">
       <a class="brand" href="/" aria-label="TalentMatch Pro home"><span class="brand-mark">◎</span> TalentMatch Pro</a>
-      <nav aria-label="Main navigation"><a href="/">Home</a><a href="/pricing">Pricing</a><a href="/privacy">Privacy</a><a href="/terms">Terms</a><a href="/refund">Refunds</a></nav>
+      <nav aria-label="Main navigation"><a href="/">Home</a><a href="/pricing">Pricing</a><a href="/privacy">Privacy</a><a href="/terms">Terms</a><a href="/refund">Refunds</a><a href="/?view=app">Open app</a></nav>
     </div>
   </header>
   <main id="main" class="container">
@@ -212,9 +212,57 @@ def _pricing_body(price: int, comparison: list[tuple[str, str, str]], faq: list[
     """
 
 
+def _home_body(price: int) -> str:
+    """Public landing content, available in the initial HTML response."""
+    return f"""
+    <section class="hero home-hero">
+      <span class="eyebrow">AI career and recruiter intelligence</span>
+      <h1>Build a stronger CV with AI</h1>
+      <p class="lead">TalentMatch Pro brings CV analysis, ATS checking, CV rewriting, semantic job matching, and recruiter workflows into one workspace. Compare a CV with a real job description, find gaps worth addressing, and review clear recommendations before you apply or make a hiring decision.</p>
+      <div class="inline-actions"><a class="button" href="/?view=app">Open the app</a><a class="button secondary" href="/pricing">Explore plans</a></div>
+      <p class="note">Start with the Free plan. The Pro subscription is ${price} USD per month through PayPal.</p>
+    </section>
+    <section aria-labelledby="tools-heading">
+      <h2 id="tools-heading">Tools for every CV workflow</h2>
+      <p>Use focused tools to understand a candidate’s experience, improve the clarity of a CV, and compare qualifications with the role at hand.</p>
+      <div class="feature-grid">
+        <article class="feature-card"><h3>CV Analysis</h3><p>Compare a CV with a job description and review strengths, gaps, and practical suggestions.</p></article>
+        <article class="feature-card"><h3>ATS Checker</h3><p>See matched and missing terms so you can improve the relevance of an application.</p></article>
+        <article class="feature-card"><h3>CV Rewrite AI</h3><p>Refine summaries and experience descriptions while keeping the candidate’s facts accurate.</p></article>
+        <article class="feature-card"><h3>Semantic Match</h3><p>Compare meaning and context across a CV and a role, beyond identical keywords.</p></article>
+        <article class="feature-card"><h3>Recruiter Mode</h3><p>Rank candidates, compare results, and organise profiles in the Candidate Database.</p></article>
+        <article class="feature-card"><h3>Professional reports</h3><p>Save your work and export available TXT, CSV, or PDF reports for review and sharing.</p></article>
+      </div>
+    </section>
+    <section aria-labelledby="workflow-heading">
+      <h2 id="workflow-heading">How it works</h2>
+      <div class="step-grid">
+        <article class="feature-card"><span class="eyebrow">Step 1</span><h3>Upload a CV</h3><p>Add the document you have the right to use and select the relevant workflow.</p></article>
+        <article class="feature-card"><span class="eyebrow">Step 2</span><h3>Add the target role</h3><p>Use a real job description to give the analysis the right context.</p></article>
+        <article class="feature-card"><span class="eyebrow">Step 3</span><h3>Review the insights</h3><p>Check the scores, suggestions, rewrites, and reports before using them.</p></article>
+      </div>
+    </section>
+    <section aria-labelledby="audience-heading">
+      <h2 id="audience-heading">Built for candidates and recruiters</h2>
+      <div class="plan-grid">
+        <article class="plan"><h3>For job seekers</h3><p>Understand how a CV fits a particular role. Prioritise missing skills and keywords, rewrite unclear sections, and prepare a more focused application.</p></article>
+        <article class="plan"><h3>For recruiters</h3><p>Compare candidates against role requirements, organise profiles and notes, and export structured results to support a careful review.</p></article>
+      </div>
+    </section>
+    <section class="cta"><h2>Start free, upgrade when you need more</h2><p>The Free plan includes three CV analyses and ATS Checker access. Pro adds unlimited analyses, full rewriting and matching workflows, recruiter tools, and premium PDF reports for ${price} USD per month via PayPal.</p><div class="inline-actions"><a class="button" href="/?view=app">Enter the workspace</a><a class="button secondary" href="/pricing">Compare Free and Pro</a></div></section>
+    <section class="contact"><h2>Questions?</h2><p>Contact <a href="mailto:support@talentmatchcv.com">support@talentmatchcv.com</a>. Review the <a href="/privacy">Privacy Policy</a>, <a href="/terms">Terms of Service</a>, and <a href="/refund">Refund Policy</a> before subscribing.</p></section>
+    """
+
+
 def build_pages() -> dict[str, str]:
     price, comparison, faq = _pricing_data()
     result = {
+        "/": _page(
+            "/",
+            "AI CV Analysis and ATS Checker",
+            "Analyze CVs, check ATS compatibility, rewrite content, match jobs, and compare candidates with TalentMatch Pro.",
+            _home_body(price),
+        ),
         "/pricing": _page(
             "/pricing",
             "Pricing",

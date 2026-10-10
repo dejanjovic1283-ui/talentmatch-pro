@@ -88,7 +88,7 @@ def _interactive_view(path: str, query_string: bytes) -> bool:
     params = parse_qs(query_string.decode("latin-1"), keep_blank_values=True)
     if "app" in params.get("view", []):
         return True
-    if path != "/pricing":
+    if path not in {"/", "/pricing"}:
         return False
     tracking_keys = {"gclid", "fbclid", "msclkid"}
     return any(

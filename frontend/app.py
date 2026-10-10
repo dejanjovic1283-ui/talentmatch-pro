@@ -31,6 +31,10 @@ st.set_page_config(
     initial_sidebar_state="expanded",
 )
 
+# Keep the dashboard URL reloadable while the canonical / serves public HTML.
+if st.query_params.get("view") != "app":
+    st.query_params["view"] = "app"
+
 verification_meta = (
     f'<meta name="google-site-verification" content="{escape(GOOGLE_SITE_VERIFICATION, quote=True)}" />'
     if GOOGLE_SITE_VERIFICATION
