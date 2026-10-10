@@ -65,6 +65,10 @@ PERSISTENT_SESSION_HEADER = "X-TalentMatch-Session"
 PERSISTENT_SESSION_COOKIE_NAME = get_config("AUTH_SESSION_COOKIE_NAME", "tm_session")
 PERSISTENT_SESSION_RESTORE_TIMEOUT_SECONDS = 70
 PERSISTENT_SESSION_BOOTSTRAP_TIMEOUT_SECONDS = 70
+PERSISTENT_SESSION_WAKE_BUDGET_SECONDS = 70
+PERSISTENT_SESSION_WAKE_REQUEST_TIMEOUT_SECONDS = 18
+PERSISTENT_SESSION_WAKE_RETRY_DELAY_SECONDS = 3
+PERSISTENT_SESSION_COLD_RESTORE_TIMEOUT_SECONDS = 20
 FIREBASE_TOKEN_REFRESH_LEEWAY_SECONDS = 120
 FIREBASE_TOKEN_REFRESH_TIMEOUT_SECONDS = 30
 PROFILE_REQUEST_TIMEOUT_SECONDS = 75
@@ -555,6 +559,42 @@ def _set_persistent_session_error(status: str, message: str) -> None:
     st.session_state["persistent_session_restore_last_attempt_at"] = time.time()
 
 
+def _wake_backend_for_session_restore() -> bool:
+    """Wait for the API to wake before sending the session-restore POST.
+
+    Render can suspend an idle backend while the browser's secure cookie is
+    still valid. A public GET is safe to retry; a restore POST may rotate the
+    server-held Firebase refresh token and must only be sent once.
+    """
+    deadline = time.monotonic() + PERSISTENT_SESSION_WAKE_BUDGET_SECONDS
+
+    while True:
+        remaining = deadline - time.monotonic()
+        if remaining <= 0:
+            return False
+
+        try:
+            response = requests.get(
+                _build_url("/readyz"),
+                timeout=min(PERSISTENT_SESSION_WAKE_REQUEST_TIMEOUT_SECONDS, remaining),
+            )
+        except requests.RequestException:
+            response = None
+
+        if response is not None:
+            if response.status_code == 200:
+                return True
+            # Configuration/authentication errors and rate limiting are not
+            # signs of a sleeping instance; do not poll through them.
+            if response.status_code in {400, 401, 403, 404, 429}:
+                return False
+
+        remaining = deadline - time.monotonic()
+        if remaining <= 0:
+            return False
+        time.sleep(min(PERSISTENT_SESSION_WAKE_RETRY_DELAY_SECONDS, remaining))
+
+
 def _restore_persistent_session() -> bool:
     """Restore a fresh Firebase ID token from the backend-held encrypted token."""
     headers = _persistent_session_headers()
@@ -571,11 +611,18 @@ def _restore_persistent_session() -> bool:
     if time.time() - last_attempt_at < 5:
         return False
 
+    st.session_state["persistent_session_restore_last_attempt_at"] = time.time()
+    backend_ready = _wake_backend_for_session_restore()
+
     try:
         response = requests.post(
             _build_url("/auth/session/restore"),
             headers=headers,
-            timeout=PERSISTENT_SESSION_RESTORE_TIMEOUT_SECONDS,
+            timeout=(
+                PERSISTENT_SESSION_RESTORE_TIMEOUT_SECONDS
+                if backend_ready
+                else PERSISTENT_SESSION_COLD_RESTORE_TIMEOUT_SECONDS
+            ),
         )
     except requests.RequestException:
         _set_persistent_session_error(
@@ -729,6 +776,29 @@ def _mark_auth_expired(message: str) -> None:
     st.session_state["token_refresh_error"] = clean_message
 
 
+def _token_refresh_temporarily_unavailable() -> bool:
+    """Distinguish an outage from a rejected or revoked browser session."""
+    status = str(st.session_state.get("token_refresh_status") or "").lower()
+    return status in {
+        "temporarily_unavailable",
+        "http_408",
+        "http_425",
+        "http_429",
+        "http_500",
+        "http_502",
+        "http_503",
+        "http_504",
+    }
+
+
+def is_session_recovery_pending() -> bool:
+    """Show a temporary reconnect state only for a retained browser session."""
+    return bool(_persistent_session_cookie()) and (
+        st.session_state.get("persistent_session_status") == "temporarily_unavailable"
+        or _token_refresh_temporarily_unavailable()
+    )
+
+
 def refresh_firebase_token() -> bool:
     """Renew an ID token from the durable session or legacy in-memory token."""
     auth_mode = str(st.session_state.get("auth_mode") or "").strip().lower()
@@ -846,6 +916,12 @@ def _ensure_fresh_token() -> bool:
     if now < expires_at:
         return True
 
+    if _token_refresh_temporarily_unavailable():
+        # An expired ID token must never be used for API requests. Keep the
+        # browser cookie and refresh source so a later rerun can recover.
+        st.session_state["authenticated"] = False
+        return False
+
     _mark_auth_expired(
         st.session_state.get("token_refresh_error")
         or "Your authentication session expired. Please sign in again."
@@ -857,6 +933,13 @@ def _recover_from_unauthorized() -> bool:
     """Attempt one forced token renewal after a backend 401 response."""
     if refresh_firebase_token():
         return True
+
+    if _token_refresh_temporarily_unavailable():
+        # The rejected ID token is unusable even when its recorded expiry is
+        # in the future. Force another renewal before any later API request.
+        st.session_state["token_expires_at"] = time.time()
+        st.session_state["authenticated"] = False
+        return False
 
     _mark_auth_expired(
         st.session_state.get("token_refresh_error")
@@ -963,6 +1046,11 @@ def api_get(
                         "Your authentication session is no longer valid. "
                         "Please sign in again."
                     )
+            elif _token_refresh_temporarily_unavailable():
+                return FakeResponse(
+                    503,
+                    "Session renewal is temporarily unavailable. Please try again.",
+                )
 
         return response
     except requests.RequestException:
@@ -1025,6 +1113,11 @@ def api_post(
                         "Your authentication session is no longer valid. "
                         "Please sign in again."
                     )
+            elif _token_refresh_temporarily_unavailable():
+                return FakeResponse(
+                    503,
+                    "Session renewal is temporarily unavailable. Please try again.",
+                )
 
         return response
     except requests.RequestException:

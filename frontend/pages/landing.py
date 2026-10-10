@@ -7,7 +7,12 @@ from typing import Final, TypeAlias, TypedDict, cast
 
 import streamlit as st
 
-from auth_utils import is_logged_in, is_pro_user, refresh_profile
+from auth_utils import (
+    is_logged_in,
+    is_pro_user,
+    is_session_recovery_pending,
+    refresh_profile,
+)
 from components.ui import (
     apply_global_styles,
     get_display_name,
@@ -1244,7 +1249,10 @@ def render_landing() -> None:
         st.session_state["landing_profile_loaded"] = True
 
     name = get_display_name()
-    plan = "PRO" if is_pro_user() else "FREE"
+    if is_session_recovery_pending():
+        plan = "SYNC"
+    else:
+        plan = "PRO" if is_pro_user() else "FREE"
     title = (
         _text("hero_user_title", name=name)
         if is_logged_in()

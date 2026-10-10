@@ -12,6 +12,7 @@ from auth_utils import (
     get_profile,
     get_profile_state,
     is_logged_in,
+    is_session_recovery_pending,
     logout_and_redirect,
     refresh_profile,
 )
@@ -31,16 +32,25 @@ apply_global_styles()
 APP_VERSION = "v3.0 FINAL"
 
 
+def _session_failure_notice() -> str:
+    if is_session_recovery_pending():
+        return (
+            "The backend is temporarily unavailable. Your browser session is "
+            "preserved; refresh this page shortly."
+        )
+    return (
+        "Your authentication session expired and could not be renewed. "
+        "Please sign in again."
+    )
+
+
 # Load the profile before rendering the sidebar.  The sidebar is present on
 # every page and used to turn a cold-start/timeout into a visually convincing
 # FREE account before Account had a chance to retry `/me`.
 if is_logged_in():
     refresh_profile()
     if not is_logged_in():
-        st.session_state["account_session_notice"] = (
-            "Your authentication session expired and could not be renewed. "
-            "Please sign in again."
-        )
+        st.session_state["account_session_notice"] = _session_failure_notice()
         st.rerun()
 
 get_backend_readiness()
@@ -1075,7 +1085,12 @@ plan_name = (
     if entitlement_state == "free"
     else "Checking"
 )
-access_status = "ACTIVE" if signed_in else "NOT SIGNED IN"
+if signed_in:
+    access_status = "ACTIVE"
+elif is_session_recovery_pending():
+    access_status = "RECONNECTING"
+else:
+    access_status = "NOT SIGNED IN"
 if signed_in and not profile_available:
     access_status = "SYNCING"
 system_status = check_system_status()
@@ -1259,10 +1274,7 @@ with st.container(key="tm_account_actions", border=False, width="stretch"):
             ).strip().lower()
 
             if not is_logged_in():
-                st.session_state["account_session_notice"] = (
-                    "Your authentication session expired and could not be renewed. "
-                    "Please sign in again."
-                )
+                st.session_state["account_session_notice"] = _session_failure_notice()
                 st.rerun()
             elif refresh_status == "ok" and refreshed_profile:
                 st.session_state["account_profile_notice"] = "success"

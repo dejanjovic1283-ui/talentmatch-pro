@@ -11,6 +11,7 @@ from auth_utils import (
     get_profile_state,
     is_admin_user,
     is_logged_in,
+    is_session_recovery_pending,
     logout_and_redirect,
     refresh_profile,
 )
@@ -503,7 +504,13 @@ def _profile_sync_label() -> str:
 
 def _user() -> None:
     logged = is_logged_in()
-    name = get_display_name() if logged else c("guest")
+    reconnecting = not logged and is_session_recovery_pending()
+    if logged:
+        name = get_display_name()
+    elif reconnecting:
+        name = c("waking")
+    else:
+        name = c("guest")
     initials = get_initials(name) if logged else "TM"
     entitlement = (
         get_entitlement_state(load_if_missing=False)
@@ -511,7 +518,10 @@ def _user() -> None:
         else "signed_out"
     )
 
-    if not logged:
+    if reconnecting:
+        membership = c("profile_syncing")
+        plan = c("waking").upper()
+    elif not logged:
         membership = c("create")
         plan = c("signin").upper()
     elif entitlement == "pro":
@@ -652,6 +662,10 @@ def _auth() -> None:
 
         if st.button(f"🚪 {t('navigation.logout')}", use_container_width=True):
             logout_and_redirect()
+    elif is_session_recovery_pending():
+        if st.button(f"🔄 {c('refresh')}", use_container_width=True):
+            st.session_state.pop("persistent_session_restore_last_attempt_at", None)
+            st.rerun()
     else:
         st.page_link("pages/login.py", label=f"🔐 {t('navigation.login')}")
         st.page_link("pages/register.py", label=f"📝 {t('navigation.register')}")
