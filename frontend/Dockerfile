@@ -1,4 +1,4 @@
-﻿# syntax=docker/dockerfile:1.7
+# syntax=docker/dockerfile:1.7
 
 FROM python:3.13-slim-bookworm
 
@@ -15,8 +15,14 @@ WORKDIR /app
 
 RUN apt-get update \
     && apt-get install -y --no-install-recommends \
+        ca-certificates \
         fonts-droid-fallback \
         fonts-noto-core \
+    && dpkg --compare-versions \
+        "$(dpkg-query -W -f='${Version}' ca-certificates)" \
+        ge '20250419~deb12u2' \
+    && update-ca-certificates \
+    && dpkg-query -W ca-certificates \
     && rm -rf /var/lib/apt/lists/* \
     && groupadd --system appgroup \
     && useradd --system --gid appgroup --create-home appuser
@@ -24,7 +30,9 @@ RUN apt-get update \
 COPY requirements.txt /tmp/requirements.txt
 
 RUN python -m pip install --upgrade pip \
-    && python -m pip install --no-cache-dir -r /tmp/requirements.txt \
+    && python -m pip install --no-cache-dir -r /tmp/requirements.txt "certifi>=2026.10.19" \
+    && python -m pip check \
+    && python -c "import certifi; version = certifi.__version__; print('certifi=' + version); raise SystemExit(0 if tuple(map(int, version.split('.'))) >= (2026, 10, 19) else 'certifi must be >= 2026.10.19')" \
     && rm -f /tmp/requirements.txt
 
 COPY --chown=appuser:appgroup . /app/
